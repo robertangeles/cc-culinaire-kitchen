@@ -12,15 +12,17 @@
 import pino from "pino";
 import { db } from "../db/index.js";
 import { menuItem, menuItemIngredient, menuCategorySetting, wasteLog, ingredient, locationIngredient, user } from "../db/schema.js";
-import { eq, and, sql, gte, inArray } from "drizzle-orm";
+import { eq, and, or, sql, gte, inArray, isNull } from "drizzle-orm";
+import { AppError } from "../utils/appError.js";
+import { menuReadable, assertCanManageMenuItem, type MenuScope } from "./menuAccess.js";
+import { accessibleLocationIds } from "./locationContextService.js";
+import type { TokenPayload } from "./authService.js";
 import {
   IncompatibleUnitsError, classifyAgainstWholeMenu, menuMixPct, plateFoodCost, storedItemCosts, storedLineCost,
   summariseMenuAnalysis,
 } from "@culinaire/shared";
 import { resolveToBase } from "./unitConversionService.js";
 import { recordOpsEvent } from "./brainCaptureService.js";
-import { getUserOrgContext } from "./orgContextService.js";
-import { AppError } from "../utils/appError.js";
 
 const logger = pino({ name: "menuIntelligence" });
 
@@ -28,7 +30,7 @@ const logger = pino({ name: "menuIntelligence" });
 // Menu Item CRUD
 // ---------------------------------------------------------------------------
 
-export async function createMenuItem(userId: number, data: {
+export async function createMenuItem(scope: MenuScope, data: {
   name: string;
   category: string;
   sellingPrice: string;
@@ -39,10 +41,11 @@ export async function createMenuItem(userId: number, data: {
   const [userRow] = await db
     .select({ selectedLocationId: user.selectedLocationId })
     .from(user)
-    .where(eq(user.userId, userId));
+    .where(eq(user.userId, scope.userId));
 
   const [item] = await db.insert(menuItem).values({
-    userId,
+    userId: scope.userId,
+    organisationId: scope.organisationId,
     storeLocationId: userRow?.selectedLocationId ?? null,
     name: data.name,
     category: data.category,
@@ -52,14 +55,12 @@ export async function createMenuItem(userId: number, data: {
     qFactorPct: data.qFactorPct ?? "0",
   }).returning();
 
-  // Brain memory (spec T12): remember this menu item was added. menuItem has no
-  // org column, so resolve the acting user's org for scope.
-  const orgCtx = await getUserOrgContext(userId);
+  // Brain memory (spec T12): remember this menu item was added.
   void recordOpsEvent({
-    userId,
+    userId: scope.userId,
     sourceType: "menu",
-    scope: orgCtx.primaryOrgId ? "org" : "user",
-    organisationId: orgCtx.primaryOrgId,
+    scope: scope.organisationId ? "org" : "user",
+    organisationId: scope.organisationId,
     sourceRef: item.menuItemId,
     title: data.name,
     action: "created",
@@ -68,12 +69,14 @@ export async function createMenuItem(userId: number, data: {
     sellingPrice: data.sellingPrice,
   });
 
+  await persistClassification(scope);
   return item;
 }
 
-export async function getMenuItems(userId: number, category?: string, storeLocationId?: string) {
+/** Every item of the caller's organisation (their own, while they have none), without the system-made FOH sale links. */
+export async function getMenuItems(scope: MenuScope, category?: string, storeLocationId?: string) {
   const conditions = [
-    eq(menuItem.userId, userId),
+    menuReadable(scope),
     // Hide system-generated FOH direct-sale links — they're plumbing (a can's
     // 1:1 depletion), not dishes the operator engineers.
     sql`${menuItem.linkedIngredientId} IS NULL`,
@@ -86,14 +89,28 @@ export async function getMenuItems(userId: number, category?: string, storeLocat
     .orderBy(menuItem.category, menuItem.name);
 }
 
-export async function getMenuItem(menuItemId: string, userId: number) {
+export async function getMenuItem(menuItemId: string, scope: MenuScope) {
   const [item] = await db.select().from(menuItem)
-    .where(and(eq(menuItem.menuItemId, menuItemId), eq(menuItem.userId, userId)))
+    .where(and(eq(menuItem.menuItemId, menuItemId), menuReadable(scope)))
     .limit(1);
   return item ?? null;
 }
 
-export async function updateMenuItem(menuItemId: string, userId: number, data: Partial<{
+/** The item for a read, or 404 NOT_FOUND (another organisation's item is not found either). */
+export async function requireMenuItem(menuItemId: string, scope: MenuScope) {
+  const item = await getMenuItem(menuItemId, scope);
+  if (!item) throw new AppError(404, "NOT_FOUND", "Item not found");
+  return item;
+}
+
+/** The item for a change: 404 NOT_FOUND unless readable, 403 FORBIDDEN unless the caller made it or administers its organisation. */
+export async function requireManageableMenuItem(menuItemId: string, scope: MenuScope) {
+  const item = await requireMenuItem(menuItemId, scope);
+  assertCanManageMenuItem(scope, item);
+  return item;
+}
+
+export async function updateMenuItem(menuItemId: string, scope: MenuScope, data: Partial<{
   name: string;
   category: string;
   sellingPrice: string;
@@ -104,6 +121,7 @@ export async function updateMenuItem(menuItemId: string, userId: number, data: P
   periodStart: string;
   periodEnd: string;
 }>) {
+  await requireManageableMenuItem(menuItemId, scope);
   const setValues: Record<string, unknown> = { updatedDttm: new Date() };
   if (data.name !== undefined) setValues.name = data.name;
   if (data.category !== undefined) setValues.category = data.category;
@@ -115,8 +133,7 @@ export async function updateMenuItem(menuItemId: string, userId: number, data: P
   if (data.periodStart !== undefined) setValues.periodStart = data.periodStart;
   if (data.periodEnd !== undefined) setValues.periodEnd = data.periodEnd;
 
-  await db.update(menuItem).set(setValues)
-    .where(and(eq(menuItem.menuItemId, menuItemId), eq(menuItem.userId, userId)));
+  await db.update(menuItem).set(setValues).where(eq(menuItem.menuItemId, menuItemId));
 
   // Stored food_cost / food_cost_pct / contribution_margin depend on price,
   // servings, sales-unit size, and Q — refresh them when any of those change.
@@ -125,8 +142,9 @@ export async function updateMenuItem(menuItemId: string, userId: number, data: P
   const costRelevantChange =
     data.sellingPrice !== undefined || data.servings !== undefined ||
     data.servingsPerSale !== undefined || data.qFactorPct !== undefined;
-  if (costRelevantChange) {
-    await recalculateItemCosts(menuItemId);
+  if (costRelevantChange || data.unitsSold !== undefined) {
+    if (costRelevantChange) await recalculateItemCosts(menuItemId);
+    await persistClassification(scope);
   }
 
   // Brain memory (spec T12): only capture SEMANTIC menu changes (name/category/
@@ -139,15 +157,14 @@ export async function updateMenuItem(menuItemId: string, userId: number, data: P
     const [current] = await db
       .select({ name: menuItem.name, category: menuItem.category, sellingPrice: menuItem.sellingPrice })
       .from(menuItem)
-      .where(and(eq(menuItem.menuItemId, menuItemId), eq(menuItem.userId, userId)))
+      .where(eq(menuItem.menuItemId, menuItemId))
       .limit(1);
     if (current) {
-      const orgCtx = await getUserOrgContext(userId);
       void recordOpsEvent({
-        userId,
+        userId: scope.userId,
         sourceType: "menu",
-        scope: orgCtx.primaryOrgId ? "org" : "user",
-        organisationId: orgCtx.primaryOrgId,
+        scope: scope.organisationId ? "org" : "user",
+        organisationId: scope.organisationId,
         sourceRef: menuItemId,
         title: current.name,
         action: "updated",
@@ -159,9 +176,17 @@ export async function updateMenuItem(menuItemId: string, userId: number, data: P
   }
 }
 
-export async function deleteMenuItem(menuItemId: string, userId: number) {
-  await db.delete(menuItem)
-    .where(and(eq(menuItem.menuItemId, menuItemId), eq(menuItem.userId, userId)));
+export async function deleteMenuItem(menuItemId: string, scope: MenuScope) {
+  await requireManageableMenuItem(menuItemId, scope);
+  try {
+    await db.delete(menuItem).where(eq(menuItem.menuItemId, menuItemId));
+  } catch (err) {
+    // A sale or prep row points at the item and is history: the item stays.
+    const code = (err as { code?: string; cause?: { code?: string } }).code ?? (err as { cause?: { code?: string } }).cause?.code;
+    if (code === "23503") throw new AppError(409, "CONFLICT", "This menu item has recorded sales or prep history and cannot be deleted");
+    throw err;
+  }
+  await persistClassification(scope);
 }
 
 // ---------------------------------------------------------------------------
@@ -242,7 +267,7 @@ async function computeLineCost(
   });
 }
 
-export async function addIngredient(menuItemId: string, data: {
+export async function addIngredient(menuItemId: string, scope: MenuScope, data: {
   ingredientId?: string | null;
   ingredientName: string;
   note?: string | null;
@@ -275,6 +300,7 @@ export async function addIngredient(menuItemId: string, data: {
 
   // Recalculate item costs
   await recalculateItemCosts(menuItemId);
+  await persistClassification(scope);
   return ing;
 }
 
@@ -311,10 +337,11 @@ export async function getIngredients(menuItemId: string) {
     .orderBy(menuItemIngredient.ingredientName);
 }
 
-export async function deleteIngredient(ingredientId: number, menuItemId: string) {
+export async function deleteIngredient(ingredientId: number, menuItemId: string, scope: MenuScope) {
   await db.delete(menuItemIngredient)
     .where(and(eq(menuItemIngredient.id, ingredientId), eq(menuItemIngredient.menuItemId, menuItemId)));
   await recalculateItemCosts(menuItemId);
+  await persistClassification(scope);
 }
 
 /**
@@ -325,7 +352,7 @@ export async function deleteIngredient(ingredientId: number, menuItemId: string)
  * Throws if the row is unlinked (legacy free-text) — there's no Catalog
  * cost to refresh from.
  */
-export async function refreshIngredientCost(rowId: number, menuItemId: string) {
+export async function refreshIngredientCost(rowId: number, menuItemId: string, scope: MenuScope) {
   const [row] = await db.select().from(menuItemIngredient)
     .where(and(eq(menuItemIngredient.id, rowId), eq(menuItemIngredient.menuItemId, menuItemId)));
   if (!row) throw new Error("Menu item ingredient not found");
@@ -361,6 +388,7 @@ export async function refreshIngredientCost(rowId: number, menuItemId: string) {
     .returning();
 
   await recalculateItemCosts(menuItemId);
+  await persistClassification(scope);
   return updated;
 }
 
@@ -473,56 +501,69 @@ async function recalculateItemCosts(menuItemId: string) {
 // Classification Engine
 // ---------------------------------------------------------------------------
 
-export async function recalculateMenu(userId: number, category?: string) {
-  const items = await getMenuItems(userId, category);
+type MenuItemRow = typeof menuItem.$inferSelect;
+
+/**
+ * Menu mix and Star/Plowhorse/Puzzle/Dog for a set of items, relative to that set (pure: nothing is written).
+ * Mix is each item's share of the set's units sold; the averages of contribution margin and mix split the matrix.
+ */
+export function classifyMenu(items: MenuItemRow[]): Map<string, { menuMixPct: string; classification: string }> {
+  const out = new Map<string, { menuMixPct: string; classification: string }>();
+  if (items.length === 0) return out;
+  const totalUnitsSold = items.reduce((sum, i) => sum + i.unitsSold, 0);
+
+  // Averages use the stored mix text (two decimals), exactly as when the values were persisted before classifying.
+  const mixes = items.map((i) => menuMixPct(i.unitsSold, totalUnitsSold).toFixed(2));
+  const { classifications } = classifyAgainstWholeMenu(items.map((item, i) => ({
+    unitsSold: item.unitsSold,
+    contributionMargin: parseFloat(item.contributionMargin ?? "0"),
+    menuMixPct: parseFloat(mixes[i]),
+  })));
+
+  for (const [i, item] of items.entries()) {
+    out.set(item.menuItemId, { menuMixPct: mixes[i], classification: classifications[i] });
+  }
+  return out;
+}
+
+/**
+ * Store mix and classification for the caller's whole menu, relative to the whole menu. Only rows whose values
+ * changed are written. Always the whole menu: a category-relative value stored on an item would be read by prep
+ * and the item list as if it were the menu-wide one.
+ */
+export async function persistClassification(scope: MenuScope): Promise<void> {
+  const items = await getMenuItems(scope);
+  const computed = classifyMenu(items);
+  for (const item of items) {
+    const next = computed.get(item.menuItemId)!;
+    if (item.menuMixPct === next.menuMixPct && item.classification === next.classification) continue;
+    await db.update(menuItem).set({ menuMixPct: next.menuMixPct, classification: next.classification, updatedDttm: new Date() })
+      .where(eq(menuItem.menuItemId, item.menuItemId));
+  }
+}
+
+/** POST /analysis/recalculate: refresh stored costs (of one category, or all), then stored mix and classification. */
+export async function recalculateMenu(scope: MenuScope, category?: string) {
+  const items = await getMenuItems(scope, category);
   if (items.length === 0) return;
 
-  // Recalculate costs for all items
   for (const item of items) {
     await recalculateItemCosts(item.menuItemId);
   }
+  await persistClassification(scope);
 
-  // Re-fetch after cost recalculation
-  const updated = await getMenuItems(userId, category);
-
-  // Calculate totals for menu mix
-  const totalUnitsSold = updated.reduce((sum, i) => sum + i.unitsSold, 0);
-
-  // Update menu mix percentages
-  for (const item of updated) {
-    await db.update(menuItem).set({
-      menuMixPct: menuMixPct(item.unitsSold, totalUnitsSold).toFixed(2),
-    }).where(eq(menuItem.menuItemId, item.menuItemId));
-  }
-
-  // Re-fetch with mix percentages
-  const withMix = await getMenuItems(userId, category);
-
-  // Classify against the averages of every item in scope
-  const { avgCM, avgMix, classifications } = classifyAgainstWholeMenu(withMix.map((item) => ({
-    unitsSold: item.unitsSold,
-    contributionMargin: parseFloat(item.contributionMargin ?? "0"),
-    menuMixPct: parseFloat(item.menuMixPct ?? "0"),
-  })));
-
-  for (const [i, item] of withMix.entries()) {
-    await db.update(menuItem).set({
-      classification: classifications[i],
-      updatedDttm: new Date(),
-    }).where(eq(menuItem.menuItemId, item.menuItemId));
-  }
-
-  logger.info({ userId, itemCount: withMix.length, avgCM: avgCM.toFixed(2), avgMix: avgMix.toFixed(2) }, "Menu recalculated");
+  logger.info({ userId: scope.userId, itemCount: items.length }, "Menu recalculated");
 }
 
 // ---------------------------------------------------------------------------
 // Analysis
 // ---------------------------------------------------------------------------
 
-export async function getMenuAnalysis(userId: number, category?: string) {
-  await recalculateMenu(userId, category);
-
-  const items = await getMenuItems(userId, category);
+/** GET /analysis: computed from what is stored, writes nothing. With `category`, mix and classification are relative to that category only. */
+export async function getMenuAnalysis(scope: MenuScope, category?: string) {
+  const stored = await getMenuItems(scope, category);
+  const computed = classifyMenu(stored);
+  const items = stored.map((i) => ({ ...i, ...computed.get(i.menuItemId)! }));
 
   const analysed = items.map((i) => ({
     ...i,
@@ -543,13 +584,15 @@ export async function getMenuAnalysis(userId: number, category?: string) {
 // Category Settings
 // ---------------------------------------------------------------------------
 
-export async function getCategorySettings(userId: number) {
+// Category targets are still per user (the table has no organisation column); sharing them across the organisation is a follow-up.
+export async function getCategorySettings(scope: MenuScope) {
   return db.select().from(menuCategorySetting)
-    .where(eq(menuCategorySetting.userId, userId))
+    .where(eq(menuCategorySetting.userId, scope.userId))
     .orderBy(menuCategorySetting.categoryName);
 }
 
-export async function upsertCategorySetting(userId: number, categoryName: string, targetFoodCostPct: string) {
+export async function upsertCategorySetting(scope: MenuScope, categoryName: string, targetFoodCostPct: string) {
+  const userId = scope.userId;
   const [existing] = await db.select().from(menuCategorySetting)
     .where(and(eq(menuCategorySetting.userId, userId), eq(menuCategorySetting.categoryName, categoryName)))
     .limit(1);
@@ -572,7 +615,7 @@ export async function upsertCategorySetting(userId: number, categoryName: string
 // CSV Import
 // ---------------------------------------------------------------------------
 
-export async function importCsvSalesData(userId: number, csvContent: string) {
+export async function importCsvSalesData(scope: MenuScope, csvContent: string) {
   const lines = csvContent.trim().split("\n");
   if (lines.length < 2) return { updated: 0, notFound: [] };
 
@@ -585,6 +628,7 @@ export async function importCsvSalesData(userId: number, csvContent: string) {
   }
 
   let updated = 0;
+  // Names with no item to update: no match, or (marked as such) more than one.
   const notFound: string[] = [];
 
   for (let i = 1; i < lines.length; i++) {
@@ -593,13 +637,15 @@ export async function importCsvSalesData(userId: number, csvContent: string) {
     const sold = parseInt(cols[soldIdx], 10);
     if (!name || isNaN(sold)) continue;
 
-    // Find matching menu item by name (case-insensitive)
-    const [match] = await db.select({ menuItemId: menuItem.menuItemId })
+    // Find matching menu item by name (case-insensitive), among the dishes this caller may change: this overwrites units sold.
+    const [match, another] = await db.select({ menuItemId: menuItem.menuItemId })
       .from(menuItem)
-      .where(and(eq(menuItem.userId, userId), sql`LOWER(${menuItem.name}) = LOWER(${name})`))
-      .limit(1);
+      .where(and(menuReadable(scope), scope.isOrgAdmin ? undefined : eq(menuItem.userId, scope.userId), isNull(menuItem.linkedIngredientId), sql`LOWER(${menuItem.name}) = LOWER(${name})`))
+      .limit(2);
 
-    if (match) {
+    if (another) {
+      notFound.push(`${name} (ambiguous name: multiple menu items)`);
+    } else if (match) {
       await db.update(menuItem).set({ unitsSold: sold, updatedDttm: new Date() })
         .where(eq(menuItem.menuItemId, match.menuItemId));
       updated++;
@@ -609,7 +655,7 @@ export async function importCsvSalesData(userId: number, csvContent: string) {
   }
 
   // Recalculate after import
-  await recalculateMenu(userId);
+  await recalculateMenu(scope);
 
   return { updated, notFound };
 }
@@ -634,12 +680,11 @@ const RecommendationSchema = z.object({
 
 export type MenuRecommendation = z.infer<typeof RecommendationSchema>;
 
-export async function getItemRecommendations(menuItemId: string, userId: number): Promise<MenuRecommendation> {
-  const item = await getMenuItem(menuItemId, userId);
-  if (!item) throw new AppError(404, "NOT_FOUND", "Menu item not found.");
+export async function getItemRecommendations(menuItemId: string, scope: MenuScope): Promise<MenuRecommendation> {
+  const item = await requireMenuItem(menuItemId, scope);
 
   const ingredients = await getIngredients(menuItemId);
-  const kitchenContext = await buildContextString(userId);
+  const kitchenContext = await buildContextString(scope.userId);
 
   const ingredientList = ingredients.map((i) =>
     `${i.ingredientName}: ${i.quantity} ${i.unit} @ $${i.unitCost}/${i.unit} (line cost: $${i.lineCost})`
@@ -685,10 +730,11 @@ export interface WasteImpactResult {
 
 /**
  * For each menu item, check if any of its ingredients appear in waste logs
- * from the last 30 days. Returns aggregated waste cost per menu item.
+ * from the last 30 days. Returns aggregated waste cost per menu item. The waste
+ * is the viewer's own plus the organisation's at the locations the viewer may use.
  */
-export async function getWasteImpactForMenuItems(userId: number): Promise<WasteImpactResult[]> {
-  const items = await getMenuItems(userId);
+export async function getWasteImpactForMenuItems(scope: MenuScope, actor: TokenPayload): Promise<WasteImpactResult[]> {
+  const items = await getMenuItems(scope);
   if (items.length === 0) return [];
 
   // Get all ingredients for all menu items.
@@ -700,6 +746,12 @@ export async function getWasteImpactForMenuItems(userId: number): Promise<WasteI
     .where(inArray(menuItemIngredient.menuItemId, allItemIds));
 
   if (allIngredients.length === 0) return [];
+
+  let wasteInScope = eq(wasteLog.userId, scope.userId);
+  if (scope.organisationId !== null) {
+    const locationIds = await accessibleLocationIds(actor);
+    if (locationIds.length) wasteInScope = or(wasteInScope, and(eq(wasteLog.organisationId, scope.organisationId), inArray(wasteLog.storeLocationId, locationIds)))!;
+  }
 
   // Query waste logs for matching ingredients in the last 30 days
   const thirtyDaysAgo = new Date();
@@ -713,7 +765,7 @@ export async function getWasteImpactForMenuItems(userId: number): Promise<WasteI
     .from(wasteLog)
     .where(
       and(
-        eq(wasteLog.userId, userId),
+        wasteInScope,
         gte(wasteLog.loggedAt, thirtyDaysAgo),
       ),
     )

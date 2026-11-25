@@ -10,7 +10,8 @@ import { z } from "zod";
 import {
   createMenuItem,
   getMenuItems,
-  getMenuItem,
+  requireMenuItem,
+  requireManageableMenuItem,
   updateMenuItem,
   deleteMenuItem,
   addIngredient,
@@ -31,142 +32,156 @@ import {
   getYieldVariance,
   listYieldVariance,
 } from "../services/yieldVarianceService.js";
-import { recordSale, voidSale, listSales, previewSalesCsv, commitSalesCsv, listSellableConsumables, recordConsumableSale, SaleError } from "../services/saleService.js";
-import { getUserLocationContext, assertLocationAccess } from "../services/locationContextService.js";
+import { recordSale, voidSale, listSales, previewSalesCsv, commitSalesCsv, listSellableConsumables, recordConsumableSale, fitsSaleQty } from "../services/saleService.js";
+import { assertLocationAccess } from "../services/locationContextService.js";
+import { resolveMenuScope, canManageMenuItem, type MenuScope } from "../services/menuAccess.js";
+import { hasPermission } from "../middleware/auth.js";
+import { AppError } from "../utils/appError.js";
 
-/** Resolve the caller's org id from their location context. */
-async function resolveSalesOrgId(req: Request, res: Response): Promise<number | null> {
-  const ctx = await getUserLocationContext(req.user!.sub);
-  const orgId = ctx.locations[0]?.organisationId ?? ctx.organisationId;
-  if (orgId === null) {
-    res.status(400).json({ error: "You are not a member of any organisation" });
-    return null;
-  }
-  return orgId;
+/** 400 with the machine-readable code the phone's queue branches on. */
+function invalid(res: Response, message: string): void {
+  res.status(400).json({ error: message, code: "VALIDATION" });
 }
 
-/** Map a SaleError to its status; otherwise bubble to the error handler. */
-function handleSaleError(err: unknown, res: Response, next: NextFunction): void {
-  if (err instanceof SaleError) {
-    res.status(err.statusCode).json({ error: err.message });
-    return;
+/** The caller's menu scope (their organisation, or their own items while they have none). */
+const menuScope = (req: Request) => resolveMenuScope(req.user!.sub);
+
+/**
+ * Adds `canManage` to each item for the client's edit, delete and recipe controls: the caller holds menu:manage and
+ * made the item or administers its organisation. The routes enforce the same rule; this only saves a refused click.
+ */
+function withCanManage<T extends { userId: number; organisationId: number | null }>(req: Request, scope: MenuScope, items: T[]) {
+  const mayEdit = hasPermission(req.user!, "menu:manage");
+  return items.map((item) => ({ ...item, canManage: mayEdit && canManageMenuItem(scope, item) }));
+}
+
+/** The caller's scope for a sale, which always belongs to an organisation. */
+async function saleScope(req: Request): Promise<MenuScope & { organisationId: number }> {
+  const scope = await menuScope(req);
+  if (scope.organisationId === null) throw new AppError(400, "VALIDATION", "You are not a member of any organisation");
+  return scope as MenuScope & { organisationId: number };
+}
+
+const saleBodySchema = z.object({
+  qtySold: z.coerce.number().positive("qtySold must be greater than 0").refine(fitsSaleQty, "qtySold can have at most 3 decimal places"),
+  soldAt: z.string().optional().refine((v) => v === undefined || v === "" || !Number.isNaN(new Date(v).getTime()), "soldAt is not a date"),
+  locationId: z.preprocess((v) => (v === "" ? undefined : v), z.string().uuid("locationId is not a location id").optional()),
+  idempotencyKey: z.string().max(120, "The idempotency key is longer than 120 characters").optional(),
+});
+
+/** The rows of POST /sales/import/commit: what the preview returned under `matched`. */
+const csvLinesSchema = z
+  .array(
+    z.object({
+      rowIndex: z.number({ message: "rowIndex must be a whole number" }).int("rowIndex must be a whole number"),
+      name: z.string({ message: "name is required" }).min(1, "name is required"),
+      qtySold: saleBodySchema.shape.qtySold,
+      soldAt: saleBodySchema.shape.soldAt.transform((v) => v || undefined),
+    }),
+    { message: "lines must be a non-empty array" },
+  )
+  .min(1, "lines must be a non-empty array");
+
+/** The sale fields of a request. The idempotency key may come in the `Idempotency-Key` header or the body; if both are sent they must agree. */
+function parseSaleRequest(req: Request, res: Response) {
+  const parsed = saleBodySchema.safeParse(req.body ?? {});
+  if (!parsed.success) {
+    invalid(res, parsed.error.issues[0].message);
+    return null;
   }
-  next(err as Error);
+  const { qtySold, soldAt, locationId, idempotencyKey: bodyKey } = parsed.data;
+  const headerKey = req.header("Idempotency-Key") || undefined;
+  if (headerKey && bodyKey && headerKey !== bodyKey) {
+    invalid(res, "The Idempotency-Key header and the idempotencyKey field differ");
+    return null;
+  }
+  return { qtySold, soldAt: soldAt ? new Date(soldAt) : undefined, locationId, idempotencyKey: headerKey ?? bodyKey ?? undefined };
 }
 
 /** POST /items/:id/sales — record a menu-item sale (recipe → stock depletion). */
 export async function handleRecordSale(req: Request, res: Response, next: NextFunction) {
   try {
-    const orgId = await resolveSalesOrgId(req, res);
-    if (orgId === null) return;
-    const userId = req.user!.sub;
-    const { qtySold, soldAt, locationId } = req.body ?? {};
-    if (qtySold === undefined || Number(qtySold) <= 0) {
-      res.status(400).json({ error: "qtySold must be greater than 0" });
-      return;
-    }
-    const idempotencyKey = (req.header("Idempotency-Key") as string | undefined) ?? undefined;
-    const result = await recordSale(orgId, userId, {
-      menuItemId: req.params.id as string,
-      qtySold: Number(qtySold),
-      soldAt: soldAt ? new Date(String(soldAt)) : undefined,
-      locationId: locationId || undefined,
-      idempotencyKey,
-      actor: req.user!,
-    });
+    const scope = await saleScope(req);
+    const body = parseSaleRequest(req, res);
+    if (!body) return;
+    const result = await recordSale(scope.organisationId, scope.userId, { menuItemId: req.params.id as string, ...body, actor: req.user! });
     res.status(201).json(result);
   } catch (err) {
-    handleSaleError(err, res, next);
+    next(err);
   }
 }
 
-/** POST /sales/:saleId/void — reverse a recorded sale. */
+/** POST /sales/:saleId/void — reverse a recorded sale (its recorder or an organisation admin). */
 export async function handleVoidSale(req: Request, res: Response, next: NextFunction) {
   try {
-    const orgId = await resolveSalesOrgId(req, res);
-    if (orgId === null) return;
-    const result = await voidSale(orgId, req.user!.sub, req.params.saleId as string);
-    res.json(result);
+    const scope = await saleScope(req);
+    res.json(await voidSale(scope, req.params.saleId as string, req.user!));
   } catch (err) {
-    handleSaleError(err, res, next);
+    next(err);
   }
 }
 
 /** GET /locations/:locId/sales — recent sales for a location. */
 export async function handleListSales(req: Request, res: Response, next: NextFunction) {
   try {
-    const orgId = await resolveSalesOrgId(req, res);
-    if (orgId === null) return;
+    const scope = await saleScope(req);
     const limit = req.query.limit ? Number(req.query.limit) : undefined;
-    res.json(await listSales(orgId, req.params.locId as string, limit));
+    const mayVoid = hasPermission(req.user!, "menu:manage");
+    const sales = await listSales(scope.organisationId, req.params.locId as string, limit);
+    // canManage: the caller may void this sale (its recorder or an organisation admin, holding menu:manage).
+    res.json(sales.map(({ createdBy, ...row }) => ({ ...row, canManage: mayVoid && (createdBy === scope.userId || scope.isOrgAdmin) })));
   } catch (err) {
-    handleSaleError(err, res, next);
+    next(err);
   }
 }
 
 /** GET /consumables — sellable FOH consumables for the Record-sale picker. */
 export async function handleListConsumables(req: Request, res: Response, next: NextFunction) {
   try {
-    const orgId = await resolveSalesOrgId(req, res);
-    if (orgId === null) return;
-    res.json(await listSellableConsumables(orgId));
+    const scope = await saleScope(req);
+    res.json(await listSellableConsumables(scope.organisationId));
   } catch (err) {
-    handleSaleError(err, res, next);
+    next(err);
   }
 }
 
 /** POST /consumables/:ingredientId/sales — sell a FOH consumable directly (auto 1:1 link). */
 export async function handleRecordConsumableSale(req: Request, res: Response, next: NextFunction) {
   try {
-    const orgId = await resolveSalesOrgId(req, res);
-    if (orgId === null) return;
-    const userId = req.user!.sub;
-    const { qtySold, soldAt, locationId } = req.body ?? {};
-    if (qtySold === undefined || Number(qtySold) <= 0) {
-      res.status(400).json({ error: "qtySold must be greater than 0" });
-      return;
-    }
-    const idempotencyKey = (req.header("Idempotency-Key") as string | undefined) ?? undefined;
-    const result = await recordConsumableSale(orgId, userId, {
-      ingredientId: req.params.ingredientId as string,
-      qtySold: Number(qtySold),
-      soldAt: soldAt ? new Date(String(soldAt)) : undefined,
-      locationId: locationId || undefined,
-      idempotencyKey,
-      actor: req.user!,
-    });
+    const scope = await saleScope(req);
+    const body = parseSaleRequest(req, res);
+    if (!body) return;
+    const result = await recordConsumableSale(scope.organisationId, scope.userId, { ingredientId: req.params.ingredientId as string, ...body, actor: req.user! });
     res.status(201).json(result);
   } catch (err) {
-    handleSaleError(err, res, next);
+    next(err);
   }
 }
 
 /** POST /sales/import/preview — match a CSV to menu items (deplete nothing). */
 export async function handleSalesCsvPreview(req: Request, res: Response, next: NextFunction) {
   try {
-    const userId = req.user!.sub;
+    const scope = await saleScope(req);
     const file = req.file;
-    if (!file) { res.status(400).json({ error: "CSV file required" }); return; }
-    res.json(await previewSalesCsv(userId, file.buffer.toString("utf-8")));
+    if (!file) { invalid(res, "CSV file required"); return; }
+    res.json(await previewSalesCsv(scope.organisationId, scope.userId, file.buffer.toString("utf-8")));
   } catch (err) {
-    handleSaleError(err, res, next);
+    next(err);
   }
 }
 
 /** POST /sales/import/commit — record matched CSV rows (per-row atomic). */
 export async function handleSalesCsvCommit(req: Request, res: Response, next: NextFunction) {
   try {
-    const orgId = await resolveSalesOrgId(req, res);
-    if (orgId === null) return;
-    const userId = req.user!.sub;
-    const lines = req.body?.lines;
-    if (!Array.isArray(lines) || lines.length === 0) {
-      res.status(400).json({ error: "lines must be a non-empty array" });
+    const scope = await saleScope(req);
+    const parsed = csvLinesSchema.safeParse(req.body?.lines);
+    if (!parsed.success) {
+      invalid(res, parsed.error.issues[0].message);
       return;
     }
-    res.json(await commitSalesCsv(orgId, userId, lines, req.user!));
+    res.json(await commitSalesCsv(scope.organisationId, scope.userId, parsed.data, req.user!));
   } catch (err) {
-    handleSaleError(err, res, next);
+    next(err);
   }
 }
 
@@ -197,21 +212,19 @@ const ingredientSchema = z.object({
 
 export async function handleListMenuItems(req: Request, res: Response, next: NextFunction) {
   try {
-    const userId = req.user!.sub;
     const category = req.query.category as string | undefined;
     const storeLocationId = req.query.storeLocationId as string | undefined;
     if (storeLocationId) await assertLocationAccess(req.user!, storeLocationId);
-    const items = await getMenuItems(userId, category, storeLocationId);
-    res.json(items);
+    const scope = await menuScope(req);
+    res.json(withCanManage(req, scope, await getMenuItems(scope, category, storeLocationId)));
   } catch (err) { next(err); }
 }
 
 export async function handleCreateMenuItem(req: Request, res: Response, next: NextFunction) {
   try {
-    const userId = req.user!.sub;
     const parsed = menuItemSchema.safeParse(req.body);
-    if (!parsed.success) { res.status(400).json({ error: parsed.error.issues[0].message }); return; }
-    const item = await createMenuItem(userId, parsed.data);
+    if (!parsed.success) { invalid(res, parsed.error.issues[0].message); return; }
+    const item = await createMenuItem(await menuScope(req), parsed.data);
     res.status(201).json(item);
   } catch (err) { next(err); }
 }
@@ -228,23 +241,18 @@ const updateMenuItemSchema = z.object({
 
 export async function handleUpdateMenuItem(req: Request, res: Response, next: NextFunction) {
   try {
-    const userId = req.user!.sub;
     const id = req.params.id as string;
     const parsed = updateMenuItemSchema.safeParse(req.body);
-    if (!parsed.success) {
-      res.status(400).json({ error: parsed.error.issues[0].message });
-      return;
-    }
-    await updateMenuItem(id, userId, parsed.data);
-    const item = await getMenuItem(id, userId);
-    res.json(item);
+    if (!parsed.success) { invalid(res, parsed.error.issues[0].message); return; }
+    const scope = await menuScope(req);
+    await updateMenuItem(id, scope, parsed.data);
+    res.json(await requireMenuItem(id, scope));
   } catch (err) { next(err); }
 }
 
 export async function handleDeleteMenuItem(req: Request, res: Response, next: NextFunction) {
   try {
-    const userId = req.user!.sub;
-    await deleteMenuItem(req.params.id as string, userId);
+    await deleteMenuItem(req.params.id as string, await menuScope(req));
     res.json({ ok: true });
   } catch (err) { next(err); }
 }
@@ -253,35 +261,30 @@ export async function handleDeleteMenuItem(req: Request, res: Response, next: Ne
 
 export async function handleAddIngredient(req: Request, res: Response, next: NextFunction) {
   try {
-    const userId = req.user!.sub;
     const parsed = ingredientSchema.safeParse(req.body);
-    if (!parsed.success) { res.status(400).json({ error: parsed.error.issues[0].message }); return; }
+    if (!parsed.success) { invalid(res, parsed.error.issues[0].message); return; }
     const menuItemId = req.params.id as string;
-    const item = await getMenuItem(menuItemId, userId);
-    if (!item) { res.status(404).json({ error: "Item not found" }); return; }
-    const ing = await addIngredient(menuItemId, parsed.data);
+    const scope = await menuScope(req);
+    await requireManageableMenuItem(menuItemId, scope);
+    const ing = await addIngredient(menuItemId, scope, parsed.data);
     res.status(201).json(ing);
   } catch (err) { next(err); }
 }
 
 export async function handleListIngredients(req: Request, res: Response, next: NextFunction) {
   try {
-    const userId = req.user!.sub;
     const menuItemId = req.params.id as string;
-    const item = await getMenuItem(menuItemId, userId);
-    if (!item) { res.status(404).json({ error: "Item not found" }); return; }
-    const ingredients = await getIngredients(menuItemId);
-    res.json(ingredients);
+    await requireMenuItem(menuItemId, await menuScope(req));
+    res.json(await getIngredients(menuItemId));
   } catch (err) { next(err); }
 }
 
 export async function handleDeleteIngredient(req: Request, res: Response, next: NextFunction) {
   try {
-    const userId = req.user!.sub;
     const menuItemId = req.params.id as string;
-    const item = await getMenuItem(menuItemId, userId);
-    if (!item) { res.status(404).json({ error: "Item not found" }); return; }
-    await deleteIngredient(parseInt(req.params.ingredientId as string, 10), menuItemId);
+    const scope = await menuScope(req);
+    await requireManageableMenuItem(menuItemId, scope);
+    await deleteIngredient(parseInt(req.params.ingredientId as string, 10), menuItemId, scope);
     res.json({ ok: true });
   } catch (err) { next(err); }
 }
@@ -294,21 +297,20 @@ export async function handleDeleteIngredient(req: Request, res: Response, next: 
  */
 export async function handleRefreshCost(req: Request, res: Response, next: NextFunction) {
   try {
-    const userId = req.user!.sub;
     const menuItemId = req.params.id as string;
-    const item = await getMenuItem(menuItemId, userId);
-    if (!item) { res.status(404).json({ error: "Item not found" }); return; }
+    const scope = await menuScope(req);
+    await requireManageableMenuItem(menuItemId, scope);
     const rowId = parseInt(req.params.ingredientId as string, 10);
-    const updated = await refreshIngredientCost(rowId, menuItemId);
+    const updated = await refreshIngredientCost(rowId, menuItemId, scope);
     res.json(updated);
   } catch (err: unknown) {
     const msg = err instanceof Error ? err.message : String(err);
-    if (msg.includes("not found")) {
-      res.status(404).json({ error: msg });
+    if (!(err instanceof AppError) && msg.includes("not found")) {
+      res.status(404).json({ error: msg, code: "NOT_FOUND" });
       return;
     }
-    if (msg.includes("unlinked")) {
-      res.status(400).json({ error: msg });
+    if (!(err instanceof AppError) && msg.includes("unlinked")) {
+      invalid(res, msg);
       return;
     }
     next(err);
@@ -323,16 +325,14 @@ export async function handleRefreshCost(req: Request, res: Response, next: NextF
  */
 export async function handleGetPandLCost(req: Request, res: Response, next: NextFunction) {
   try {
-    const userId = req.user!.sub;
     const menuItemId = req.params.id as string;
-    const item = await getMenuItem(menuItemId, userId);
-    if (!item) { res.status(404).json({ error: "Item not found" }); return; }
+    await requireMenuItem(menuItemId, await menuScope(req));
     const total = await getPandLFoodCost(menuItemId);
     res.json({ menuItemId, foodCost: total });
   } catch (err: unknown) {
     const msg = err instanceof Error ? err.message : String(err);
-    if (msg.includes("not found")) {
-      res.status(404).json({ error: msg });
+    if (!(err instanceof AppError) && msg.includes("not found")) {
+      res.status(404).json({ error: msg, code: "NOT_FOUND" });
       return;
     }
     next(err);
@@ -341,20 +341,20 @@ export async function handleGetPandLCost(req: Request, res: Response, next: Next
 
 // ── Analysis ─────────────────────────────────────────────
 
+/** GET /api/menu/analysis — computed from what is stored; writes nothing. */
 export async function handleGetAnalysis(req: Request, res: Response, next: NextFunction) {
   try {
-    const userId = req.user!.sub;
     const category = req.query.category as string | undefined;
-    const analysis = await getMenuAnalysis(userId, category);
-    res.json(analysis);
+    const scope = await menuScope(req);
+    const analysis = await getMenuAnalysis(scope, category);
+    res.json({ ...analysis, items: withCanManage(req, scope, analysis.items) });
   } catch (err) { next(err); }
 }
 
 export async function handleRecalculate(req: Request, res: Response, next: NextFunction) {
   try {
-    const userId = req.user!.sub;
-    const category = req.body.category as string | undefined;
-    await recalculateMenu(userId, category);
+    const category = req.body?.category as string | undefined;
+    await recalculateMenu(await menuScope(req), category);
     res.json({ ok: true });
   } catch (err) { next(err); }
 }
@@ -363,19 +363,16 @@ export async function handleRecalculate(req: Request, res: Response, next: NextF
 
 export async function handleGetCategories(req: Request, res: Response, next: NextFunction) {
   try {
-    const userId = req.user!.sub;
-    const settings = await getCategorySettings(userId);
-    res.json(settings);
+    res.json(await getCategorySettings(await menuScope(req)));
   } catch (err) { next(err); }
 }
 
 export async function handleUpdateCategory(req: Request, res: Response, next: NextFunction) {
   try {
-    const userId = req.user!.sub;
     const categoryName = req.params.name as string;
     const { targetFoodCostPct } = req.body;
-    if (!targetFoodCostPct) { res.status(400).json({ error: "targetFoodCostPct required" }); return; }
-    await upsertCategorySetting(userId, categoryName, targetFoodCostPct);
+    if (!targetFoodCostPct) { invalid(res, "targetFoodCostPct required"); return; }
+    await upsertCategorySetting(await menuScope(req), categoryName, targetFoodCostPct);
     res.json({ ok: true });
   } catch (err) { next(err); }
 }
@@ -384,12 +381,10 @@ export async function handleUpdateCategory(req: Request, res: Response, next: Ne
 
 export async function handleImportSales(req: Request, res: Response, next: NextFunction) {
   try {
-    const userId = req.user!.sub;
     const file = req.file;
-    if (!file) { res.status(400).json({ error: "CSV file required" }); return; }
+    if (!file) { invalid(res, "CSV file required"); return; }
     const csvContent = file.buffer.toString("utf-8");
-    const result = await importCsvSalesData(userId, csvContent);
-    res.json(result);
+    res.json(await importCsvSalesData(await menuScope(req), csvContent));
   } catch (err) { next(err); }
 }
 
@@ -397,10 +392,8 @@ export async function handleImportSales(req: Request, res: Response, next: NextF
 
 export async function handleGetRecommendations(req: Request, res: Response, next: NextFunction) {
   try {
-    const userId = req.user!.sub;
     const id = req.params.id as string;
-    const recommendations = await getItemRecommendations(id, userId);
-    res.json(recommendations);
+    res.json(await getItemRecommendations(id, await menuScope(req)));
   } catch (err) { next(err); }
 }
 
@@ -408,20 +401,14 @@ export async function handleGetRecommendations(req: Request, res: Response, next
 
 export async function handleGetWasteImpact(req: Request, res: Response, next: NextFunction) {
   try {
-    const userId = req.user!.sub;
-    const impacts = await getWasteImpactForMenuItems(userId);
-    res.json(impacts);
+    res.json(await getWasteImpactForMenuItems(await menuScope(req), req.user!));
   } catch (err) { next(err); }
 }
 
 export async function handleGenerateReplacement(req: Request, res: Response, next: NextFunction) {
   try {
-    const userId = req.user!.sub;
-    const id = req.params.id as string;
-    const item = await getMenuItem(id, userId);
-    if (!item) { res.status(404).json({ error: "Item not found" }); return; }
-    const context = generateReplacementContext(item);
-    res.json(context);
+    const item = await requireMenuItem(req.params.id as string, await menuScope(req));
+    res.json(generateReplacementContext(item));
   } catch (err) { next(err); }
 }
 
@@ -433,16 +420,13 @@ export async function handleGenerateReplacement(req: Request, res: Response, nex
  */
 export async function handleGetYieldVariance(req: Request, res: Response, next: NextFunction) {
   try {
-    const userId = req.user!.sub;
     const id = req.params.id as string;
-    const item = await getMenuItem(id, userId);
-    if (!item) { res.status(404).json({ error: "Item not found" }); return; }
-    const result = await getYieldVariance(id);
-    res.json(result);
+    await requireMenuItem(id, await menuScope(req));
+    res.json(await getYieldVariance(id));
   } catch (err: unknown) {
     const msg = err instanceof Error ? err.message : String(err);
     if (msg === "Menu item not found") {
-      res.status(404).json({ error: msg });
+      res.status(404).json({ error: msg, code: "NOT_FOUND" });
       return;
     }
     next(err);
@@ -450,15 +434,11 @@ export async function handleGetYieldVariance(req: Request, res: Response, next: 
 }
 
 /**
- * GET /api/menu/yield-variance — bulk variance for every menu item the
- * caller owns. Used by the Menu Intelligence list view.
+ * GET /api/menu/yield-variance — bulk variance for every menu item of the
+ * caller's organisation. Used by the Menu Intelligence list view.
  */
 export async function handleListYieldVariance(req: Request, res: Response, next: NextFunction) {
   try {
-    const userId = req.user!.sub;
-    const results = await listYieldVariance(userId);
-    res.json(results);
+    res.json(await listYieldVariance(await menuScope(req)));
   } catch (err) { next(err); }
 }
-
-

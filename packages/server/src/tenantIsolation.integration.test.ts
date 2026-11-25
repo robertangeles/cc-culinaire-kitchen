@@ -26,6 +26,7 @@ import {
   supplier,
   storeLocation,
   menuItem,
+  sale,
   conversation,
   message,
 } from "./db/schema.js";
@@ -36,7 +37,8 @@ import {
   createIngredient,
   createSupplier,
 } from "./services/ingredientService.js";
-import { getMenuItem } from "./services/menuIntelligenceService.js";
+import { getMenuItem, getMenuItems, updateMenuItem, deleteMenuItem } from "./services/menuIntelligenceService.js";
+import { recordSale, voidSale } from "./services/saleService.js";
 import { saveMessages } from "./services/conversationService.js";
 import { getLocationInOrg } from "./services/locationContextService.js";
 
@@ -152,9 +154,46 @@ describe.skipIf(!RUN)("tenant isolation — real DB", () => {
     expect(await getLocationInOrg(locA, orgA)).toBe(true);
   });
 
-  it("getMenuItem is owner-scoped (user-first isolation)", async () => {
-    expect(await getMenuItem(menuA, userB)).toBeNull();
-    expect(await getMenuItem(menuA, userA)).not.toBeNull();
+  // `menuA` above has no organisation (a row an older server wrote), so it only proves the creator-only fallback.
+  // This item carries organisation_id, which is the path every new item takes.
+  it("an item that belongs to organisation A cannot be read, changed, sold or voided from organisation B, member or admin", async () => {
+    const [item] = await db
+      .insert(menuItem)
+      .values({ userId: userA, organisationId: orgA, name: `${tag}-org-menu`, category: "mains", sellingPrice: "10.00" })
+      .returning({ id: menuItem.menuItemId });
+    let saleId: string | undefined;
+    try {
+      const scopeA = { userId: userA, organisationId: orgA, isOrgAdmin: true };
+      const made = await recordSale(orgA, userA, { menuItemId: item.id, qtySold: 1, locationId: locA });
+      saleId = made.saleId;
+
+      for (const isOrgAdmin of [false, true]) {
+        const scopeB = { userId: userB, organisationId: orgB, isOrgAdmin };
+        expect(await getMenuItem(item.id, scopeB)).toBeNull();
+        expect((await getMenuItems(scopeB)).map((i) => i.menuItemId)).not.toContain(item.id);
+        await expect(updateMenuItem(item.id, scopeB, { name: "hijacked" })).rejects.toMatchObject({ statusCode: 404, code: "NOT_FOUND" });
+        await expect(deleteMenuItem(item.id, scopeB)).rejects.toMatchObject({ statusCode: 404, code: "NOT_FOUND" });
+        await expect(recordSale(orgB, userB, { menuItemId: item.id, qtySold: 1, locationId: locA })).rejects.toMatchObject({ statusCode: 404, code: "NOT_FOUND" });
+        await expect(voidSale(scopeB as typeof scopeB & { organisationId: number }, saleId, { sub: userB, roles: [], permissions: [] })).rejects.toMatchObject({ statusCode: 404, code: "NOT_FOUND" });
+      }
+
+      // Nothing moved, and organisation A itself still reads and changes it.
+      const [row] = await db.select({ name: menuItem.name, sold: menuItem.unitsSold }).from(menuItem).where(eq(menuItem.menuItemId, item.id));
+      expect(row).toEqual({ name: `${tag}-org-menu`, sold: 1 });
+      const [saleRow] = await db.select({ voidedAt: sale.voidedAt }).from(sale).where(eq(sale.saleId, saleId));
+      expect(saleRow.voidedAt).toBeNull();
+      expect(await getMenuItem(item.id, scopeA)).not.toBeNull();
+      await updateMenuItem(item.id, scopeA, { name: `${tag}-org-menu-2` });
+      expect((await getMenuItem(item.id, scopeA))?.name).toBe(`${tag}-org-menu-2`);
+    } finally {
+      if (saleId) await db.delete(sale).where(eq(sale.saleId, saleId));
+      await db.delete(menuItem).where(eq(menuItem.menuItemId, item.id));
+    }
+  });
+
+  it("getMenuItem is organisation-scoped (another organisation's admin cannot see it)", async () => {
+    expect(await getMenuItem(menuA, { userId: userB, organisationId: orgB, isOrgAdmin: true })).toBeNull();
+    expect(await getMenuItem(menuA, { userId: userA, organisationId: orgA, isOrgAdmin: true })).not.toBeNull();
   });
 
   it("saveMessages refuses a cross-owner write and inserts nothing", async () => {

@@ -21,6 +21,7 @@ import { db } from "../db/index.js";
 import {
   organisation,
   user,
+  userOrganisation,
   storeLocation,
   ingredient,
   locationIngredient,
@@ -93,6 +94,8 @@ describe.skipIf(!RUN)("kitchen-unit model + recipe selling — real DB", () => {
       .insert(organisation)
       .values({ organisationName: `${fx.tag}-org`, joinKey: `${fx.tag}-key`, createdBy: fx.userId })
       .returning({ id: organisation.organisationId });
+    // An organisation admin: sells at, and voids at, every location of the organisation.
+    await db.insert(userOrganisation).values({ userId: fx.userId, organisationId: fx.orgId, role: "admin" });
     [{ id: fx.locId }] = await db
       .insert(storeLocation)
       .values({
@@ -130,7 +133,8 @@ describe.skipIf(!RUN)("kitchen-unit model + recipe selling — real DB", () => {
         activeInd: true,
       });
       if (v.stock !== undefined) {
-        await db.insert(stockLevel).values({ storeLocationId: fx.locId, ingredientId: row.id, currentQty: v.stock });
+        // A FOH consumable's stock lives on the shelf (FOH), everything else in the back of house.
+        await db.insert(stockLevel).values({ storeLocationId: fx.locId, ingredientId: row.id, currentQty: v.stock, zone: v.itemType === "FOH_CONSUMABLE" ? "FOH" : "BOH" });
       }
       return row.id;
     };
@@ -170,6 +174,7 @@ describe.skipIf(!RUN)("kitchen-unit model + recipe selling — real DB", () => {
     await db.delete(locationIngredient).where(eq(locationIngredient.storeLocationId, fx.locId));
     await db.delete(ingredient).where(inArray(ingredient.ingredientId, ingIds));
     await db.delete(storeLocation).where(eq(storeLocation.storeLocationId, fx.locId));
+    await db.delete(userOrganisation).where(eq(userOrganisation.organisationId, fx.orgId));
     await db.delete(organisation).where(eq(organisation.organisationId, fx.orgId));
     await db.delete(user).where(eq(user.userId, fx.userId));
   });
@@ -334,9 +339,11 @@ describe.skipIf(!RUN)("kitchen-unit model + recipe selling — real DB", () => {
       const before = await stockQtyOf(fx.wineId);
       const res = await recordSale(fx.orgId, fx.userId, { menuItemId: fx.glassId, qtySold: 2 });
       expect(await stockQtyOf(fx.wineId)).toBeCloseTo(before - 0.4, 6);
-      await voidSale(fx.orgId, fx.userId, res.saleId);
+      const scope = { userId: fx.userId, organisationId: fx.orgId, isOrgAdmin: true };
+      const actor = { sub: fx.userId, roles: [], permissions: [] };
+      await voidSale(scope, res.saleId, actor);
       expect(await stockQtyOf(fx.wineId)).toBeCloseTo(before, 6);
-      await expect(voidSale(fx.orgId, fx.userId, res.saleId)).rejects.toBeInstanceOf(SaleError);
+      await expect(voidSale(scope, res.saleId, actor)).rejects.toBeInstanceOf(SaleError);
     });
 
     it("idempotency: a replayed key deducts once", async () => {
@@ -401,7 +408,7 @@ describe.skipIf(!RUN)("kitchen-unit model + recipe selling — real DB", () => {
 
     it("preview matches names, reports unmatched, depletes nothing", async () => {
       const before = await stockQtyOf(fx.wineId);
-      const preview = await previewSalesCsv(fx.userId, `item,qty\n${fx.tag}-glass,2\nNo Such Item,3`);
+      const preview = await previewSalesCsv(fx.orgId, fx.userId, `item,qty\n${fx.tag}-glass,2\nNo Such Item,3`);
       expect(preview.matched).toHaveLength(1);
       expect(preview.unmatched).toHaveLength(1);
       expect(await stockQtyOf(fx.wineId)).toBe(before);
