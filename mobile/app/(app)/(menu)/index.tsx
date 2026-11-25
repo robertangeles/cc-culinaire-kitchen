@@ -44,8 +44,10 @@ export default function MenuHome() {
   if (state.phase !== "ready") return null;
   const canManage = hasAnyPermission(state.user, ["menu:manage"]);
   const categories = categoriesOf(snap.items);
+  // A category whose last item is gone has no chip to switch it off with.
+  const inCategory = category && categories.includes(category) ? category : null;
   const klass = CLASS_FILTERS.find((k) => classInfo(k).label === classLabel) ?? null;
-  const shown = filterItems(snap.items, { query, category, klass });
+  const shown = filterItems(snap.items, { query, category: inCategory, klass });
   const emptyCard = (heading: string, sentence: string) => (
     <Surface>
       <View style={{ padding: space.lg, gap: space.xs }}>
@@ -87,7 +89,7 @@ export default function MenuHome() {
           {snap.items.length > 0 ? (
             <>
               <TextField label="Search the menu" value={query} onChangeText={setQuery} placeholder="Item or category" autoCorrect={false} returnKeyType="search" />
-              {categories.length > 1 ? <ChoiceChips label="Category" options={categories} value={category} onChange={setCategory} clearable /> : null}
+              {categories.length > 1 ? <ChoiceChips label="Category" options={categories} value={inCategory} onChange={setCategory} clearable /> : null}
               <ChoiceChips label="Class" options={CLASS_LABELS} value={classLabel} onChange={setClassLabel} clearable />
               {shown.length === 0 ? (
                 emptyCard("Nothing matches", "No item matches this search or filter.")

@@ -90,6 +90,15 @@ describe("the menu list", () => {
     expect(screen.getByText("Nothing matches")).toBeTruthy();
   });
 
+  it("forgets a category filter whose last item is gone: there is no chip left to clear it", async () => {
+    const t = await makeMenu({ items });
+    render(<MenuHome />);
+    fireEvent.click(screen.getByRole("radio", { name: "Desserts" }));
+    t.api.items.mockResolvedValue([items[0]]);
+    await act(() => t.store.refresh());
+    expect(screen.getByText("Margherita")).toBeTruthy();
+  });
+
   it("says an empty menu in a card, an error in the server's words, and with no signal shows the last menu and that writes need a connection", async () => {
     await makeMenu({ items: [] });
     const first = render(<MenuHome />);

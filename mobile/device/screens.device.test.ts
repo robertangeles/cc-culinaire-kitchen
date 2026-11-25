@@ -958,6 +958,11 @@ describe.skipIf(!process.env.SCREENS_OUT)(`screens on ${FORM}`, { timeout: 600_0
     await dish("Focaccia", "Sides", "9.00", 30, [[flour, "Tipo 00 flour", "1.2", "kg"]], { servings: 8, qFactorPct: "5" });
     await dish("Dozen dinner rolls", "Sides", "15.00", 2, [[flour, "Tipo 00 flour", "0.9", "kg"]], { servings: 12, servingsPerSale: 12 });
     await m.client.request("PUT", "/api/menu/categories/Grilled", { body: { targetFoodCostPct: "32" } });
+    // A saved recipe: only the model makes one through the API, so straight into the walk's own throwaway database, never any other.
+    const url = new URL(process.env.DATABASE_URL ?? "");
+    if (url.hostname !== "127.0.0.1" || url.port !== "55432") throw new Error(`not the local test cluster: ${url.host}`);
+    const recipeData = JSON.stringify({ yield: "4 servings", ingredients: [{ name: "Potato", amount: "1", unit: "kg" }, { name: "Tipo 00 flour", amount: "1 1/2", unit: "cups" }, { name: "Salt", amount: "to taste", unit: "pinch" }] });
+    execFileSync("psql", [url.href, "-qAt", "-v", "ON_ERROR_STOP=1", "-c", `insert into recipe (user_id, domain, title, recipe_data) select user_id, 'recipe', 'Potato gnocchi', '${recipeData}' from "user" where user_email = '${credentials.email}'`]);
   }
 
   it("menu: list, filter, item, change it, add one, sale, sales, targets, offline", async () => {
@@ -1000,6 +1005,15 @@ describe.skipIf(!process.env.SCREENS_OUT)(`screens on ${FORM}`, { timeout: 600_0
     await choose("Save the item");
     await sleep(800);
     await shot("m4b-add-item-error");
+    await choose("Start from a recipe");
+    await waitFor("Potato gnocchi", 30_000);
+    await shot("m4c-start-from-recipe");
+    await choose("Start from Potato gnocchi");
+    await type("Selling price, in $", "22");
+    await hideKeyboard();
+    await choose(/^Salt, no quantity/);
+    await shot("m4d-imported-line-open");
+    await choose("Remove Salt");
     await choose("Cancel");
     await choose("Record a sale");
     await waitFor("What was sold", 30_000);
@@ -1028,6 +1042,11 @@ describe.skipIf(!process.env.SCREENS_OUT)(`screens on ${FORM}`, { timeout: 600_0
       await tab("Menu"); // reads the menu again when it comes into view
       await waitFor(/^You're offline/, 60_000);
       await shot("m8-menu-offline");
+      await choose("Record a sale");
+      await choose("Sell Margherita");
+      await choose("Record the sale");
+      await waitFor("This sale is not confirmed", 60_000);
+      await shot("m8b-sale-not-confirmed");
     } finally {
       await setAirplane(false);
     }
