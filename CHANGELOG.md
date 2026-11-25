@@ -11,6 +11,15 @@ Server only, additive. No migration, no permission change, no change to who sees
 
 - **`GET /api/workforce/swaps`:** each swap also carries `shiftStatus` (`Draft`, `Published` or `Cancelled`), and its venue's `ianaTimezone` and `locationName`, so a client can hide swaps of shifts that are not published and show venue time for a venue the person does not work at. The list itself is unchanged: swaps of draft and cancelled shifts are still in it.
 
+### Added (mobile Wave 5, phone: the biometric app lock)
+
+Phone app only; no server change, no migration, no permission change, nothing on the web. **The phone's development build must be rebuilt**: `expo-local-authentication` is a new native module and iOS needs its Face ID sentence (`mobile/RELEASE.md`, "Release blockers"). No build was run.
+
+- **The app locks** for anyone who holds `purchasing:approve` or a roster or compliance permission beyond their own records, and for Administrators: at a cold start, at a sign-in, and after more than 60 seconds in the background. Unlock is Face ID, Touch ID or Android biometrics, with the device passcode as the fallback. Nothing of the app shows behind the lock or in the app switcher. A cancelled or failed prompt leaves it locked and signed in. It cannot be switched off; nobody else sees a lock.
+- **A device with no passcode and no biometrics** is asked to set one up or sign out, for those people only.
+- **Approve, Reject and Raise credit note** ask again when the last unlock is more than two minutes old; a prompt that does not go through sends nothing.
+- The lock was the last condition before roster and compliance data may be kept on the phone (the cache itself is not built).
+
 ### Added (mobile Wave 7, phone: the menu)
 
 Phone app only; no server change, no migration, no new permission. Uses the Wave 7 menu server (organisation-owned menu items, `menu:manage`, keyed sales) and the shared costing.
@@ -40,7 +49,7 @@ Server and web. No migration, no new permission. **Before deploying:** a custom 
 Phone app and shared schemas only; no server change, no migration, no permission change, no new dependency (the development build does not need a rebuild). Uses the Wave 5 purchasing server and the draft edit and replay-safe create routes.
 
 - **Orders tab** for holders of `purchasing:draft`, `purchasing:submit`, `purchasing:approve` or `purchasing:credit` (after Receive; under More for most people): the location's orders with a status filter, one order with its items, submit, email, cancel, reorder, and a new order written by hand or from an order guide, kept on the phone until it is saved. A saved draft can be changed.
-- **Approvals:** the queue, longest wait first (over a day and over two days stand out), approve and reject on the order itself. An approver is not offered Approve on an order they raised or changed while someone else can approve it. No biometric lock yet: that is its own task before the first store release.
+- **Approvals:** the queue, longest wait first (over a day and over two days stand out), approve and reject on the order itself. An approver is not offered Approve on an order they raised or changed while someone else can approve it.
 - **Credit notes** raised from a delivery's discrepancy, one each, for no more than it is worth.
 - **Links:** order to delivery, delivery to order, received order to what can be claimed, and approval, answer and discrepancy notifications to their order.
 - **Offline:** lists open with no signal and say from when; every write needs a connection and says so. A repeated save, approval or credit note never acts twice.

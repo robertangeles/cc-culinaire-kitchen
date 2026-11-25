@@ -41,6 +41,11 @@ NODE_OPTIONS="--import $PWD/mobile/device/fakeModel.mjs" OPENROUTER_API_KEY=fake
 The database also needs the `recipePrompt` and `recipeRefinementPrompt` rows (`prompt` table, `default_ind = false`): they are authored in the admin UI and not seeded.
 Then `check:device -- device/chatRecipes`, with Metro on 8088 and `adb reverse` for 8088 and 3009. It deletes only the recipes and conversations it made.
 
+The walks run with the **app lock off** (the E2E user is an Administrator, and nobody's fingerprint is here to unlock the owner's phone): `screens.sh` and `storeRoom.sh` start Metro with `EXPO_PUBLIC_APP_LOCK=off`, and so must you when you start
+it by hand. Only a development build reads it. `device/appLock.device.test.ts` is the lock's own walk, on the **tablet emulator only**: it sets a PIN on the emulator and takes it away again, and walks the lock screen, a device with no screen lock, a cancelled prompt, an unlock with the PIN, a guarded approval,
+the grace period, the app switcher and a cold start. Android keeps its own PIN prompt out of screenshots, so that picture shows it blank.
+`EXPO_PUBLIC_APP_LOCK=on SCREENS_FILE=device/appLock.device.test.ts SCREENS_FORMS=tablet bash device/lease.sh bash device/screens.sh <out-dir>`. A run that died halfway can leave the PIN: `adb shell locksettings clear --old 4826` (under the emulator's lease).
+
 `device/orders.device.test.ts` is the purchasing walk: every Orders screen, written from a guide, submitted, rejected, approved, received short and credited, with no signal and on its side, photographed. It runs
 through the screenshot walk's own set-up: `SCREENS_FILE=device/orders.device.test.ts SCREENS_FORMS=phone bash device/lease.sh bash device/screens.sh <out-dir>` (with the emulator's env for iPad width).
 
@@ -103,7 +108,7 @@ local cluster (any name but another worker's, for example `culinaire_emulator`).
 alias for this machine's 127.0.0.1, with no `adb reverse`. The count walk, for example:
 
 ```bash
-EXPO_PUBLIC_API_URL=http://10.0.2.2:3019 npx expo start --dev-client --port 8098   # in its own shell, like the API on 3019
+EXPO_PUBLIC_APP_LOCK=off EXPO_PUBLIC_API_URL=http://10.0.2.2:3019 npx expo start --dev-client --port 8098   # in its own shell, like the API on 3019
 curl -sf -m 10 http://127.0.0.1:3019/api/health && curl -sf -m 10 http://127.0.0.1:8098/status   # both answer within 10 s, or stop here
 bash device/lease.sh npx vitest run --config vitest.device.config.ts device/walk.device.test.ts
 ```
@@ -175,7 +180,7 @@ If `install -r` fails with `INSTALL_FAILED_UPDATE_INCOMPATIBLE` (a different sig
 Start it: Metro needs the server address when it bundles, and the phone reaches Metro through `adb reverse`:
 
 ```bash
-EXPO_PUBLIC_API_URL=http://127.0.0.1:3009 npx expo start --dev-client --port 8088   # without the variable the app shows "EXPO_PUBLIC_API_URL is not set"
+EXPO_PUBLIC_APP_LOCK=off EXPO_PUBLIC_API_URL=http://127.0.0.1:3009 npx expo start --dev-client --port 8088   # without the variable the app shows "EXPO_PUBLIC_API_URL is not set"
 adb reverse tcp:8088 tcp:8088; adb reverse tcp:3009 tcp:3009   # the walk does the first itself; the second lets the phone's 127.0.0.1 reach your server
 ```
 

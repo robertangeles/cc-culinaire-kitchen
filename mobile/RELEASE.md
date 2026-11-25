@@ -13,11 +13,20 @@ Run commands from the repository root. `eas` is the Expo build service; use it t
 | Build numbers | EAS keeps them (`appVersionSource: remote`, `autoIncrement` on preview and production) | never edit a build number by hand |
 | Updates over the air | `runtimeVersion: { policy: "appVersion" }`, one channel per profile (`development`, `preview`, `production`) | a JavaScript update reaches only builds with the same `version`, so it can never meet a build whose native code differs |
 | Server address | per EAS environment, never in a file | a test build can never silently point at production |
-| Permissions | none asked for yet | camera, notifications and the rest add theirs, with their own wording, in the wave that first uses them |
+| Permissions | Face ID (the app lock), photos and camera (the profile picture), notifications (only when turned on) | each with its own wording in `app.json`, asked for when it is first used; later ones arrive with their feature |
 | Encryption | `ITSAppUsesNonExemptEncryption: false` (HTTPS only) | no export-compliance question on every iOS build |
+| App lock | on for people who approve orders or manage rosters or compliance documents, always; needs a device passcode, fingerprint or face | owner's lost-phone policy (Q6) |
 | Billing | none in the app: no pricing, purchase or upgrade link (a test enforces it) | owner decision; see the Apple rule 3.1.3(b) note below |
 
 **The version rule.** Change `version` whenever a build needs new native code (a new native module, an Expo SDK bump) or whenever you ship to the stores. Then no over-the-air update can reach an older binary. Never raise `mobile_min_app_version` (Settings, Site Settings) above a version that is already live in both stores: you would lock people out of an app they cannot yet update.
+
+## Release blockers
+
+| Blocker | State |
+|---|---|
+| Biometric app lock for people who hold approval, roster or compliance permissions (owner's Q6: before the first store release, and before any roster or compliance data is kept on the phone) | **Done in code** (`mobile/README.md`, "App lock"). Still needs: a new development build (below) and the device checks at the end of this file, on the iPhone, the iPad and the moto g86. |
+
+**The app lock needs a new dev client.** `expo-local-authentication` is native code and the Face ID sentence is in the iOS build, so a development build made before it dies at start with "Cannot find native module 'ExpoLocalAuthentication'". Nothing has been built in the cloud: run the dev client commands under "Test builds" once for each platform (they use your Expo account's build allowance), or rebuild the Android one locally for free (`mobile/device/README.md`, "Rebuild and install"). If a build has already reached a tester by then, raise `version` first (the version rule above).
 
 ## One-time setup (owner)
 
@@ -88,6 +97,8 @@ The script prints the host before it writes anything and never prints the passwo
 >
 > Account deletion: Account (a tab, or under More), "Delete my account" (asks for the password). The demo account may be deleted during review; if it is, please contact us and we will restore it.
 >
+> App lock: this account can approve orders, so the app asks for Face ID, Touch ID or the device passcode when it opens. The review device needs a passcode set (Settings, Face ID & Passcode); without one the app asks for one and shows nothing else.
+>
 > Sign in with Google and Sign in with Apple are available on the sign-in screen. There are no in-app purchases and no paid features in this app. The Terms of Service and Privacy Policy are linked from the sign-in screen and the Account screen. Support: <support email>.
 
 ## Checks to do on real devices before each release
@@ -96,5 +107,7 @@ The script prints the host before it writes anything and never prints the passwo
 - iPad: each screen reads as one centred column, not stretched across the glass (the first-run, update, delete-account, terms and sign-in screens).
 - Sign in on a fresh account that has no organisation: first-run screen, join by key, join a location, reach the count.
 - Delete a test account from the Account screen (a tab, or under More); confirm the phone returns to sign-in with nothing left on it.
+- App lock, signed in as someone who approves orders: cold start shows the lock screen; Unlock works with Face ID or a fingerprint, and with the passcode after biometrics fail; cancel it and fail it five times (still locked, still signed in); lock the phone or switch apps for over a minute (locked) and for a few seconds (not locked); the app switcher shows a blank page; wait two minutes and approve an order (asked again; cancel sends nothing). On a spare device with no passcode: the app asks for one.
+- App lock, signed in as a cook: no lock anywhere.
 - Open Terms and Privacy from sign-in (signed out) and from the Account screen.
 - Set `mobile_min_app_version` above the installed version on a test server: the update screen appears with no link, then (after setting the store link) with the right store's button.

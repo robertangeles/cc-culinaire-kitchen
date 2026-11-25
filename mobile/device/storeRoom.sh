@@ -53,6 +53,8 @@ eval "$(bash "$ROOT/scripts/localIntegrationDb.sh" env)"
 export PORT DATABASE_URL=postgresql://ci@127.0.0.1:55432/$DB DEV_DATABASE_URL=postgresql://ci@127.0.0.1:55432/$DB CLIENT_URL=http://127.0.0.1:5179
 (cd "$ROOT" && pnpm --filter @culinaire/shared build >/dev/null)
 
+# The walks cannot unlock the app lock (the phone is the owner's); development builds only. The lock's own walk sets it to "on".
+export EXPO_PUBLIC_APP_LOCK=${EXPO_PUBLIC_APP_LOCK:-off}
 EXPO_PUBLIC_API_URL=http://$APP_HOST:$PORT npx expo start --dev-client --port "$METRO_PORT" >"$LOGS/metro.log" 2>&1 </dev/null &
 metro=$!
 
