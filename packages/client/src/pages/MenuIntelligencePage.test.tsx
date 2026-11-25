@@ -197,10 +197,9 @@ describe("Menu & Costing with inventory:cost", () => {
     expect(screen.queryByText(/costs and margins are hidden/i)).not.toBeInTheDocument();
     expect(figures(page)).toEqual(expect.arrayContaining(["36.0%", "$14.30", "32.9%", "$17.90", "$10.70"]));
     tab("Menu Items");
-    expect(screen.getAllByRole("columnheader").map((h) => h.textContent!.trim())).toEqual(["Name", "Category", "Price", "Food Cost", "FC %", "CM", "Units Sold", "Class", ""]);
-    expect(figures(page)).toEqual(expect.arrayContaining(["$6.10", "25.4%", "$17.90"]));
     expect(await screen.findByText("Dog + $40 waste")).toBeInTheDocument();
-    expect(screen.getByRole("columnheader", { name: "Waste" })).toBeInTheDocument();
+    expect(screen.getAllByRole("columnheader").map((h) => h.textContent!.trim())).toEqual(["Name", "Category", "Price", "Food Cost", "FC %", "CM", "Units Sold", "Class", "Waste", ""]);
+    expect(figures(page)).toEqual(expect.arrayContaining(["$6.10", "25.4%", "$17.90"]));
     tab("Engineering Matrix");
     expect(screen.getByText("Menu Engineering Matrix")).toBeInTheDocument();
     tab("Category Settings");
