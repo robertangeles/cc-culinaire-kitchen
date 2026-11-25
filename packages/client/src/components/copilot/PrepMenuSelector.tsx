@@ -27,7 +27,8 @@ interface MenuItem {
   name: string;
   category: string;
   classification: string | null;
-  foodCostPct: number | null;
+  /** Absent for someone without inventory:cost. */
+  foodCostPct?: number | null;
 }
 
 interface Recipe {

@@ -354,4 +354,24 @@ describe.skipIf(!RUN)("menu costing (real DB) — characterisation before the mo
       }
     `);
   });
+
+  it("a line changed by someone who may not see costs keeps the cost it had; anyone who may see them gets the catalogue's", async () => {
+    const id = await item("Flambé", "Mains", "30");
+    await addIngredient(id, chef, { ingredientId: brandyId, ingredientName: "Brandy", quantity: "100", unit: "mL", unitCost: "50" }); // a cost of this dish's own
+    await addIngredient(id, chef, { ingredientName: "Sugar", quantity: "0.1", unit: "kg", unitCost: "3.2" });
+    const blind = { keepHiddenCost: true };
+
+    await addIngredient(id, chef, { ingredientId: brandyId, ingredientName: "Brandy", quantity: "0.2", unit: "L" }, blind); // per kitchen unit, so the line's unit may change
+    await addIngredient(id, chef, { ingredientName: "Sugar", quantity: "0.2", unit: "kg" }, blind);
+    await addIngredient(id, chef, { ingredientName: "Sugar", quantity: "200", unit: "g" }, blind); // $3.20 was per kg: not kept for g
+    await addIngredient(id, chef, { ingredientName: "Salt", quantity: "1", unit: "kg" }, blind); // nothing to keep
+    await addIngredient(id, chef, { ingredientName: "Sugar", quantity: "0.2", unit: "kg", unitCost: "4" }, blind); // a cost sent is used
+    await addIngredient(id, chef, { ingredientId: brandyId, ingredientName: "Brandy", quantity: "0.2", unit: "L" });
+    await addIngredient(id, chef, { ingredientName: "Sugar", quantity: "0.2", unit: "kg" });
+
+    expect((await lineCosts("Flambé")).slice(2)).toEqual([
+      "Brandy=10.00@50.0000", "Sugar=0.64@3.2000", "Sugar=0.00@0.0000", "Salt=0.00@0.0000", "Sugar=0.80@4.0000",
+      "Brandy=8.25@41.2500", "Sugar=0.00@0.0000",
+    ]);
+  });
 });

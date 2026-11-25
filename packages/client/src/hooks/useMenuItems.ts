@@ -20,9 +20,10 @@ export interface MenuItem {
   /** Sales-unit size: how many servings one sale (the price) covers. 12-pack = 12. */
   servingsPerSale: number;
   qFactorPct: number;
-  foodCost: number;
-  foodCostPct: number;
-  contributionMargin: number;
+  /** Absent, like `foodCostPct` and `contributionMargin`, for someone without inventory:cost: hidden, not zero. */
+  foodCost?: number;
+  foodCostPct?: number;
+  contributionMargin?: number;
   unitsSold: number;
   menuMixPct: number;
   classification: string;
@@ -57,15 +58,22 @@ export interface MenuIngredient {
   packQty?: string | null;
   /** Catalog row's last update — cost provenance age in the recipe editor. */
   costUpdatedAt?: string | null;
-  unitCost: string;
+  /** Absent, like `catalogUnitCost` and `lineCost`, for someone without inventory:cost. */
+  unitCost?: string;
   /** The linked catalog ingredient's current per-unit cost. Used as a fallback
    *  when the stored unitCost is 0/empty so a linked row never shows $0. */
   catalogUnitCost?: string | null;
   yieldPct: string;
-  lineCost: string;
+  lineCost?: string;
   costStaleInd?: boolean;
   costStaleAt?: string | null;
 }
+
+/** The server left the costs out (no inventory:cost). */
+export const costsHidden = (items: MenuItem[]): boolean => items.length > 0 && items.every((i) => i.foodCost === undefined);
+
+/** A cost as a number (none stored is 0); one the server left out stays absent. */
+const cost = (v: unknown): number | undefined => (v === undefined ? undefined : parseFloat(String(v ?? "0")));
 
 /** The server's own sentence for a refused request (403 not yours to change, 409 has history), else the fallback. */
 async function failure(res: Response, fallback: string): Promise<Error> {
@@ -93,9 +101,9 @@ export function useMenuItems(category?: string) {
         servings: i.servings ?? 1,
         servingsPerSale: i.servingsPerSale ?? 1,
         qFactorPct: parseFloat(String(i.qFactorPct ?? "0")),
-        foodCost: parseFloat(String(i.foodCost ?? "0")),
-        foodCostPct: parseFloat(String(i.foodCostPct ?? "0")),
-        contributionMargin: parseFloat(String(i.contributionMargin ?? "0")),
+        foodCost: cost(i.foodCost),
+        foodCostPct: cost(i.foodCostPct),
+        contributionMargin: cost(i.contributionMargin),
         menuMixPct: parseFloat(String(i.menuMixPct ?? "0")),
       })));
     } catch {

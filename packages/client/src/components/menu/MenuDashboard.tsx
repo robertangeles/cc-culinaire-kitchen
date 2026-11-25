@@ -20,6 +20,7 @@ import {
 import { FOOD_COST_ALERT_PCT } from "@culinaire/shared";
 import type { MenuAnalysis } from "../../hooks/useMenuAnalysis.js";
 import type { MenuItem } from "../../hooks/useMenuItems.js";
+import { CostsHiddenNote } from "./CostsHiddenNote.js";
 
 const QUAD_CONFIG = [
   {
@@ -91,11 +92,13 @@ export function MenuDashboard({ analysis, loading, onFilterDogs }: MenuDashboard
   }
 
   const items = analysis.items ?? [];
+  // The server left the averages out: no inventory:cost.
+  const costsHidden = analysis.avgFoodCostPct === undefined;
 
   // Find top/bottom performers
-  const sortedByMargin = [...items].sort(
-    (a, b) => b.contributionMargin - a.contributionMargin
-  );
+  const sortedByMargin = items
+    .filter((i): i is MenuItem & { contributionMargin: number } => i.contributionMargin !== undefined)
+    .sort((a, b) => b.contributionMargin - a.contributionMargin);
   const highestMargin = sortedByMargin[0] ?? null;
   const lowestMargin = sortedByMargin[sortedByMargin.length - 1] ?? null;
 
@@ -134,29 +137,38 @@ export function MenuDashboard({ analysis, loading, onFilterDogs }: MenuDashboard
       </div>
 
       {/* Key metrics */}
-      <div className="grid grid-cols-2 lg:grid-cols-4 gap-3">
+      <div className={`grid ${costsHidden ? "grid-cols-1" : "grid-cols-2"} lg:grid-cols-4 gap-3`}>
         <MetricCard
           icon={BarChart3}
           label="Total Items Analyzed"
           value={String(analysis.totalItems)}
         />
-        <MetricCard
-          icon={DollarSign}
-          label="Avg Food Cost"
-          value={`${Number(analysis.avgFoodCostPct).toFixed(1)}%`}
-          alert={Number(analysis.avgFoodCostPct) > FOOD_COST_ALERT_PCT}
-        />
-        <MetricCard
-          icon={TrendingUp}
-          label="Avg Contribution Margin"
-          value={`$${Number(analysis.avgContributionMargin).toFixed(2)}`}
-        />
-        <MetricCard
-          icon={DollarSign}
-          label="Overall Food Cost"
-          value={`${Number(analysis.overallFoodCostPct).toFixed(1)}%`}
-          alert={Number(analysis.overallFoodCostPct) > FOOD_COST_ALERT_PCT}
-        />
+        {costsHidden ? (
+          <CostsHiddenNote
+            className="lg:col-span-3"
+            detail="Your role shows prices, sales and popularity. Ask an administrator for access to costs."
+          />
+        ) : (
+          <>
+            <MetricCard
+              icon={DollarSign}
+              label="Avg Food Cost"
+              value={`${Number(analysis.avgFoodCostPct).toFixed(1)}%`}
+              alert={Number(analysis.avgFoodCostPct) > FOOD_COST_ALERT_PCT}
+            />
+            <MetricCard
+              icon={TrendingUp}
+              label="Avg Contribution Margin"
+              value={`$${Number(analysis.avgContributionMargin).toFixed(2)}`}
+            />
+            <MetricCard
+              icon={DollarSign}
+              label="Overall Food Cost"
+              value={`${Number(analysis.overallFoodCostPct).toFixed(1)}%`}
+              alert={Number(analysis.overallFoodCostPct) > FOOD_COST_ALERT_PCT}
+            />
+          </>
+        )}
       </div>
 
       {/* Top/bottom performers */}

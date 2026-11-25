@@ -16,11 +16,12 @@ export interface MenuAnalysis {
   puzzles: number;
   dogs: number;
   unclassified: number;
-  avgFoodCostPct: string;
-  avgContributionMargin: string;
+  /** Absent, like the other costs and margins here, for someone without inventory:cost. */
+  avgFoodCostPct?: string;
+  avgContributionMargin?: string;
   totalRevenue: string;
-  totalFoodCost: string;
-  overallFoodCostPct: string;
+  totalFoodCost?: string;
+  overallFoodCostPct?: string;
   items: MenuItem[];
 }
 

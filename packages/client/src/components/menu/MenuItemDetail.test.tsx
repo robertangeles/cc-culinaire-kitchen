@@ -77,3 +77,39 @@ describe("MenuItemDetail — recommendations that fail", () => {
     await waitFor(() => expect(screen.queryByRole("alert")).not.toBeInTheDocument());
   });
 });
+
+describe("MenuItemDetail without inventory:cost (the server leaves costs out)", () => {
+  const { foodCost: _c, foodCostPct: _p, contributionMargin: _m, ...hidden } = item;
+  const line = { id: 1, menuItemId: "item-1", ingredientName: "Leeks", quantity: "0.300", unit: "kg", yieldPct: "100" };
+
+  it("shows the price and the recipe, a note, and no figure standing in for a cost", async () => {
+    const { container } = render(
+      <MenuItemDetail item={hidden} onClose={vi.fn()} onAddIngredient={vi.fn()} onRemoveIngredient={vi.fn()} getIngredients={async () => [line]} />,
+    );
+    expect(await screen.findByText("0.300 kg")).toBeInTheDocument();
+    expect(screen.getByText("$18.00")).toBeInTheDocument();
+    expect(screen.getByText(/costs and margins are hidden/i)).toBeInTheDocument();
+    for (const label of ["Food Cost", "CM"]) expect(screen.queryByText(label)).not.toBeInTheDocument();
+    expect(container.textContent!.match(/\$[\d.]*/g)).toEqual(["$18.00"]);
+    expect(container.textContent).not.toMatch(/NaN|undefined/);
+  });
+
+  it("adds an ingredient without asking for a cost", async () => {
+    const onAddIngredient = vi.fn(async () => {});
+    render(<MenuItemDetail item={hidden} onClose={vi.fn()} onAddIngredient={onAddIngredient} onRemoveIngredient={vi.fn()} getIngredients={async () => [line]} />);
+    fireEvent.change(await screen.findByPlaceholderText("Ingredient"), { target: { value: "Butter" } });
+    expect(screen.queryByPlaceholderText("$/unit")).not.toBeInTheDocument();
+    fireEvent.change(screen.getByPlaceholderText("Qty"), { target: { value: "0.05" } });
+    fireEvent.submit(screen.getByPlaceholderText("Qty").closest("form")!);
+    await waitFor(() => expect(onAddIngredient).toHaveBeenCalledWith("item-1", { ingredientName: "Butter", quantity: "0.05", unit: "kg", unitCost: undefined, yieldPct: "100" }));
+  });
+
+  it("still asks a holder for the cost", async () => {
+    const onAddIngredient = vi.fn(async () => {});
+    render(<MenuItemDetail item={item} onClose={vi.fn()} onAddIngredient={onAddIngredient} onRemoveIngredient={vi.fn()} getIngredients={async () => []} />);
+    fireEvent.change(await screen.findByPlaceholderText("Ingredient"), { target: { value: "Butter" } });
+    fireEvent.change(screen.getByPlaceholderText("Qty"), { target: { value: "0.05" } });
+    fireEvent.submit(screen.getByPlaceholderText("Qty").closest("form")!);
+    expect(onAddIngredient).not.toHaveBeenCalled();
+  });
+});

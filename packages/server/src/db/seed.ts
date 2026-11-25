@@ -136,7 +136,7 @@ async function seed() {
     { permissionKey: "inventory:manage", permissionDescription: "Open stock take sessions, set par levels, manage ingredient catalog" },
     { permissionKey: "inventory:transfer", permissionDescription: "Initiate and confirm inventory transfers between locations" },
     { permissionKey: "inventory:hq", permissionDescription: "HQ dashboard, approve/flag stock takes, cross-location oversight" },
-    { permissionKey: "inventory:cost", permissionDescription: "See stock value, unit costs and expected quantities (without it a counter counts blind)" },
+    { permissionKey: "inventory:cost", permissionDescription: "See stock value, unit costs, expected quantities, and menu costs and margins (without it a counter counts blind)" },
     // Purchasing & Receiving permissions
     { permissionKey: "purchasing:draft", permissionDescription: "Create and edit draft purchase orders" },
     { permissionKey: "purchasing:submit", permissionDescription: "Submit POs for approval or send directly to supplier" },
@@ -147,7 +147,7 @@ async function seed() {
     { permissionKey: "sales:record", permissionDescription: "Record front-of-house sales, restock FOH shelf, count and log waste" },
     { permissionKey: "sales:read", permissionDescription: "View FOH sales history and revenue reports" },
     // Kitchen Operations module permissions (gate the Menu & Costing, Waste, and Prep modules)
-    { permissionKey: "menu:read", permissionDescription: "View Menu & Costing — menu engineering, food cost %, and P&L per item, and record sales" },
+    { permissionKey: "menu:read", permissionDescription: "View Menu & Costing — items, prices, recipes and sales, and record sales (costs and margins also need inventory:cost)" },
     { permissionKey: "menu:manage", permissionDescription: "Edit Menu & Costing — create, change and delete menu items, set category targets, void sales, run AI recommendations" },
     { permissionKey: "waste:read", permissionDescription: "View Waste analytics, cost reports and the team view" },
     { permissionKey: "waste:log", permissionDescription: "Log, edit and delete your own waste entries" },

@@ -24,6 +24,7 @@ import {
   getPreviousSelections,
   PrepError,
 } from "../services/prepService.js";
+import { forViewer } from "../utils/costFields.js";
 
 // ---------------------------------------------------------------------------
 // Zod schemas
@@ -282,7 +283,7 @@ export async function handleGetMenuForSelection(req: Request, res: Response) {
   const teamView = parsed.success && parsed.data.teamView === "true";
 
   const data = await getMenuForSelection(userId, teamView);
-  res.json(data);
+  res.json({ ...data, menuItems: data.menuItems.map((i) => forViewer(req.user!, i)) });
 }
 
 /** GET /api/prep/forecast-suggest?covers=N — suggested per-item portions from a cover forecast */

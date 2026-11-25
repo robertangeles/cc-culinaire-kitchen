@@ -267,6 +267,29 @@ async function computeLineCost(
   });
 }
 
+/**
+ * The cost this item's line for the same ingredient already has (a typed name counts per unit, so in the same unit).
+ * No route changes a line: an editor adds the new version, then removes the old one.
+ */
+async function existingLineCost(menuItemId: string, data: { ingredientId?: string | null; ingredientName: string; unit: string }): Promise<string | undefined> {
+  const [row] = await db
+    .select({ unitCost: menuItemIngredient.unitCost })
+    .from(menuItemIngredient)
+    .where(and(
+      eq(menuItemIngredient.menuItemId, menuItemId),
+      data.ingredientId
+        ? eq(menuItemIngredient.ingredientId, data.ingredientId)
+        : and(isNull(menuItemIngredient.ingredientId), eq(menuItemIngredient.ingredientName, data.ingredientName), eq(menuItemIngredient.unit, data.unit)),
+    ))
+    .orderBy(menuItemIngredient.id)
+    .limit(1);
+  return row?.unitCost;
+}
+
+/**
+ * `keepHiddenCost`: the caller may not see costs, so a line they send without one keeps the cost the item has for that
+ * ingredient (a per-dish cost or a typed ingredient's cost would otherwise be lost to an edit of the quantity).
+ */
 export async function addIngredient(menuItemId: string, scope: MenuScope, data: {
   ingredientId?: string | null;
   ingredientName: string;
@@ -275,9 +298,10 @@ export async function addIngredient(menuItemId: string, scope: MenuScope, data: 
   unit: string;
   unitCost?: string;
   yieldPct?: string;
-}) {
+}, { keepHiddenCost = false } = {}) {
   const yieldPct = data.yieldPct ?? "100";
-  const resolvedCost = await resolveUnitCost(data.unitCost, data.ingredientId);
+  const callerCost = data.unitCost ?? (keepHiddenCost ? await existingLineCost(menuItemId, data) : undefined);
+  const resolvedCost = await resolveUnitCost(callerCost, data.ingredientId);
   const lineCost = await computeLineCost(
     data.quantity,
     data.unit,
@@ -680,14 +704,17 @@ const RecommendationSchema = z.object({
 
 export type MenuRecommendation = z.infer<typeof RecommendationSchema>;
 
-export async function getItemRecommendations(menuItemId: string, scope: MenuScope): Promise<MenuRecommendation> {
+/** Without `withCosts` the model is given no cost or margin, so its answer cannot repeat one. */
+export async function getItemRecommendations(menuItemId: string, scope: MenuScope, { withCosts }: { withCosts: boolean }): Promise<MenuRecommendation> {
   const item = await requireMenuItem(menuItemId, scope);
 
   const ingredients = await getIngredients(menuItemId);
   const kitchenContext = await buildContextString(scope.userId);
 
   const ingredientList = ingredients.map((i) =>
-    `${i.ingredientName}: ${i.quantity} ${i.unit} @ $${i.unitCost}/${i.unit} (line cost: $${i.lineCost})`
+    withCosts
+      ? `${i.ingredientName}: ${i.quantity} ${i.unit} @ $${i.unitCost}/${i.unit} (line cost: $${i.lineCost})`
+      : `${i.ingredientName}: ${i.quantity} ${i.unit}`
   ).join("\n");
 
   const prompt = `You are a menu engineering consultant for a restaurant. Analyse this menu item and provide specific, actionable recommendations.
@@ -697,10 +724,10 @@ ${kitchenContext}
 ## Menu Item Analysis
 - Name: ${item.name}
 - Category: ${item.category}
-- Selling Price: $${item.sellingPrice}
+- Selling Price: $${item.sellingPrice}${withCosts ? `
 - Food Cost: $${item.foodCost ?? "0"}
 - Food Cost %: ${item.foodCostPct ?? "0"}%
-- Contribution Margin: $${item.contributionMargin ?? "0"}
+- Contribution Margin: $${item.contributionMargin ?? "0"}` : ""}
 - Units Sold (period): ${item.unitsSold}
 - Menu Mix: ${item.menuMixPct ?? "0"}%
 - Classification: ${item.classification.toUpperCase()}
@@ -714,7 +741,7 @@ ${ingredientList || "No ingredients entered yet"}
 - PUZZLE: High profit + low popularity. Better marketing or lower price to drive trial.
 - DOG: Low profit + low popularity. Rework or replace.
 
-Provide recommendations appropriate for this item's classification. Be specific about dollar amounts, ingredient swaps, and projected impact. Write for a chef, not an accountant.`;
+Provide recommendations appropriate for this item's classification. ${withCosts ? "Be specific about dollar amounts, ingredient swaps, and projected impact." : "Be specific about ingredient swaps. The reader may not see costs: do not state or estimate any cost, margin or food cost percentage."} Write for a chef, not an accountant.`;
 
   return generateStructured({ schema: RecommendationSchema, prompt });
 }
@@ -803,16 +830,18 @@ export async function getWasteImpactForMenuItems(scope: MenuScope, actor: TokenP
   return results;
 }
 
+/** The cost and margin are absent (not null) for a viewer who may not see them, and then not mentioned. */
 export function generateReplacementContext(item: {
   name: string;
   category: string;
-  foodCostPct: string | null;
-  contributionMargin: string | null;
+  foodCostPct?: string | null;
+  contributionMargin?: string | null;
   unitsSold: number;
   classification: string;
 }) {
+  const costs = item.foodCostPct === undefined ? "" : ` with food cost of ${item.foodCostPct ?? "unknown"}% and contribution margin of $${item.contributionMargin ?? "unknown"}`;
   return {
-    request: `Generate a replacement recipe for "${item.name}" in the ${item.category} category. This item was classified as a ${item.classification} with food cost of ${item.foodCostPct ?? "unknown"}% and contribution margin of $${item.contributionMargin ?? "unknown"}. The replacement should target Star territory — high profitability and broad appeal.`,
+    request: `Generate a replacement recipe for "${item.name}" in the ${item.category} category. This item was classified as a ${item.classification}${costs}. The replacement should target Star territory — high profitability and broad appeal.`,
     domain: "recipe" as const,
   };
 }

@@ -18,7 +18,7 @@ export interface RecordSaleResult {
   saleId: string;
   alreadyExists?: boolean;
   voided?: boolean;
-  depleted: Array<{ ingredientId: string; ingredientName: string; baseQty: number; baseUnit: string; fohOnHand: number; oversold: boolean }>;
+  depleted: Array<{ ingredientId: string; ingredientName: string; baseQty: number; baseUnit: string; /** Absent for someone without inventory:cost. */ fohOnHand?: number; oversold: boolean }>;
   skipped: Array<{ ingredientName: string; reason: string }>;
   oversold: string[];
 }

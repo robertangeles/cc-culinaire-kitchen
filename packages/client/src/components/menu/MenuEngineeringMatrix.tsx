@@ -10,7 +10,8 @@
 import { useState, useMemo } from "react";
 import { Loader2, BarChart3 } from "lucide-react";
 import { matrixAverages } from "@culinaire/shared";
-import type { MenuItem } from "../../hooks/useMenuItems.js";
+import { costsHidden, type MenuItem } from "../../hooks/useMenuItems.js";
+import { CostsHiddenNote } from "./CostsHiddenNote.js";
 
 /* ---- Dot colors per classification ---- */
 
@@ -43,7 +44,7 @@ export function MenuEngineeringMatrix({
   const [hoveredId, setHoveredId] = useState<string | null>(null);
 
   const classified = useMemo(
-    () => items.filter((i) => i.unitsSold > 0),
+    () => items.filter((i): i is MenuItem & { contributionMargin: number } => i.unitsSold > 0 && i.contributionMargin !== undefined),
     [items]
   );
 
@@ -67,6 +68,11 @@ export function MenuEngineeringMatrix({
         <Loader2 className="size-6 animate-spin text-gold" />
       </div>
     );
+  }
+
+  // The chart places every dish by its margin: nothing of it is left without costs.
+  if (costsHidden(items)) {
+    return <CostsHiddenNote detail="The engineering matrix compares each dish's margin with its popularity. Ask an administrator for access to costs." />;
   }
 
   if (classified.length < 2) {
