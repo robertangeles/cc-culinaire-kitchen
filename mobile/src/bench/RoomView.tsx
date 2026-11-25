@@ -39,7 +39,7 @@ export function RoomView({ room, user, onBack, onOpen }: { room: Room; user: Aut
   const title = channel?.channelName ?? thread?.otherUserName ?? "The Bench";
   // Who was there before the connection went says nothing about now.
   const here: BenchPerson[] = kitchen && room.kind === "channel" && status === "online" ? (snap.presence[room.key] ?? []) : [];
-  const mayPin = canPin(user, room);
+  const mayPin = canPin(room);
 
   // Where pins can be changed, which messages are pinned is known from the start, for Pin or Unpin.
   async function loadPins() {

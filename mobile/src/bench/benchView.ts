@@ -50,5 +50,5 @@ export const insertMention = (draft: string, name: string) => draft.replace(/@\w
 const isAdmin = (user: AuthUser) => user.roles.includes("Administrator");
 export const canEdit = (user: AuthUser, m: BenchMessage) => m.userId === user.userId && m.messageType === "text";
 export const canDelete = (user: AuthUser, m: BenchMessage) => m.userId === user.userId || isAdmin(user);
-/** A kitchen's members pin in their own channel; in Everyone that is for its moderators. The server has the last word. */
-export const canPin = (user: AuthUser, room: Room) => room.kind === "channel" && (room.key !== "everyone" || isAdmin(user));
+/** Whoever can reach a channel may pin in it; direct messages have no pins. */
+export const canPin = (room: Room) => room.kind === "channel";

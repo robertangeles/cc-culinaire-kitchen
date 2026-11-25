@@ -1,5 +1,5 @@
 // @vitest-environment jsdom
-import { describe, it, expect, vi, afterEach } from "vitest";
+import { describe, it, expect, vi, afterEach, beforeEach } from "vitest";
 import { render, screen, cleanup, fireEvent } from "@testing-library/react";
 import { Children, createContext, useContext, type ReactNode } from "react";
 import { Platform } from "react-native";
@@ -65,7 +65,13 @@ vi.mock("expo-router/tabs", () => ({
 import AppTabs from "../app/(app)/_layout";
 import More from "../app/(app)/more";
 
+// Every test but the build flag's own is of a build with the Bench on.
+beforeEach(() => {
+  process.env.EXPO_PUBLIC_BENCH = "on";
+});
+
 afterEach(() => {
+  delete process.env.EXPO_PUBLIC_BENCH;
   cleanup();
   mocks.screens.length = 0;
   mocks.navigate.mockReset();
@@ -160,6 +166,15 @@ describe("the tab bar", () => {
     mocks.user = person({ permissions: ["waste:log"] });
     render(<AppTabs />);
     expect(buttons()).toEqual(["Waste", "Ask", "Recipes", "Inbox", "More"]);
+  });
+
+  it.each([["off", "off"], ["absent", undefined]])("leaves a cook with one module of their own the bar they had before the Bench, Waste, Ask, Recipes, Inbox and Account, and keeps the Bench from the navigator, when the flag is %s", (_name, value) => {
+    if (value === undefined) delete process.env.EXPO_PUBLIC_BENCH;
+    else process.env.EXPO_PUBLIC_BENCH = value;
+    mocks.user = person({ permissions: ["waste:log"] });
+    render(<AppTabs />);
+    expect(buttons()).toEqual(["Waste", "Ask", "Recipes", "Inbox", "Account"]);
+    expect(mocks.screens.filter((s) => s.guard).map((s) => s.name)).not.toContain("(bench)");
   });
 
   it("gives a person with no permission Ask, Recipes, the Inbox, the Bench and Account, with Account ahead of More, which has no button then", () => {

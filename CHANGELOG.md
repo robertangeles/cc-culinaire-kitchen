@@ -14,9 +14,9 @@ Server only. No migration, no permission change.
 
 ### Added (mobile Wave 9, phone: the Bench)
 
-Phone app only; no server change, no migration, no new permission. New dependency in the phone app: `socket.io-client`, the version the web already uses. **Not for a store build until the server has report and block** (App Store 1.2).
+Phone app only; no server change, no migration, no new permission. New dependency in the phone app: `socket.io-client`, the version the web already uses. The Bench tab is hidden in production builds by the build flag `EXPO_PUBLIC_BENCH` (`on` in the development and preview profiles of `eas.json`, `off` in production): turn it on for production only when the server has report and block (App Store 1.2).
 
-- **Bench tab** for everyone signed in, last in the tab order: Everyone, each kitchen's own channel and direct messages, with reactions, mentions, edit, delete, pins and search. On a tablet the list sits beside the open room.
+- **Bench tab** for everyone signed in (where `EXPO_PUBLIC_BENCH` is `on`), last in the tab order: Everyone, each kitchen's own channel and direct messages, with reactions, mentions, edit, delete, pins (anyone who can reach a channel may pin and unpin in it) and search. On a tablet the list sits beside the open room.
 - **Live** over the Bearer socket while the tab is in view and the app is in front; a drop or the background reconnects and reads what was missed. Messages are kept in memory only. A post made with no connection says Not sent and never sends itself later.
 - Presence shows in a kitchen's own channel only, and direct messages go to people of one's kitchens or existing threads, pending the owner's decisions.
 

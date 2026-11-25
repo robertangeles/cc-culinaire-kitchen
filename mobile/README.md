@@ -445,7 +445,7 @@ Differences from the web, found while comparing:
 The Bench tab is the web's The Bench page (`BenchPage.tsx`), for everyone signed in: Everyone, each kitchen's own channel, and direct messages. Lists, history, pins and search are REST
 (`benchApi.ts`); posts, edits, deletes, reactions, typing and presence go over the server's Socket.IO channel with the sign-in's access token (`benchLive.ts`, `nativeLive.ts`; `socket.io-client`, the version the web uses, JavaScript only).
 
-**It must not be in a store build until people can report a message and block a person** (App Store 1.2, user-generated content; Google Play asks the same). The server has neither yet.
+**The tab is hidden in production builds by `EXPO_PUBLIC_BENCH`**: it shows only when that is `on` (`eas.json`: `on` for the development and preview profiles, `off` for production; a build without the variable hides it, as does every list the tab bar and More are built from). Turn it on for production only when people can report a message and block a person (App Store 1.2, user-generated content; Google Play asks the same). The server has neither yet.
 
 Nothing of the Bench is kept on the phone (messages are private: memory only) and nothing is ever queued: a post either goes out now or says "Not sent" with Try again and Discard.
 
@@ -470,7 +470,7 @@ Differences from the web, found while comparing:
 | Any name starts a direct message, in Everyone too | Only people of one's kitchens or an existing thread | Privacy rule above. |
 | @ suggests everyone online | @ suggests who is in the kitchen's room and who wrote what is on screen; one's own @name is in copper | The name is plain text on both: nothing stores a mention, so there is no unread count and no push. |
 | Reconnects at most ten times; a post made offline is dropped silently | Reconnects until left; says Not sent | |
-| No pins and no search on the web (the server has both) | Pinned and Search in each channel. Pin and Unpin in a kitchen's channel for its members; in Everyone for Administrators only | Pins in Everyone are for its moderators. |
+| No pins and no search on the web (the server has both) | Pinned and Search in each channel. Pin and Unpin in any channel, for whoever can reach it | Who may pin is an open question for the owner. |
 | Search | The newest five, no jump to the message | Follow-up. |
 | Reactions can be added in direct messages but never show (the list does not return them) | No reactions in direct messages | |
 | Direct messages: no typing sign, a toast when one arrives on another tab | No typing sign; "New" on the thread, kept until it is opened | In memory only: the server keeps no unread state. |
@@ -479,7 +479,7 @@ Differences from the web, found while comparing:
 | The banner texts come from the site settings | The channel's own banner, or the web's default words | The site settings are not read by the phone. |
 | Attachments | None | Same. |
 
-The Bench is open to everyone, so a person with one module of their own now has more than five tabs: their first four stay where they were, and the Bench and Account are under More.
+With the Bench on, it is open to everyone, so a person with one module of their own has more than five tabs: their first four stay where they were, and the Bench and Account are under More. With it off, every tab bar is as it was before the Bench.
 
 ## Receive (`src/receiving`, `app/(app)/(receive)`)
 

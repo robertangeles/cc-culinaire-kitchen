@@ -15,7 +15,12 @@ export interface ModuleTab {
   icon: TabIconName;
   /** Left out when the server asks only for a signed-in person (no permission key on its routes). */
   anyPermission?: string[];
+  /** A build-time switch: the module is in no tab list, bar or More unless this says so. */
+  buildFlag?: () => boolean;
 }
+
+// Metro inlines `process.env.EXPO_PUBLIC_*` only when written out by name.
+const benchBuild = () => process.env.EXPO_PUBLIC_BENCH === "on";
 
 /** In the order a line cook reaches for them: prep all shift, waste and usage as they happen, counts at stock take, moves now and then, deliveries when they arrive, orders for those who raise or approve them; then Ask and Recipes, which everyone signed in gets. */
 export const moduleTabs: ModuleTab[] = [
@@ -43,8 +48,8 @@ export const moduleTabs: ModuleTab[] = [
   { route: "(menu)", title: "Menu", icon: "menu", anyPermission: ["menu:read"] },
   // What CulinAIre remembers for this person; removing a memory is `brain:manage` on the server.
   { route: "(brain)", title: "Brain", icon: "brain", anyPermission: ["brain:read"] },
-  // Team chat: the server asks only for a sign-in and checks each room (a kitchen's members, a thread's two people).
-  { route: "(bench)", title: "Bench", icon: "bench" },
+  // Team chat: the server asks only for a sign-in and checks each room (a kitchen's members, a thread's two people). Only in a build made with EXPO_PUBLIC_BENCH=on: a store build waits for report and block (App Store 1.2).
+  { route: "(bench)", title: "Bench", icon: "bench", buildFlag: benchBuild },
 ];
 
 /** Administrators hold every permission implicitly, as on the web and the server. */
@@ -52,7 +57,7 @@ export function hasAnyPermission(user: AuthUser, keys: string[]): boolean {
   return user.roles.includes("Administrator") || keys.some((k) => user.permissions.includes(k));
 }
 
-export const canOpen = (user: AuthUser, tab: ModuleTab) => !tab.anyPermission || hasAnyPermission(user, tab.anyPermission);
+export const canOpen = (user: AuthUser, tab: ModuleTab) => (!tab.buildFlag || tab.buildFlag()) && (!tab.anyPermission || hasAnyPermission(user, tab.anyPermission));
 
 /** Everyone also gets the Account tab (sign out, location). */
 export const visibleTabs = (user: AuthUser) => moduleTabs.filter((t) => canOpen(user, t));

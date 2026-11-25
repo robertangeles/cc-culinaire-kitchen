@@ -276,7 +276,7 @@ describe("Everyone", () => {
     expect(screen.queryByText(/on the pass/)).toBeNull();
     press(/^Bo Li, .*Message 1$/);
     expect(screen.queryByRole("button", { name: "Message Bo Li" })).toBeNull();
-    expect(screen.queryByRole("button", { name: "Pin" })).toBeNull();
+    expect(screen.getByRole("button", { name: "Pin" })).toBeTruthy();
     expect(screen.getByRole("button", { name: "React Fire" })).toBeTruthy();
   });
 });

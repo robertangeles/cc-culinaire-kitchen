@@ -1,4 +1,4 @@
-import { describe, it, expect } from "vitest";
+import { describe, it, expect, beforeEach, afterEach } from "vitest";
 import type { AuthUser } from "../api/auth";
 import { canOpen, hasAnyPermission, homeHref, MAX_TABS, moduleTabs, tabBar, tabLabels, visibleTabs } from "./tabs";
 
@@ -6,6 +6,14 @@ import { canOpen, hasAnyPermission, homeHref, MAX_TABS, moduleTabs, tabBar, tabL
 const gatedTabs = (user: AuthUser) => visibleTabs(user).filter((t) => t.anyPermission);
 
 const person = (over: Partial<AuthUser> = {}): AuthUser => ({ userId: 1, userName: "A", userEmail: "a@x.test", mfaEnabled: false, roles: [], permissions: [], ...over });
+
+// Every test but the build flag's own is of a build with the Bench on.
+beforeEach(() => {
+  process.env.EXPO_PUBLIC_BENCH = "on";
+});
+afterEach(() => {
+  delete process.env.EXPO_PUBLIC_BENCH;
+});
 
 describe("which tabs a person sees", () => {
   it("shows the Count tab to someone who holds inventory:count", () => {
@@ -129,5 +137,28 @@ describe("the tab bar and More", () => {
     expect(homeHref(person({ permissions: ["waste:log", "inventory:count"] }))).toBe("/(waste)");
     expect(homeHref(person({ permissions: ["purchasing:receive"] }))).toBe("/(receive)");
     expect(homeHref(person())).toBe("/(chat)");
+  });
+});
+
+describe("the Bench's build flag (a store build waits for report and block)", () => {
+  const admin = person({ roles: ["Administrator"] });
+  const routes = (user: AuthUser) => visibleTabs(user).map((t) => t.route);
+
+  it.each([["off", "off"], ["absent", undefined], ["anything but on", "true"]])("keeps the Bench out of every list for everyone, an Administrator too, when the flag is %s", (_name, value) => {
+    if (value === undefined) delete process.env.EXPO_PUBLIC_BENCH;
+    else process.env.EXPO_PUBLIC_BENCH = value;
+    expect(routes(person())).toEqual(["(chat)", "(recipes)", "(inbox)"]);
+    expect(routes(admin)).not.toContain("(bench)");
+    const { bar, more } = tabBar(admin);
+    expect([...bar, ...more].map((t) => t.route)).not.toContain("(bench)");
+    expect(tabLabels(person())).toEqual({ Ask: "Ask, tab, 1 of 4", Recipes: "Recipes, tab, 2 of 4", Inbox: "Inbox, tab, 3 of 4", Account: "Account, tab, 4 of 4" });
+    // The tab bar a person had before the Bench: Waste, Ask, Recipes, Inbox, More (Account), the Bench not among them.
+    expect(tabBar(person({ permissions: ["waste:log"] })).bar.map((t) => t.title)).toEqual(["Waste", "Ask", "Recipes", "Inbox"]);
+    expect(tabBar(person({ permissions: ["waste:log"] })).more).toEqual([]);
+  });
+
+  it("shows the Bench to everyone signed in when the flag is on", () => {
+    expect(routes(person())).toEqual(["(chat)", "(recipes)", "(inbox)", "(bench)"]);
+    expect(routes(admin)).toContain("(bench)");
   });
 });

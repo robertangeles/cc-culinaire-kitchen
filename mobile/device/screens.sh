@@ -70,6 +70,8 @@ export PORT DATABASE_URL=postgresql://ci@127.0.0.1:55432/$DB DEV_DATABASE_URL=po
 
 # The walks cannot unlock the app lock (the phone is the owner's); development builds only. The lock's own walk sets it to "on".
 export EXPO_PUBLIC_APP_LOCK=${EXPO_PUBLIC_APP_LOCK:-off}
+# The Bench tab is in a build only when this is on (the photo walk shoots it).
+export EXPO_PUBLIC_BENCH=on
 EXPO_PUBLIC_API_URL=http://$APP_HOST:$PORT npx expo start --dev-client --port "$METRO_PORT" >"$LOGS/metro.log" 2>&1 </dev/null &
 metro=$!
 

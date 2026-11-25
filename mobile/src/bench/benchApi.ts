@@ -13,7 +13,7 @@ export function createBenchApi(client: ApiClient) {
   // A picture's address is text its owner can edit. As the web's content policy has it, only the site's own uploads and Cloudinary are loaded: anything
   // else would let a stranger's message make this phone call any host. A site path gets the whole address.
   const whole = (photo: string | null) => {
-    if (photo?.startsWith("/uploads/") && !photo.includes("..")) return `${client.baseUrl}${photo}`;
+    if (photo && /^\/uploads\/(?:[A-Za-z0-9_-]+\/)*[A-Za-z0-9_-]+\.[A-Za-z0-9]+$/.test(photo)) return `${client.baseUrl}${photo}`;
     return photo?.startsWith("https://res.cloudinary.com/") ? photo : null;
   };
   return {
