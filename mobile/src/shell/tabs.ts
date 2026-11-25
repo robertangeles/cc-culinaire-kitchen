@@ -41,6 +41,8 @@ export const moduleTabs: ModuleTab[] = [
   { route: "(stock)", title: "Stock", icon: "stock", anyPermission: ["inventory:count"] },
   // Reading the menu and recording a sale are `menu:read` on the server; changing it is `menu:manage`, and costs show only with `inventory:cost`.
   { route: "(menu)", title: "Menu", icon: "menu", anyPermission: ["menu:read"] },
+  // What CulinAIre remembers for this person; removing a memory is `brain:manage` on the server.
+  { route: "(brain)", title: "Brain", icon: "brain", anyPermission: ["brain:read"] },
 ];
 
 /** Administrators hold every permission implicitly, as on the web and the server. */
