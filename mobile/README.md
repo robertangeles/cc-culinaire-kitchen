@@ -11,7 +11,7 @@ Run the screenshot walk (`device/README.md`, "The screenshot walk") after changi
 
 - Light paper background (`bg`), never white; cards and grouped rows on the sunk paper `Surface` with hairline dividers.
 - Section and field labels in copper capitals (`Text variant="label"`: Inter semibold 12, letter-spaced, `accentText`); titles and sentences in Fraunces; a card's or a row's name is `variant="heading"` (Fraunces 20); buttons, chips, numbers and short facts in Inter. Nothing below 16 pt except those labels and the tab bar's. No screen writes these styles out by hand.
-- Every tab starts with `ScreenHeader`: the location in copper capitals held close over the title that says what the tab is ("Waste", "Count"); Ask and Recipes, which no location owns, name their part instead ("Kitchen AI", "Recipe book"). An empty tab (or an empty list on it) shows its state in a card, never a bare line.
+- Every tab starts with `ScreenHeader`: the location in copper capitals held close over the title that says what the tab is ("Waste", "Count"); Ask, Recipes and Menu, which no location owns, name their part instead ("Kitchen AI", "Recipe book", "Menu & costing"). An empty tab (or an empty list on it) shows its state in a card, never a bare line.
 - The signed-in app opens on the first button of the person's bar (`homeHref`): Prep for a cook who preps, Waste for one who only logs waste, Ask for someone with no module. Never on a tab under More.
 - Nothing clipped or overlapping: lists scroll right up to the tab bar (each tab screen has a safe area of its own, `app/(app)/_layout.tsx`, so no paper strip is left above it), tab labels fully above the system navigation bar, long item names wrap, buttons fit their words.
 - At most five tab buttons; more modules go under More (`src/shell/tabs.ts`, `tabBar`), and Account is always reachable. The bar is quiet: fine grey line icons with a short Inter 12 label each, one line, never cut; the open tab (More for a screen under it) is the only one in copper, on a sunk-paper pill.
@@ -25,11 +25,11 @@ Run the screenshot walk (`device/README.md`, "The screenshot walk") after changi
 
 | Folder | What lives there |
 |---|---|
-| `app/` | Screens (expo-router). A module is a route group `app/(app)/(module)/`, plus one entry in `src/shell/tabs.ts` naming the permission that opens it (none when the server asks only for a signed-in person), in the order a line cook uses them (Prep, Waste, Usage, Count, Move, Receive, Orders, Ask, Recipes, Inbox, Transfers, Stock). Past five tab buttons, the fifth is More (`app/(app)/more.tsx`), listing the rest and Account. A tab under More keeps its route and loses only its button: never `href: null`, which expo-router turns into a hidden tab that redirects to the first tab when opened. |
+| `app/` | Screens (expo-router). A module is a route group `app/(app)/(module)/`, plus one entry in `src/shell/tabs.ts` naming the permission that opens it (none when the server asks only for a signed-in person), in the order a line cook uses them (Prep, Waste, Usage, Count, Move, Receive, Orders, Ask, Recipes, Inbox, Transfers, Stock, Menu). Past five tab buttons, the fifth is More (`app/(app)/more.tsx`), listing the rest and Account. A tab under More keeps its route and loses only its button: never `href: null`, which expo-router turns into a hidden tab that redirects to the first tab when opened. |
 | `src/api` | The one network client: auth, refresh, coded errors (`ApiError.code`, `serverCode`). |
 | `src/outbox` | The offline queue (below). |
 | `src/ingredients` | The shared ingredient picker's data (below); its component is `src/ui/IngredientPicker.tsx`. |
-| `src/count`, `src/waste`, `src/prep`, `src/consumption`, `src/movements`, `src/chat`, `src/recipes`, `src/notifications`, `src/transfers`, `src/stock`, `src/orders` | One folder per module: API calls, store (screen state), pure view functions, commands. |
+| `src/count`, `src/waste`, `src/prep`, `src/consumption`, `src/movements`, `src/chat`, `src/recipes`, `src/notifications`, `src/transfers`, `src/stock`, `src/orders`, `src/menu` | One folder per module: API calls, store (screen state), pure view functions, commands. |
 | `src/profile` | The photo picker and the kitchen profile form's rules. |
 | `src/ui` | Components shared by every module, `Column` (the tablet column) among them. |
 | `packages/shared/src/schemas` | The zod schemas of what the server sends, parsed leniently at the boundary (`lenient.ts`). |
@@ -365,6 +365,56 @@ Differences from the web (`LocationDashboard.tsx`, `IngredientCatalog.tsx`, `Cat
 | An item's stock at every location (managers) | The same route, for `inventory:manage`; quantities hidden without `inventory:cost` | |
 | Staff cannot ask for a new item anywhere (only HQ's review queue exists, `CatalogRequestQueue.tsx`) | Ask for a new item, and My requests with HQ's outcome | Nothing to mirror; HQ still approves on the web. |
 | An item's stock per storage area | None on either: stock is per location and zone; the phone shows where an item is kept | See "Stock by area" above. |
+
+## Menu (`src/menu`, `app/(app)/(menu)`)
+
+The Menu tab is the web's Menu & Costing page (`MenuIntelligencePage.tsx`): its Menu Items tab, the item's page and form, Category Settings and Record sale. It is shown to `menu:read` holders, the key on every
+menu route, and comes last in the tab order. Adding, changing and deleting items, saving a target and voiding a sale are offered only to `menu:manage` holders, and per item only where the server says `canManage`
+(its creator or an organisation admin). The menu belongs to the organisation; a sale is recorded at the current location.
+
+**Costs.** A food cost, percentage or margin is the server's stored figure (`storedItemCosts`), shown only to `inventory:cost` holders and only when the server sent it. The server sends menu costs to everyone with
+`menu:read`, so the store drops them for anyone else (`withoutCosts`, `lineWithoutCosts`, and a sale's on-hand figures), also when it reads what an earlier session kept on the phone. Nothing is worked out from
+what is left. The form's live preview uses the shared web editor functions (`previewLineCost`, `editorItemCosts`) and says it is a preview; a category's actual is `categoryActualFoodCostPct`. A person who may not see
+costs can still change a recipe: a changed line keeps the cost it had, unseen.
+
+**Offline.** The list, targets, items sold as they are and the lines of items already opened are kept on the phone (`menu.<user>`, `menu.lines.<user>.<item>`) and read with no signal, with their time. Nothing is
+queued: every write waits for the server, and says when it needs a connection.
+
+- **A sale is retry-safe.** Each sale carries its own `idempotencyKey`, saved on the phone (`menu.sale.<user>`) before it is sent. When no answer comes back the sale stays "not confirmed", over a restart too, and
+  Send it again repeats the same item, quantity, location and key: the server records a key once and answers `alreadyExists`. A refused first try was not recorded, so its key is dropped; a refused repeat says nothing
+  about the try before it, so the key stays until an answer or the person settles it. No second sale starts meanwhile.
+- **Saving an item is several requests without keys** (the item, then its lines; no route changes a line). `SaveSession` (`menuEditor.ts`) makes Save again safe: it reads the menu before a create and finds the item a
+  lost reply left behind (same creator, same fields, not there before), sends only fields that changed, adds only lines that are not on the server yet, adds a changed line's new version before removing the old one,
+  and never removes a line it did not start from.
+- A void of a sale already voided, and a delete of an item already gone, count as done. A delete refused because the item has sales or prep history (409 `CONFLICT`) shows the server's words.
+
+Differences from the web (`components/menu`, `components/menu-intelligence/RecordSaleModal.tsx`), found while comparing:
+
+| Web | Phone | Why |
+|---|---|---|
+| Costs shown to everyone with `menu:read` | Only with `inventory:cost` | The server does not hide menu costs or a sale's on-hand figures yet (owner decision); the phone follows the cost permission. |
+| Add Menu Item and Save target shown to everyone with `menu:read` (a 403 without `menu:manage`) | Hidden without `menu:manage` | The server's gate. |
+| Nine-column table, sortable by any column | One row per item, A to Z; search, category and class filters | |
+| Waste column, dashboard, engineering matrix, AI recommendations, replacement recipe, sales CSV import, Recalculate | Not on the phone | Later slices; the web keeps them. |
+| The item's panel opens only from the matrix | A row opens the item | |
+| A line reads "@ $14/g" when the cost is per kg (the cost is per kitchen unit, the label is the line's unit) | "$14.00 per kg" | The web label is wrong when the line's unit is not the kitchen unit. |
+| Deleting an item asks nothing | Asks first | |
+| An edit sends every field, units sold among them, so a sale recorded while the form is open is taken out of the count again | Sends only what changed | |
+| An edit removes every line and adds them all again; a failure in between loses lines, a prep sub-recipe line becomes a plain one, and the costs of untouched lines are worked out anew | Untouched lines are left alone; a changed line is added before the old one goes | A prep line that is itself changed still becomes a plain one: the route does not send or take its prep link. |
+| Units Sold is on the add form but not sent | On the change form only | The create route does not take it. |
+| A line with a name and no quantity is dropped without a word | "Enter how much" | |
+| Category up to 100 characters on add, 50 on edit (server) | 50 on both | So an item can always be changed. |
+| Recipe import: "2 cups" becomes 2 ml, "8 oz" 8 g, "1 lb" 1 kg, "1/2" becomes 1, "to taste" becomes 0 | Cups stay cups, oz and lb become their grams, fractions are read, no number is left for the person to fill | The web changes what the amounts mean. |
+| Recipe import is grouped by lab, with each owner's name | One list, searched by name or lab | |
+| Refresh cost sits in the edit form | On the item's page, for `inventory:cost` holders | |
+| "+ Add to Catalog", keyboard shortcuts, the line's cost breakdown text | Not on the phone | |
+| A retried sale gets a new key (`manual-<id>-<time>`), so a lost reply and a second press record it twice | The same key until it is settled | |
+| Void asks nothing | Asks first | |
+| A sale's time is the server's clock; the list shows the day | The same; the list shows the day and time | A sale sent again later is recorded at the time it arrives. |
+
+The six costing differences between the web editor and the server (`menuCosting.test.ts`) are kept as they are. The phone meets five of them: a half-cent line (1), a zero yield (2, the form asks for 1 to 200, as the web's does),
+units with no path between them (3, the preview says so and the server refuses the line), and servings per sale below 1 (6, the form asks for at least 1) in the form; the class shown is the server's, over every item (4).
+The plate P&L cost (5) is not on the phone, as it is on no web page.
 
 ## Receive (`src/receiving`, `app/(app)/(receive)`)
 

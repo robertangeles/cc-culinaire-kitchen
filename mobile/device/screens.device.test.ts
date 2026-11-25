@@ -6,6 +6,7 @@ import {
   adb, back, clearApp, dismissSavePassword, openTab, dump, fieldText, find, isSavePasswordSheet, findAll, forceStop, has, hideKeyboard, openApp, setAirplane, setAnimations, setDarkMode, setFontScale,
   setRotation, swipe, tap as tapNow, tapAt, typeInto, waitFor, waitGone,
 } from "./adb";
+import { createApiClient, type Tokens } from "../src/api/client";
 import { credentials, freshCode, manager } from "./fixtures";
 
 /**
@@ -925,6 +926,113 @@ describe.skipIf(!process.env.SCREENS_OUT)(`screens on ${FORM}`, { timeout: 600_0
     }
   });
 
+  /** Press a menu control by its label, scrolled clear of the tab bar first: a button half under the fold is in the dump, but a tap there misses it. */
+  async function choose(label: string | RegExp) {
+    const [w, h] = /(\d+)x(\d+)/.exec(adb(["shell", "wm", "size"]).trim().split("\n").pop()!)!.slice(1).map(Number);
+    let lastY = -1;
+    for (let i = 0; i < 14; i++) {
+      const node = (await dump()).find((n) => n.clickable && (typeof label === "string" ? n.desc === label : label.test(n.desc)));
+      if (node && (node.y2 < h * 0.84 || node.y1 === lastY)) return tapAt(Math.round((node.x1 + node.x2) / 2), Math.round((node.y1 + node.y2) / 2));
+      lastY = node ? node.y1 : -1;
+      await hideKeyboard();
+      const [from, to] = i < 7 ? [0.7, 0.4] : [0.35, 0.65]; // down the page, then back up
+      await swipe(Math.round(w / 2), Math.round(h * from), Math.round(w / 2), Math.round(h * to), 300);
+    }
+    throw new Error(`no control labelled ${label}`);
+  }
+
+  /** A menu with every class, a pack, an item over its target and one nobody has costed. Made once per form. */
+  async function seedMenu() {
+    if ((await m.client.request<{ name: string }[]>("GET", "/api/menu/items")).some((i) => i.name === "Margherita")) return;
+    const ing = async (name: string, baseUnit: string, unitCost: string) => (await m.client.request<{ ingredientId: string }>("POST", `${INV}/ingredients`, { body: { ingredientName: name, ingredientCategory: "dry_goods", baseUnit, unitCost } })).ingredientId;
+    const mozzarella = await ing("Fior di latte mozzarella", "kg", "14.00");
+    const flour = await ing("Tipo 00 flour", "kg", "2.40");
+    const wagyu = await ing("Wagyu rump cap", "kg", "62.00");
+    const dish = async (name: string, category: string, sellingPrice: string, sold: number, lines: [string, string, string, string][], over: object = {}) => {
+      const { menuItemId } = await m.client.request<{ menuItemId: string }>("POST", "/api/menu/items", { body: { name, category, sellingPrice, ...over } });
+      for (const [ingredientId, ingredientName, quantity, unit] of lines) await m.client.request("POST", `/api/menu/items/${menuItemId}/ingredients`, { body: { ...(ingredientId ? { ingredientId } : { unitCost: "3.00" }), ingredientName, quantity, unit } });
+      if (sold) await m.client.request("POST", `/api/menu/items/${menuItemId}/sales`, { body: { qtySold: sold, locationId } });
+    };
+    await dish("Margherita", "Pizza", "24.00", 40, [[mozzarella, "Fior di latte mozzarella", "120", "g"], [flour, "Tipo 00 flour", "160", "g"], ["", "Basil", "0.01", "kg"]]);
+    await dish("Wagyu rump cap, burnt onion, bone marrow butter and pickled mustard seed", "Grilled", "58.00", 6, [[wagyu, "Wagyu rump cap", "0.42", "kg"]]);
+    await dish("Focaccia", "Sides", "9.00", 30, [[flour, "Tipo 00 flour", "1.2", "kg"]], { servings: 8, qFactorPct: "5" });
+    await dish("Dozen dinner rolls", "Sides", "15.00", 2, [[flour, "Tipo 00 flour", "0.9", "kg"]], { servings: 12, servingsPerSale: 12 });
+    await m.client.request("PUT", "/api/menu/categories/Grilled", { body: { targetFoodCostPct: "32" } });
+  }
+
+  it("menu: list, filter, item, change it, add one, sale, sales, targets, offline", async () => {
+    await signedIn();
+    await tab("Menu");
+    await waitFor("French onion soup", 30_000);
+    await shot("m0-menu-one-item");
+    await seedMenu();
+    await launch();
+    await tab("Menu");
+    await waitFor("Dozen dinner rolls", 60_000);
+    await shot("m1-menu");
+    await choose("Pizza");
+    await choose("Star");
+    await shot("m1b-menu-filtered");
+    await choose("Pizza");
+    await choose("Star");
+    await type("Search the menu", "wagyu");
+    await hideKeyboard();
+    await shot("m1c-menu-long-name");
+    await choose(/^Wagyu rump cap/);
+    await waitFor("Contribution margin", 30_000);
+    await shot("m2-item-over-target");
+    await choose("Back to the menu");
+    await type("Search the menu", "margh");
+    await hideKeyboard();
+    await choose(/^Margherita, Pizza/);
+    await waitFor("Fior di latte mozzarella", 30_000);
+    await shot("m2b-item");
+    await choose("Change the item");
+    await waitFor("Item name", 30_000);
+    await shot("m3-change-item");
+    await choose("Fior di latte mozzarella, 120 g, $1.68");
+    await shot("m3b-line-open");
+    await choose("Cancel");
+    await choose("Back to the menu");
+    await choose("Add a menu item");
+    await waitFor("Start from a recipe", 30_000);
+    await shot("m4-add-item");
+    await choose("Save the item");
+    await sleep(800);
+    await shot("m4b-add-item-error");
+    await choose("Cancel");
+    await choose("Record a sale");
+    await waitFor("What was sold", 30_000);
+    await shot("m5-sale");
+    await type("What was sold", "marg");
+    await hideKeyboard();
+    await choose("Sell Margherita");
+    await type("How many", "3");
+    await hideKeyboard();
+    await shot("m5b-sale-picked");
+    await choose("Record the sale");
+    await waitFor("Sale recorded", 30_000);
+    await shot("m5c-sale-recorded");
+    await choose("Back");
+    await choose("Recent sales");
+    await waitFor("3 × Margherita", 30_000);
+    await shot("m6-sales");
+    await choose("Back");
+    await choose("Category targets");
+    await waitFor("Category targets", 30_000);
+    await shot("m7-targets");
+    await choose("Back to the menu");
+    await setAirplane(true);
+    try {
+      await tab("Inbox");
+      await tab("Menu"); // reads the menu again when it comes into view
+      await waitFor(/^You're offline/, 60_000);
+      await shot("m8-menu-offline");
+    } finally {
+      await setAirplane(false);
+    }
+  });
+
   it("account, change location, delete account form", async () => {
     await signedIn();
     const me = await m.client.request<{ userId?: number; user?: { userId: number } }>("GET", "/api/auth/me");
@@ -1051,6 +1159,41 @@ describe.skipIf(!process.env.SCREENS_OUT)(`screens on ${FORM}`, { timeout: 600_0
     await shot("72-first-run-location");
     await press("Sign out");
     await waitFor("Welcome back to the line.", 20_000);
+  });
+
+  // A person who reads the menu without inventory:cost. Takes every other key off the Subscriber role of the throwaway database, and leaves
+  // the organisation again: its only admin, deleted next, could not go while it has another member.
+  it("menu without costs: list, item, sale", async () => {
+    await seedMenu();
+    const { permissions } = await m.client.request<{ permissions: { permissionId: number; permissionKey: string }[] }>("GET", "/api/permissions");
+    const { roles } = await m.client.request<{ roles: { roleId: number; roleName: string }[] }>("GET", "/api/roles");
+    const subscriber = roles.find((r) => r.roleName === "Subscriber")!;
+    await m.client.request("PUT", `/api/roles/${subscriber.roleId}/permissions`, { body: { permissionIds: permissions.filter((p) => p.permissionKey === "menu:read").map((p) => p.permissionId) } });
+    const { organisation } = await m.client.request<{ organisation: { organisationId: number; joinKey: string } }>("GET", "/api/organisations/mine");
+    const [email, password] = [process.env.E2E_DELETE_USER_EMAIL ?? "", process.env.E2E_DELETE_USER_PASSWORD ?? ""];
+    const cook = await m.client.request<{ user: { userId: number }; tokens: Tokens }>("POST", "/api/auth/login", { auth: false, body: { email, password } });
+    const asCook = createApiClient({ baseUrl: API_URL, appVersion: "0.1.0-device", tokenStore: { load: async () => cook.tokens, save: async () => {}, clear: async () => {} } });
+    await asCook.request("POST", "/api/organisations/join", { body: { joinKey: organisation.joinKey } });
+    try {
+      await m.client.request("POST", `/api/store-locations/${locationId}/staff`, { body: { userId: cook.user.userId } });
+      await toSignIn();
+      await typePassword(email, password);
+      await submitSignIn();
+      await tab("Menu");
+      await waitFor("Dozen dinner rolls", 60_000);
+      await shot("m9-menu-no-costs");
+      await type("Search the menu", "margh");
+      await hideKeyboard();
+      await choose(/^Margherita, Pizza/);
+      await waitFor("Fior di latte mozzarella", 30_000);
+      await shot("m9b-item-no-costs");
+      await choose("Record a sale");
+      await choose("Record the sale");
+      await waitFor("Sale recorded", 30_000);
+      await shot("m9c-sale-no-costs");
+    } finally {
+      await asCook.request("DELETE", `/api/organisations/${organisation.organisationId}/leave`).catch(() => {});
+    }
   });
 
   it("delete account, then the goodbye screen", async () => {

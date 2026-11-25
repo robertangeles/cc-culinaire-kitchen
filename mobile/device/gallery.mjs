@@ -34,6 +34,7 @@ const WEB = [
   [/^8[0-4]/, `${C}/pages/ChatPage.tsx (/chat)`],
   [/^8[5-9]/, `${C}/pages/MyShelfPage.tsx, RecipeLabPage.tsx (/my-shelf, /recipes)`],
   [/^9[0-4]/, `${C}/pages/PurchasingPage.tsx (receiving)`],
+  [/^m/, `${C}/pages/MenuIntelligencePage.tsx, components/menu, components/menu-intelligence/RecordSaleModal.tsx (/menu-intelligence)`],
   [/^o/, `${C}/pages/PurchasingPage.tsx (/purchasing: Orders, Approvals; credit notes have no web page)`],
   [/^97/, "none: the web has no notification settings page (phone only)"],
   [/^9[56]/, `${C}/components/layout/NotificationBell.tsx (the bell)`],
