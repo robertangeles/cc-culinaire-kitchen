@@ -178,11 +178,20 @@ describe("saving", () => {
     expect(s.calls).toEqual(["add Mozzarella 0.2", "remove 1"]);
   });
 
-  it("keeps the cost of a changed line when the person cannot see it", async () => {
+  it("sends a changed line's own cost again when the server showed it", async () => {
     const s = server([item()], [line()]);
     const d = draft();
     await saveMenuItem(s.api, saveSession(item(), [line()]), ok({ ...d, lines: [{ ...d.lines[0], quantity: "0.2" }] }), 4);
     expect(s.api.addLine.mock.calls[0][1]).toMatchObject({ unitCost: "14" });
+  });
+
+  it("sends a changed line whose cost is hidden without one, before the old one goes, so the server can carry the cost over; untouched lines stay", async () => {
+    const hidden = [line({ unitCost: undefined, lineCost: undefined, catalogUnitCost: undefined }), line({ id: 2, ingredientName: "Basil", ingredientId: null, baseUnit: null, unitCost: undefined, lineCost: undefined, catalogUnitCost: undefined })];
+    const s = server([item()], [...hidden]);
+    const d = draftOf(item(), hidden);
+    await saveMenuItem(s.api, saveSession(item(), hidden), ok({ ...d, lines: [{ ...d.lines[0], quantity: "0.2" }, d.lines[1]] }), 4);
+    expect(s.calls).toEqual(["add Mozzarella 0.2", "remove 1"]);
+    expect(s.api.addLine.mock.calls[0][1]).not.toHaveProperty("unitCost");
   });
 
   it("finds the item a lost create reply left on the server instead of making a second one, and saves what was typed since", async () => {
