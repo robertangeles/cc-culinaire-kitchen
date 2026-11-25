@@ -87,7 +87,7 @@ const { errorHandler } = await import("../middleware/errorHandler.js");
 const HIDDEN = [
   "foodCost", "foodCostPct", "contributionMargin", "unitCost", "lineCost", "catalogUnitCost", "fohOnHand",
   "avgFoodCostPct", "avgContributionMargin", "totalFoodCost", "overallFoodCostPct",
-  "theoretical", "actual", "variance", "variancePct", "threshold",
+  "theoretical", "actual", "variance", "variancePct", "threshold", "wasteEstimate",
 ];
 
 const omit = (row: object, ...keys: string[]) => Object.fromEntries(Object.entries(row).filter(([k]) => !keys.includes(k)));
@@ -141,7 +141,7 @@ const menuRoutes: Array<[string, string, unknown, string[]]> = [
   ["PUT", "/categories/:name", { targetFoodCostPct: "30" }, []],
   ["GET", "/items/:id/recommendations", undefined, []],
   ["POST", "/items/:id/generate-replacement", {}, []],
-  ["GET", "/waste-impact", undefined, []],
+  ["GET", "/waste-impact", undefined, ["wasteEstimate"]],
   ["POST", "/import-sales", "csv", []],
   ["GET", "/yield-variance", undefined, ["actual", "theoretical", "threshold", "variance", "variancePct"]],
   ["GET", "/items/:id/yield-variance", undefined, ["actual", "theoretical", "threshold", "variance", "variancePct"]],

@@ -51,6 +51,7 @@ function serve(seesCosts: boolean) {
       if (path.endsWith("/sales")) return json({ ...SALE, depleted: SALE.depleted.map((d) => see(d, "fohOnHand")) });
       return json({ menuItemId: "m1" });
     }
+    if (path.includes("/api/menu/waste-impact")) return json([see({ menuItemId: "m2", wasteEstimate: 40 }, "wasteEstimate")]);
     if (path.includes("/api/menu/analysis")) return json(analysis);
     if (path.includes("/ingredients") && path.includes("/api/menu/items/")) return json(LINES.map((l) => see(l, "unitCost", "lineCost", "catalogUnitCost")));
     if (path.includes("/api/menu/items")) return json(DISHES.map((d) => see(d, ...ITEM_COSTS)));
@@ -93,6 +94,15 @@ describe("Menu & Costing without inventory:cost", () => {
     expect(within(screen.getByText("Risotto").closest("tr")!).getAllByRole("cell").slice(0, 5).map((c) => c.textContent)).toEqual(["Risotto", "Mains", "$24.00", "12", "Star"]);
     expect(figures(page)).toEqual(["$20.00", "$24.00"]);
     noStandIn(page);
+  });
+
+  it("menu items: a dog keeps its class but shows no waste column or dollar badge", async () => {
+    const page = await open();
+    tab("Menu Items");
+    await waitFor(() => expect(fetch).toHaveBeenCalledWith(expect.stringContaining("/api/menu/waste-impact"), expect.anything()));
+    expect(within(screen.getByText("Gnocchi").closest("tr")!).getByText("Dog")).toBeInTheDocument();
+    expect(screen.queryByRole("columnheader", { name: "Waste" })).not.toBeInTheDocument();
+    expect(page.textContent).not.toMatch(/waste/i);
   });
 
   it("matrix: a note instead of an empty chart", async () => {
@@ -189,6 +199,8 @@ describe("Menu & Costing with inventory:cost", () => {
     tab("Menu Items");
     expect(screen.getAllByRole("columnheader").map((h) => h.textContent!.trim())).toEqual(["Name", "Category", "Price", "Food Cost", "FC %", "CM", "Units Sold", "Class", ""]);
     expect(figures(page)).toEqual(expect.arrayContaining(["$6.10", "25.4%", "$17.90"]));
+    expect(await screen.findByText("Dog + $40 waste")).toBeInTheDocument();
+    expect(screen.getByRole("columnheader", { name: "Waste" })).toBeInTheDocument();
     tab("Engineering Matrix");
     expect(screen.getByText("Menu Engineering Matrix")).toBeInTheDocument();
     tab("Category Settings");

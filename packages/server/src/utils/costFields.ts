@@ -5,10 +5,10 @@ import type { TokenPayload } from "../services/authService.js";
 const COST_FIELDS = [
   "expectedQty", "varianceQty", "variancePct", "unitCost",
   "currentQty", "locationUnitCost", "orgUnitCost", "preferredUnitCost", "packCost", "costPerUnit", "actualUnitCost", "totalValue",
-  // The menu: item and line costs, margin, the dashboard averages, yield variance (in dollars), and what a sale left on hand.
+  // The menu: item and line costs, margin, the dashboard averages, yield variance and waste (in dollars), and what a sale left on hand.
   "foodCost", "foodCostPct", "contributionMargin", "lineCost", "catalogUnitCost",
   "avgFoodCostPct", "avgContributionMargin", "totalFoodCost", "overallFoodCostPct",
-  "theoretical", "actual", "variance", "threshold", "fohOnHand",
+  "theoretical", "actual", "variance", "threshold", "fohOnHand", "wasteEstimate",
 ] as const;
 
 /** `row` without {@link COST_FIELDS}. */

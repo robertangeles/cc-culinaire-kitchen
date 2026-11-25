@@ -77,7 +77,7 @@ type SortKey =
 /** Waste impact data per menu item (from backend). */
 export interface WasteImpact {
   menuItemId: string;
-  wasteEstimate: number;
+  wasteEstimate?: number;
 }
 
 interface MenuItemListProps {
@@ -115,7 +115,7 @@ export function MenuItemList({
   const wasteMap = useMemo(() => {
     const map = new Map<string, number>();
     if (wasteImpacts) {
-      for (const w of wasteImpacts) map.set(w.menuItemId, w.wasteEstimate);
+      for (const w of wasteImpacts) if (w.wasteEstimate !== undefined) map.set(w.menuItemId, w.wasteEstimate);
     }
     return map;
   }, [wasteImpacts]);
@@ -213,7 +213,7 @@ export function MenuItemList({
     ["classification", "Class"],
   ];
 
-  const hasWasteData = wasteImpacts && wasteImpacts.length > 0;
+  const hasWasteData = wasteMap.size > 0;
 
   return (
     <div className="space-y-4">

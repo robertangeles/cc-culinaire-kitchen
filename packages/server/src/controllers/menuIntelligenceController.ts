@@ -409,7 +409,8 @@ export async function handleGetRecommendations(req: Request, res: Response, next
 
 export async function handleGetWasteImpact(req: Request, res: Response, next: NextFunction) {
   try {
-    res.json(await getWasteImpactForMenuItems(await menuScope(req), req.user!));
+    const rows = await getWasteImpactForMenuItems(await menuScope(req), req.user!);
+    res.json(rows.map((r) => forViewer(req.user!, r)));
   } catch (err) { next(err); }
 }
 
