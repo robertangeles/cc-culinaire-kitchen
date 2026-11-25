@@ -11,7 +11,7 @@ Run the screenshot walk (`device/README.md`, "The screenshot walk") after changi
 
 - Light paper background (`bg`), never white; cards and grouped rows on the sunk paper `Surface` with hairline dividers.
 - Section and field labels in copper capitals (`Text variant="label"`: Inter semibold 12, letter-spaced, `accentText`); titles and sentences in Fraunces; a card's or a row's name is `variant="heading"` (Fraunces 20); buttons, chips, numbers and short facts in Inter. Nothing below 16 pt except those labels and the tab bar's. No screen writes these styles out by hand.
-- Every tab starts with `ScreenHeader`: the location in copper capitals held close over the title that says what the tab is ("Waste", "Count"); Ask, Recipes and Menu, which no location owns, name their part instead ("Kitchen AI", "Recipe book", "Menu & costing"). An empty tab (or an empty list on it) shows its state in a card, never a bare line.
+- Every tab starts with `ScreenHeader`: the location in copper capitals held close over the title that says what the tab is ("Waste", "Count"); Ask, Brain, Recipes and Menu, which no location owns, name their part instead ("Kitchen AI" for Ask and Brain, "Recipe book", "Menu & costing"). An empty tab (or an empty list on it) shows its state in a card, never a bare line.
 - The signed-in app opens on the first button of the person's bar (`homeHref`): Prep for a cook who preps, Waste for one who only logs waste, Ask for someone with no module. Never on a tab under More.
 - Nothing clipped or overlapping: lists scroll right up to the tab bar (each tab screen has a safe area of its own, `app/(app)/_layout.tsx`, so no paper strip is left above it), tab labels fully above the system navigation bar, long item names wrap, buttons fit their words.
 - At most five tab buttons; more modules go under More (`src/shell/tabs.ts`, `tabBar`), and Account is always reachable. The bar is quiet: fine grey line icons with a short Inter 12 label each, one line, never cut; the open tab (More for a screen under it) is the only one in copper, on a sunk-paper pill.
@@ -25,11 +25,11 @@ Run the screenshot walk (`device/README.md`, "The screenshot walk") after changi
 
 | Folder | What lives there |
 |---|---|
-| `app/` | Screens (expo-router). A module is a route group `app/(app)/(module)/`, plus one entry in `src/shell/tabs.ts` naming the permission that opens it (none when the server asks only for a signed-in person), in the order a line cook uses them (Prep, Waste, Usage, Count, Move, Receive, Orders, Ask, Recipes, Inbox, Transfers, Stock, Menu). Past five tab buttons, the fifth is More (`app/(app)/more.tsx`), listing the rest and Account. A tab under More keeps its route and loses only its button: never `href: null`, which expo-router turns into a hidden tab that redirects to the first tab when opened. |
+| `app/` | Screens (expo-router). A module is a route group `app/(app)/(module)/`, plus one entry in `src/shell/tabs.ts` naming the permission that opens it (none when the server asks only for a signed-in person), in the order a line cook uses them (Prep, Waste, Usage, Count, Move, Receive, Orders, Ask, Recipes, Inbox, Transfers, Stock, Menu, Brain). Past five tab buttons, the fifth is More (`app/(app)/more.tsx`), listing the rest and Account. A tab under More keeps its route and loses only its button: never `href: null`, which expo-router turns into a hidden tab that redirects to the first tab when opened. |
 | `src/api` | The one network client: auth, refresh, coded errors (`ApiError.code`, `serverCode`). |
 | `src/outbox` | The offline queue (below). |
 | `src/ingredients` | The shared ingredient picker's data (below); its component is `src/ui/IngredientPicker.tsx`. |
-| `src/count`, `src/waste`, `src/prep`, `src/consumption`, `src/movements`, `src/chat`, `src/recipes`, `src/notifications`, `src/transfers`, `src/stock`, `src/orders`, `src/menu` | One folder per module: API calls, store (screen state), pure view functions, commands. |
+| `src/count`, `src/waste`, `src/prep`, `src/consumption`, `src/movements`, `src/chat`, `src/recipes`, `src/notifications`, `src/transfers`, `src/stock`, `src/orders`, `src/menu`, `src/brain` | One folder per module: API calls, store (screen state), pure view functions, commands. |
 | `src/lock` | The app lock (below): its state (`appLock.ts`, no React), the lock screen, the system prompt, and `useAppLock().confirm(reason)` for guarded actions. |
 | `src/profile` | The photo picker and the kitchen profile form's rules. |
 | `src/ui` | Components shared by every module, `Column` (the tablet column) among them. |
@@ -418,6 +418,28 @@ The six costing differences between the web editor and the server (`menuCosting.
 units with no path between them (3, the preview says so and the server refuses the line), and servings per sale below 1 (6, the form asks for at least 1) in the form; the class shown is the server's, over every item (4).
 The plate P&L cost (5) is not on the phone, as it is on no web page.
 
+## Your Brain (`src/brain`, `app/(app)/(brain)`)
+
+The Brain tab is the web's Your Brain page (`YourBrainPage.tsx`), shown to `brain:read` holders, as on the web. It lists what CulinAIre remembers, private to
+the person or shared with their kitchen, by source, searched on the server once typing pauses, twenty at a time. A memory opens to its text; Remove asks first and
+takes it off the web too. It is offered only when the server says this row is the person's to manage (`canManage`) and they hold `brain:manage`, the key the delete route asks for.
+A removal needs a signal (it is not queued): a failure keeps the row and says so. The first page of each tier is kept on the phone (`brain.<userId>.<scope>`) for a start with no signal;
+a search or a source is never kept, a removed memory leaves the kept copy, and a refusal (the permission was taken away) clears it. The "Grounded in your Brain" chip is Ask's and the Recipe Lab's (above).
+
+Differences from the web, found while comparing:
+
+| Web | Phone | Why |
+|---|---|---|
+| Pin, correct the text, share with the kitchen and un-share on each row | Not on the phone (pinned rows are marked and come first, shared ones are in their tab) | Follow-up: this slice reads, removes and opts in. Sharing is one tap and un-sharing needs an organisation admin, so it wants its own confirmation. |
+| Remove deletes at once, with no question | Asks first; for a shared memory it says the whole kitchen loses it | It cannot be undone. |
+| Remove shows on `canManage` alone (a 403 without `brain:manage`) | Needs `brain:manage` too | The server's gate. |
+| A failed removal always says "Couldn't remove that" | A memory already removed elsewhere (404) says so and the list is read again | |
+| The first 100 memories, no more | Twenty at a time, Load more to the end | Each row carries its whole text. |
+| Tabs "Private to you" and "Shared with your kitchen", hidden with no kitchen | "Private to you" and "Shared"; always shown | Both labels do not fit a phone; a signed-in phone always has a location. |
+| A "shared" chip on each shared row | No chip: the Shared tab says it, and the row names who shared it | |
+| Nudges: when the setting cannot be read the switch shows off; a failed save only slips back | No switch until the choice is known, and it says why; a failed save says so | Off may be wrong. |
+| Not gated by the admin's Brain switch (an empty or old list when it is off) | The same | The routes check permissions only. |
+
 ## Receive (`src/receiving`, `app/(app)/(receive)`)
 
 The Receive tab is shown to `purchasing:receive` holders. It is the web's receiving (`components/purchasing/ReceiveQueue.tsx`, `ReceivingChecklist.tsx`) and uses the same routes.
@@ -562,5 +584,5 @@ The web's "create your first location" link for an admin is a sentence here: mak
 ## Tests
 
 `check:test` runs the logic tests (`src/**`) and the screen tests (`tests/*.test.tsx`); `check:e2e` runs the real client and queue against a server
-(`e2e/phoneFlow`, `e2e/wasteQueue`, `e2e/prepQueue`, `e2e/stockQueue`, `e2e/chatRecipes`, `e2e/storeRoom`; `e2e/receiving` uses the client alone, receiving has no queue; `e2e/orders` uses the client, lists and order form, which have none either; `e2e/accountNotifications`
+(`e2e/phoneFlow`, `e2e/wasteQueue`, `e2e/prepQueue`, `e2e/stockQueue`, `e2e/chatRecipes`, `e2e/storeRoom`; `e2e/brain` (Your Brain, no queue); `e2e/receiving` uses the client alone, receiving has no queue; `e2e/orders` uses the client, lists and order form, which have none either; `e2e/accountNotifications`
 covers details, kitchen profile, password, two-step, the inbox read queue and push settings with a just-registered person; set `E2E_NOTIFICATION_ID` to a notification made for that person to check a real row, as the suite cannot make one through the API). See `device/README.md`.

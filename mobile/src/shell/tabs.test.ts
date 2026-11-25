@@ -72,6 +72,11 @@ describe("which tabs a person sees", () => {
     expect(gatedTabs(person({ permissions: ["menu:manage", "inventory:cost"] }))).toEqual([]);
   });
 
+  it("shows the Brain to someone who holds brain:read, the key the server asks for to list memories, and to no one who holds only brain:manage", () => {
+    expect(gatedTabs(person({ permissions: ["brain:read"] })).map((t) => t.route)).toEqual(["(brain)"]);
+    expect(gatedTabs(person({ permissions: ["brain:manage"] }))).toEqual([]);
+  });
+
   it("does not treat a role name other than Administrator as a superuser", () => {
     expect(hasAnyPermission(person({ roles: ["Paid Subscriber"] }), ["inventory:count"])).toBe(false);
   });
@@ -80,8 +85,8 @@ describe("which tabs a person sees", () => {
     expect(new Set(moduleTabs.map((t) => t.route)).size).toBe(moduleTabs.length);
   });
 
-  it("puts the tabs in the order a line cook uses them (prep, waste, usage, count, move, receive, orders), then Ask, Recipes and the Inbox, then the weekly store-room Transfers and Stock, then the Menu", () => {
-    expect(moduleTabs.map((t) => t.title)).toEqual(["Prep", "Waste", "Usage", "Count", "Move", "Receive", "Orders", "Ask", "Recipes", "Inbox", "Transfers", "Stock", "Menu"]);
+  it("puts the tabs in the order a line cook uses them (prep, waste, usage, count, move, receive, orders), then Ask, Recipes and the Inbox, then the weekly store-room Transfers and Stock, then the Menu, then the Brain", () => {
+    expect(moduleTabs.map((t) => t.title)).toEqual(["Prep", "Waste", "Usage", "Count", "Move", "Receive", "Orders", "Ask", "Recipes", "Inbox", "Transfers", "Stock", "Menu", "Brain"]);
   });
 });
 
@@ -96,7 +101,7 @@ describe("the tab bar and More", () => {
   it("shows four modules and More when a person's modules and Account would make more than five buttons", () => {
     const { bar, more } = tabBar(person({ roles: ["Administrator"] }));
     expect(bar.map((t) => t.title)).toEqual(["Prep", "Waste", "Usage", "Count"]);
-    expect(more.map((t) => t.title)).toEqual(["Move", "Receive", "Orders", "Ask", "Recipes", "Inbox", "Transfers", "Stock", "Menu"]);
+    expect(more.map((t) => t.title)).toEqual(["Move", "Receive", "Orders", "Ask", "Recipes", "Inbox", "Transfers", "Stock", "Menu", "Brain"]);
     expect(bar.length + 1).toBe(MAX_TABS); // the fifth button is More, which also holds Account
   });
 

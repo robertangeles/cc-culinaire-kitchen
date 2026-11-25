@@ -1059,6 +1059,63 @@ describe.skipIf(!process.env.SCREENS_OUT)(`screens on ${FORM}`, { timeout: 600_0
     }
   });
 
+  it("brain: warming up, a list, an open memory, remove, shared, no match, nudges, offline", async () => {
+    await signedIn();
+    const me = await m.client.request<{ userId?: number; user?: { userId: number } }>("GET", "/api/auth/me");
+    const userId = Number(me.userId ?? me.user!.userId);
+    const organisationId = Number((await m.client.request<{ organisationId: number }>("GET", "/api/users/location-context")).organisationId);
+    await tab("Brain");
+    await waitFor("Your Brain is warming up", 30_000);
+    await shot("b0-brain-empty");
+    // The server writes memories itself (its Brain flags are off here), so straight into the walk's own throwaway database.
+    sql(`insert into brain_memory (user_id, organisation_id, scope, source_type, title, body, status, is_pinned, created_dttm)
+      select ${userId}, o, s, t, n, b, st, p, now() - a::interval from (values
+      (null::int, 'user', 'chat', 'Salt fish overnight', 'You cure kingfish overnight at 2.5% salt before the ceviche goes on the specials board. Two hours was not enough in the March tasting.', 'ready', true, '20 days'),
+      (null, 'user', 'recipe', 'Cider-braised chicken thighs with prunes, speck and a very long name that has to wrap', 'You keep the skin crisp by finishing under the salamander.', 'ready', false, '3 days'),
+      (null, 'user', 'chat', null, 'Antoine suggested toasting the flour for the roux so it never tastes raw, even on a short cook.', 'pending', false, '2 minutes'),
+      (null, 'user', 'prep', 'Saturday prep', 'Onions for the soup take one cook a full hour.', 'ready', false, '5 days'),
+      (${organisationId}, 'org', 'waste', 'Herbs thrown out on Mondays', 'Three Mondays running, coriander and dill were binned after the weekend delivery.', 'ready', false, '1 day')) v(o, s, t, n, b, st, p, a)`);
+    await tab("Inbox");
+    await tab("Brain");
+    await waitFor("4 memories", 30_000);
+    await shot("b1-brain");
+    await scrollToEnd();
+    await shot("b1b-brain-end");
+    await choose(/^Salt fish overnight/);
+    await waitFor("Remove", 20_000);
+    await shot("b2-memory-open");
+    await choose("Remove");
+    await waitFor("Keep it", 20_000);
+    await shot("b2b-remove-asked");
+    await tap(/^keep it$/i);
+    await choose(/^Saturday prep/);
+    await choose("Remove");
+    await tap(/^remove$/i);
+    await waitFor("3 memories", 30_000);
+    if (sql(`select count(*) from brain_memory where title = 'Saturday prep'`) !== "0") throw new Error("the memory is still on the server");
+    await choose("Proactive nudges");
+    await sleep(1500);
+    await shot("b3-nudges-on");
+    if (sql(`select brain_nudges_opt_in from "user" where user_id = ${userId}`) !== "t") throw new Error("nudges were not switched on");
+    await choose("Shared");
+    await waitFor("Herbs thrown out on Mondays", 30_000);
+    await shot("b4-shared");
+    await choose("Private to you");
+    await type("Search", "truffle");
+    await hideKeyboard();
+    await waitFor("No memories match", 30_000);
+    await shot("b5-no-match");
+    await setAirplane(true);
+    try {
+      await launch();
+      await tab("Brain");
+      await waitFor(/^Can't reach the server/, 60_000);
+      await shot("b6-brain-offline");
+    } finally {
+      await setAirplane(false);
+    }
+  });
+
   it("account, change location, delete account form", async () => {
     await signedIn();
     const me = await m.client.request<{ userId?: number; user?: { userId: number } }>("GET", "/api/auth/me");

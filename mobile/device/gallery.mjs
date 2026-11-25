@@ -34,6 +34,7 @@ const WEB = [
   [/^8[0-4]/, `${C}/pages/ChatPage.tsx (/chat)`],
   [/^8[5-9]/, `${C}/pages/MyShelfPage.tsx, RecipeLabPage.tsx (/my-shelf, /recipes)`],
   [/^9[0-4]/, `${C}/pages/PurchasingPage.tsx (receiving)`],
+  [/^b/, `${C}/pages/YourBrainPage.tsx, components/brain (/your-brain)`],
   [/^m/, `${C}/pages/MenuIntelligencePage.tsx, components/menu, components/menu-intelligence/RecordSaleModal.tsx (/menu-intelligence)`],
   [/^l/, "none: the web has no app lock (phone only)"],
   [/^o/, `${C}/pages/PurchasingPage.tsx (/purchasing: Orders, Approvals; credit notes have no web page)`],
