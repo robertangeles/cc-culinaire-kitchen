@@ -32,14 +32,6 @@ let fx: LineLoopFx;
 let supplierId = "";
 let guideId = "";
 
-const zoneQty = async (zone: "BOH" | "FOH") => {
-  const [row] = await db
-    .select({ q: stockLevel.currentQty })
-    .from(stockLevel)
-    .where(and(eq(stockLevel.storeLocationId, fx.locA), eq(stockLevel.ingredientId, fx.ingId), eq(stockLevel.zone, zone)));
-  return Number(row.q);
-};
-
 /** A purchase order for 5 kg of flour at $2, total $10. */
 async function flourPO(status: string) {
   const [po] = await db
