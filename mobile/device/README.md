@@ -66,7 +66,7 @@ iPad portrait, and `tablet-landscape` turns its display on its side at full reso
 
 Each test starts on its own from a cleared app (`pm clear` of `com.culinairekitchen.chef` only, relaunch, sign in through the shared helper),
 so a failed test never leaves the next one on the wrong screen; a failed test saves `FAILED-<name>.png`. It needs the development build
-(`buildStamp.sh check`) and takes about 15 minutes a form. The round gear at the top right of a development build is the dev menu's
+(`buildStamp.sh check`) and takes over an hour a form (68 minutes on the tablet emulator). The round gear at the top right of a development build is the dev menu's
 Tools button; the walk switches it off after each clear (when the dev menu is slow to open, the gear stays in the picture and the walk
 goes on), and release builds never show it. Only `screens.sh` runs this walk: a plain `check:device` skips it (no `SCREENS_OUT`), because
 its last test deletes the E2E user's account.
@@ -128,7 +128,7 @@ emulator insists on 4 GB, hence 240 dpi). Delete it all with
 `rm -rf ~/.android/avd/culinaire-tablet.avd ~/.android/avd/culinaire-tablet.ini`; `start` makes it again.
 
 Measured on this machine (20 cores, 30 GB): cold boot 14 to 18 s, the x86_64 build 64 to 93 s, the count walk's sign-in screen 4.2 s
-(5.2 s on the phone), the whole screenshot walk 38 minutes (13 of 14 tests, 47 images, measured before the home, Ask, Recipes, Receive and Inbox test was added; about 15 minutes a form on the phone): slower
+(5.2 s on the phone), the whole screenshot walk 68 minutes a form (20 tests, 106 images): slower
 per walk than the phone, but it never waits for the phone's lease. The emulator is not the phone: with its airplane mode on, the app still opened an area that needs the server
 (count walk W5 and W6, cause not yet found), so use the phone for offline steps. At tablet width the walks
 written for the phone also meet screens the phone never shows at once (the Sign in tab and button are both on screen).
