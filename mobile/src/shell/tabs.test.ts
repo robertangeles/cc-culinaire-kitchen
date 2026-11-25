@@ -129,7 +129,7 @@ describe("the tab bar and More", () => {
       expect(after.more.map((t) => t.title)).toEqual([...before.more.map((t) => t.title), "Roster", "Documents"]);
       expect(after.bar.length + 1).toBeLessThanOrEqual(MAX_TABS);
     }
-    expect(Object.keys(tabLabels(person({ permissions: own })))).toEqual(["Ask", "Recipes", "Inbox", "More"]);
+    expect(Object.keys(tabLabels(person({ permissions: own })))).toEqual(["Ask", "Recipes", "Inbox", "Bench", "More"]);
   });
 
   it("never puts a module the person cannot open under More", () => {

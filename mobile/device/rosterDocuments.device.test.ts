@@ -354,21 +354,21 @@ describe.skipIf(!process.env.SCREENS_OUT)(`roster and documents on ${FORM}`, { t
     await home("Documents", "Add a certificate");
     await press("Add a certificate");
     await waitFor("What is it?");
-    await shot("c10-add");
+    await shot("d10-add");
     await tap("Food Handler");
     await press("Take a photo");
     await waitFor(/take pictures and record video|take pictures/i, 30_000);
-    await shot("c11-add-camera-question");
+    await shot("d11-add-camera-question");
     await tap(/^Don.t allow$/i);
     await waitFor(/The camera isn't allowed/, 30_000);
-    await shot("c12-add-camera-refused");
+    await shot("d12-add-camera-refused");
     if (!process.env.WALK_PHOTO) return;
     await press("Choose a photo");
     await sleep(5000);
-    await shot("c13-add-photo-picker");
+    await shot("d13-add-photo-picker");
     await pickFirst();
     await waitFor("✓ Photo added", 60_000);
-    await shot("c14-add-photo-added");
+    await shot("d14-add-photo-added");
     // Nothing of the photo is left as a file: the picker's folder is gone, and no file of the app names the camera that "took" it (WalkCam, in its EXIF).
     const app = (command: string) => adb(["shell", `run-as com.culinairekitchen.chef sh -c '${command}'`]).trim();
     if (app("ls cache/ImagePicker 2>/dev/null | wc -l") !== "0") throw new Error("the picker's copy of the photo is still on the phone");
@@ -376,13 +376,13 @@ describe.skipIf(!process.env.SCREENS_OUT)(`roster and documents on ${FORM}`, { t
     await type("Certificate number", "FH-55213");
     await type("Expires", "08072028");
     await scroll();
-    await shot("c15-add-filled");
+    await shot("d15-add-filled");
     await press("Send for review");
     await waitFor("Sent for review", 60_000);
-    await shot("c16-add-sent");
+    await shot("d16-add-sent");
     await press("Back to my documents");
     await waitFor(/^Food Handler/, 30_000);
-    await shot("c17-documents-after");
+    await shot("d17-documents-after");
   });
 
   it("profile picture: chosen, cropped and sent the same way", async (ctx) => {
