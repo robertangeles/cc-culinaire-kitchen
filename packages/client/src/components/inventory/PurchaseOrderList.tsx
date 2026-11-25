@@ -9,7 +9,7 @@
 import { useState, useCallback, useMemo, useEffect, useRef } from "react";
 import { useLocation } from "../../context/LocationContext.js";
 import { useHasPermission } from "../../hooks/useHasPermission.js";
-import { SUPPLIER_EMAIL_WINDOW_MS } from "@culinaire/shared";
+import { SUPPLIER_EMAIL_WINDOW_MS, reorderCheckLine } from "@culinaire/shared";
 import {
   usePurchaseOrders,
   useLocationIngredients,
@@ -247,9 +247,11 @@ export default function PurchaseOrderList({ focusPoId }: { focusPoId?: string | 
     if (!selectedLocationId) return;
     try {
       const result = await clonePO(poId, selectedLocationId);
-      if (result.skippedItems?.length > 0) {
-        alert(`PO cloned. ${result.skippedItems.length} item(s) skipped (at or above par level).`);
-      }
+      const notes = [
+        result.skippedItems?.length > 0 ? `PO cloned. ${result.skippedItems.length} item(s) skipped (at or above par level).` : null,
+        reorderCheckLine(result.quantityWarnings ?? []),
+      ].filter(Boolean);
+      if (notes.length > 0) alert(notes.join(" "));
     } catch (err: unknown) {
       alert(err instanceof Error ? err.message : "Failed to clone order");
     }

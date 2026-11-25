@@ -66,8 +66,13 @@ export type OrderLine = z.infer<typeof OrderLineSchema>;
 export const OrderDetailSchema = OrderSummarySchema.extend({ lines: rowsOf(OrderLineSchema) });
 export type OrderDetail = z.infer<typeof OrderDetailSchema>;
 
-/** The stored order a write answers with (create, clone): the screens need its id and number. `skippedItems` is clone only. */
-export const OrderWriteReplySchema = z.object({ poId: z.string(), poNumber: z.string().catch(""), skippedItems: z.array(z.string()).catch([]) });
+/** The stored order a write answers with (create, clone): the screens need its id and number. `skippedItems` and `quantityWarnings` (items whose quantity could not be fully worked out) are clone only. */
+export const OrderWriteReplySchema = z.object({
+  poId: z.string(),
+  poNumber: z.string().catch(""),
+  skippedItems: z.array(z.string()).catch([]),
+  quantityWarnings: rowsOf(z.object({ ingredientName: text })).catch([]),
+});
 /** Submit: where the order went. Anything but HQ_APPROVAL went straight to SENT. */
 export const OrderSubmitReplySchema = z.object({ poId: z.string(), status: z.string().catch("") });
 export const OrderEmailReplySchema = z.object({ emailed: z.boolean(), to: text, message: text });

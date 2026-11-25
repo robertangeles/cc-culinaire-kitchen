@@ -41,11 +41,11 @@ export function resetApi() {
   Object.values(api).forEach((f) => f.mockReset());
   api.list.mockResolvedValue([order()]);
   api.detail.mockResolvedValue(detail());
-  api.create.mockResolvedValue({ poId: "P9", poNumber: "PO-900", skippedItems: [] });
-  api.update.mockResolvedValue({ poId: "P1", poNumber: "PO-100", skippedItems: [] });
+  api.create.mockResolvedValue({ poId: "P9", poNumber: "PO-900", skippedItems: [], quantityWarnings: [] });
+  api.update.mockResolvedValue({ poId: "P1", poNumber: "PO-100", skippedItems: [], quantityWarnings: [] });
   api.submit.mockResolvedValue({ poId: "P1", status: "SENT" });
   api.email.mockResolvedValue({ emailed: true, to: "orders@farms.test", message: null });
-  api.clone.mockResolvedValue({ poId: "P9", poNumber: "PO-900", skippedItems: [] });
+  api.clone.mockResolvedValue({ poId: "P9", poNumber: "PO-900", skippedItems: [], quantityWarnings: [] });
   api.suppliers.mockResolvedValue([{ supplierId: "s1", supplierName: "Fresh Farms" }]);
   api.supplierItemIds.mockResolvedValue([]);
   api.items.mockResolvedValue([flour, gin]);

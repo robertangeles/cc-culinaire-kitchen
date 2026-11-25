@@ -21,13 +21,13 @@ const saved = (over: object = {}) =>
 function setup(over: Partial<Record<keyof OrdersApi, unknown>> = {}, kv = memoryKv(), editing?: string) {
   const api = {
     detail: vi.fn(async () => saved()),
-    update: vi.fn(async () => ({ poId: "P1", poNumber: "PO-100", skippedItems: [] })),
+    update: vi.fn(async () => ({ poId: "P1", poNumber: "PO-100", skippedItems: [], quantityWarnings: [] })),
     suppliers: vi.fn(async () => [{ supplierId: "s2", supplierName: "Wine Co" }, farms]),
     items: vi.fn(async () => [flour, gin]),
     guides: vi.fn(async () => [{ orderGuideId: "g1", name: "Weekly dry", supplierId: "s1", supplierName: "Fresh Farms", itemCount: 1 }]),
     guideItems: vi.fn(async () => [OrderGuideItemSchema.parse({ ingredientId: "i1", ingredientName: "Flour", baseUnit: "kg", purchaseUnit: "bag", suggestedPackages: 2, unitCost: 1.4, packUnitCost: 17.5 })]),
     supplierItemIds: vi.fn(async () => ["i1"]),
-    create: vi.fn(async () => ({ poId: "new", poNumber: "PO-9", skippedItems: [] })),
+    create: vi.fn(async () => ({ poId: "new", poNumber: "PO-9", skippedItems: [], quantityWarnings: [] })),
     submit: vi.fn(async () => ({ poId: "new", status: "SENT" })),
     ...over,
   };

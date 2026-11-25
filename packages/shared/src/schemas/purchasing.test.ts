@@ -29,7 +29,8 @@ describe("purchasing schemas", () => {
   });
 
   it("reads the write replies", () => {
-    expect(OrderWriteReplySchema.parse({ ...order, lines: [] })).toEqual({ poId: "p1", poNumber: "PO-1", skippedItems: [] });
+    expect(OrderWriteReplySchema.parse({ ...order, lines: [] })).toEqual({ poId: "p1", poNumber: "PO-1", skippedItems: [], quantityWarnings: [] });
+    expect(OrderWriteReplySchema.parse({ ...order, quantityWarnings: [{ ingredientId: "i1", ingredientName: "Rye", code: "UNIT_NOT_CONVERTIBLE" }] }).quantityWarnings).toEqual([{ ingredientName: "Rye" }]);
     expect(OrderSubmitReplySchema.parse({ ...order, status: "PENDING_APPROVAL", routing: "HQ_APPROVAL" }).status).toBe("PENDING_APPROVAL");
     expect(OrderEmailReplySchema.parse({ emailed: false, reason: "no_supplier_email", message: "No email on file." })).toEqual({ emailed: false, to: null, message: "No email on file." });
   });
