@@ -21,7 +21,7 @@ Server, web and phone. No migration, no permission change, no change to the Benc
 Server only. No migration, no permission change, no change in the web client or the phone app.
 
 - **A code is accepted once.** The server remembers the last 30-second step it accepted from each person and refuses any code at or before it with the existing `INVALID_MFA_CODE`, for sign-in, turning two-step on and off, linking Sign in with Apple and deleting an account. A refused code counts toward the existing failed-attempt limits; only an accepted one is recorded. Two actions in the same 30 seconds need two codes: the second waits for the next one.
-- **Where it is kept:** in the server's memory, so a restart or deploy clears it and a code used just before can be accepted again for the rest of its window (up to about 60 seconds). It holds for one server instance, which is what the service runs.
+- **Where it is kept:** in the server's memory, so a restart or deploy clears it and a code used just before can be accepted again for the rest of its window (up to about 60 seconds). It holds for one server instance, which is what the service runs (`numInstances` 1 on Render, checked 2026-11-26); running more than one needs the record stored in the database.
 - **A malformed code** (not a string of exactly six digits) is refused like a wrong one, with `INVALID_MFA_CODE`, instead of a 500.
 
 ### Fixed (an authenticator code typed just before the 30-second step changed was refused)
