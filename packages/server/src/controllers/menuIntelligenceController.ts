@@ -32,11 +32,12 @@ import {
   getYieldVariance,
   listYieldVariance,
 } from "../services/yieldVarianceService.js";
-import { recordSale, voidSale, listSales, previewSalesCsv, commitSalesCsv, listSellableConsumables, recordConsumableSale, fitsSaleQty } from "../services/saleService.js";
+import { recordSale, voidSale, listSales, previewSalesCsv, commitSalesCsv, listSellableConsumables, recordConsumableSale, fitsSaleQty, type RecordSaleResult } from "../services/saleService.js";
 import { assertLocationAccess } from "../services/locationContextService.js";
 import { resolveMenuScope, canManageMenuItem, type MenuScope } from "../services/menuAccess.js";
 import { hasPermission } from "../middleware/auth.js";
 import { AppError } from "../utils/appError.js";
+import { forViewer } from "../utils/costFields.js";
 
 /** 400 with the machine-readable code the phone's queue branches on. */
 function invalid(res: Response, message: string): void {
@@ -49,11 +50,18 @@ const menuScope = (req: Request) => resolveMenuScope(req.user!.sub);
 /**
  * Adds `canManage` to each item for the client's edit, delete and recipe controls: the caller holds menu:manage and
  * made the item or administers its organisation. The routes enforce the same rule; this only saves a refused click.
+ * Costs go only to who may see them.
  */
 function withCanManage<T extends { userId: number; organisationId: number | null }>(req: Request, scope: MenuScope, items: T[]) {
   const mayEdit = hasPermission(req.user!, "menu:manage");
-  return items.map((item) => ({ ...item, canManage: mayEdit && canManageMenuItem(scope, item) }));
+  return items.map((item) => forViewer(req.user!, { ...item, canManage: mayEdit && canManageMenuItem(scope, item) }));
 }
+
+/** Food cost, margin, line costs and on-hand stock are for holders of `inventory:cost`; {@link forViewer} leaves them out for anyone else. */
+const seesCosts = (req: Request) => hasPermission(req.user!, "inventory:cost");
+
+/** A sale as this caller may see it: without what is left on hand unless they hold `inventory:cost`. */
+const saleForViewer = (req: Request, result: RecordSaleResult) => ({ ...result, depleted: result.depleted.map((d) => forViewer(req.user!, d)) });
 
 /** The caller's scope for a sale, which always belongs to an organisation. */
 async function saleScope(req: Request): Promise<MenuScope & { organisationId: number }> {
@@ -105,7 +113,7 @@ export async function handleRecordSale(req: Request, res: Response, next: NextFu
     const body = parseSaleRequest(req, res);
     if (!body) return;
     const result = await recordSale(scope.organisationId, scope.userId, { menuItemId: req.params.id as string, ...body, actor: req.user! });
-    res.status(201).json(result);
+    res.status(201).json(saleForViewer(req, result));
   } catch (err) {
     next(err);
   }
@@ -152,7 +160,7 @@ export async function handleRecordConsumableSale(req: Request, res: Response, ne
     const body = parseSaleRequest(req, res);
     if (!body) return;
     const result = await recordConsumableSale(scope.organisationId, scope.userId, { ingredientId: req.params.ingredientId as string, ...body, actor: req.user! });
-    res.status(201).json(result);
+    res.status(201).json(saleForViewer(req, result));
   } catch (err) {
     next(err);
   }
@@ -225,7 +233,7 @@ export async function handleCreateMenuItem(req: Request, res: Response, next: Ne
     const parsed = menuItemSchema.safeParse(req.body);
     if (!parsed.success) { invalid(res, parsed.error.issues[0].message); return; }
     const item = await createMenuItem(await menuScope(req), parsed.data);
-    res.status(201).json(item);
+    res.status(201).json(forViewer(req.user!, item));
   } catch (err) { next(err); }
 }
 
@@ -246,7 +254,7 @@ export async function handleUpdateMenuItem(req: Request, res: Response, next: Ne
     if (!parsed.success) { invalid(res, parsed.error.issues[0].message); return; }
     const scope = await menuScope(req);
     await updateMenuItem(id, scope, parsed.data);
-    res.json(await requireMenuItem(id, scope));
+    res.json(forViewer(req.user!, await requireMenuItem(id, scope)));
   } catch (err) { next(err); }
 }
 
@@ -266,8 +274,8 @@ export async function handleAddIngredient(req: Request, res: Response, next: Nex
     const menuItemId = req.params.id as string;
     const scope = await menuScope(req);
     await requireManageableMenuItem(menuItemId, scope);
-    const ing = await addIngredient(menuItemId, scope, parsed.data);
-    res.status(201).json(ing);
+    const ing = await addIngredient(menuItemId, scope, parsed.data, { keepHiddenCost: !seesCosts(req) });
+    res.status(201).json(forViewer(req.user!, ing));
   } catch (err) { next(err); }
 }
 
@@ -275,7 +283,8 @@ export async function handleListIngredients(req: Request, res: Response, next: N
   try {
     const menuItemId = req.params.id as string;
     await requireMenuItem(menuItemId, await menuScope(req));
-    res.json(await getIngredients(menuItemId));
+    const lines = await getIngredients(menuItemId);
+    res.json(lines.map((l) => forViewer(req.user!, l)));
   } catch (err) { next(err); }
 }
 
@@ -302,7 +311,7 @@ export async function handleRefreshCost(req: Request, res: Response, next: NextF
     await requireManageableMenuItem(menuItemId, scope);
     const rowId = parseInt(req.params.ingredientId as string, 10);
     const updated = await refreshIngredientCost(rowId, menuItemId, scope);
-    res.json(updated);
+    res.json(forViewer(req.user!, updated));
   } catch (err: unknown) {
     const msg = err instanceof Error ? err.message : String(err);
     if (!(err instanceof AppError) && msg.includes("not found")) {
@@ -327,8 +336,7 @@ export async function handleGetPandLCost(req: Request, res: Response, next: Next
   try {
     const menuItemId = req.params.id as string;
     await requireMenuItem(menuItemId, await menuScope(req));
-    const total = await getPandLFoodCost(menuItemId);
-    res.json({ menuItemId, foodCost: total });
+    res.json(seesCosts(req) ? { menuItemId, foodCost: await getPandLFoodCost(menuItemId) } : { menuItemId });
   } catch (err: unknown) {
     const msg = err instanceof Error ? err.message : String(err);
     if (!(err instanceof AppError) && msg.includes("not found")) {
@@ -347,7 +355,7 @@ export async function handleGetAnalysis(req: Request, res: Response, next: NextF
     const category = req.query.category as string | undefined;
     const scope = await menuScope(req);
     const analysis = await getMenuAnalysis(scope, category);
-    res.json({ ...analysis, items: withCanManage(req, scope, analysis.items) });
+    res.json({ ...forViewer(req.user!, analysis), items: withCanManage(req, scope, analysis.items) });
   } catch (err) { next(err); }
 }
 
@@ -393,7 +401,7 @@ export async function handleImportSales(req: Request, res: Response, next: NextF
 export async function handleGetRecommendations(req: Request, res: Response, next: NextFunction) {
   try {
     const id = req.params.id as string;
-    res.json(await getItemRecommendations(id, await menuScope(req)));
+    res.json(await getItemRecommendations(id, await menuScope(req), { withCosts: seesCosts(req) }));
   } catch (err) { next(err); }
 }
 
@@ -408,7 +416,7 @@ export async function handleGetWasteImpact(req: Request, res: Response, next: Ne
 export async function handleGenerateReplacement(req: Request, res: Response, next: NextFunction) {
   try {
     const item = await requireMenuItem(req.params.id as string, await menuScope(req));
-    res.json(generateReplacementContext(item));
+    res.json(generateReplacementContext(forViewer(req.user!, item)));
   } catch (err) { next(err); }
 }
 
@@ -422,7 +430,7 @@ export async function handleGetYieldVariance(req: Request, res: Response, next: 
   try {
     const id = req.params.id as string;
     await requireMenuItem(id, await menuScope(req));
-    res.json(await getYieldVariance(id));
+    res.json(forViewer(req.user!, await getYieldVariance(id)));
   } catch (err: unknown) {
     const msg = err instanceof Error ? err.message : String(err);
     if (msg === "Menu item not found") {
@@ -439,6 +447,7 @@ export async function handleGetYieldVariance(req: Request, res: Response, next: 
  */
 export async function handleListYieldVariance(req: Request, res: Response, next: NextFunction) {
   try {
-    res.json(await listYieldVariance(await menuScope(req)));
+    const rows = await listYieldVariance(await menuScope(req));
+    res.json(rows.map((r) => forViewer(req.user!, r)));
   } catch (err) { next(err); }
 }

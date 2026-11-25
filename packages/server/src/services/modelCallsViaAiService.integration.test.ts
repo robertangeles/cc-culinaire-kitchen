@@ -21,7 +21,7 @@ vi.mock("ai", async () => ({
   },
 }));
 
-const { getItemRecommendations, createMenuItem } = await import("./menuIntelligenceService.js");
+const { getItemRecommendations, createMenuItem, addIngredient } = await import("./menuIntelligenceService.js");
 const { generateReuseSuggestions } = await import("./wasteService.js");
 
 /**
@@ -54,17 +54,35 @@ describe.skipIf(!RUN)("model calls go through aiService (real DB)", () => {
       const wanted = { summary: "Protect it.", actions: [{ type: "protect", description: "Keep it." }] };
       generateStructured.mockResolvedValueOnce(wanted);
 
-      expect(await getItemRecommendations(itemId, scope(uid))).toEqual(wanted);
+      expect(await getItemRecommendations(itemId, scope(uid), { withCosts: true })).toEqual(wanted);
       expect(generateStructured.mock.calls[0][0].prompt).toContain(`${tag} risotto`);
+    });
+
+    it("gives the model the stored costs, or no cost at all for a caller who may not see them", async () => {
+      await addIngredient(itemId, scope(uid), { ingredientName: "rice", quantity: "0.2", unit: "kg", unitCost: "7.65" });
+      const promptFor = async (withCosts: boolean) => {
+        generateStructured.mockResolvedValueOnce({ summary: "x", actions: [] });
+        await getItemRecommendations(itemId, scope(uid), { withCosts });
+        return generateStructured.mock.lastCall![0].prompt as string;
+      };
+
+      const full = await promptFor(true);
+      for (const figure of ["$7.65", "$1.53", "6.38%", "$22.47"]) expect(full).toContain(figure);
+
+      const blind = await promptFor(false);
+      for (const figure of ["7.65", "1.53", "6.38", "22.47"]) expect(blind).not.toContain(figure);
+      expect(blind).toContain("rice: 0.200 kg");
+      expect(blind).toContain("Selling Price: $24.00");
+      expect(blind).toContain("do not state or estimate any cost");
     });
 
     it("when the model fails the caller gets the 503, not a canned recommendation", async () => {
       generateStructured.mockRejectedValueOnce(new AppError(503, "AI_UNAVAILABLE", "down"));
-      await expect(getItemRecommendations(itemId, scope(uid))).rejects.toMatchObject({ statusCode: 503, code: "AI_UNAVAILABLE" });
+      await expect(getItemRecommendations(itemId, scope(uid), { withCosts: true })).rejects.toMatchObject({ statusCode: 503, code: "AI_UNAVAILABLE" });
     });
 
     it("an item that is not yours is a 404 NOT_FOUND", async () => {
-      await expect(getItemRecommendations(itemId, scope(uid + 1_000_000))).rejects.toMatchObject({ statusCode: 404, code: "NOT_FOUND" });
+      await expect(getItemRecommendations(itemId, scope(uid + 1_000_000), { withCosts: true })).rejects.toMatchObject({ statusCode: 404, code: "NOT_FOUND" });
     });
   });
 

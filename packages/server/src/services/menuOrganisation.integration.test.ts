@@ -85,7 +85,7 @@ const fx = {
   madeOrgs: [] as number[], // organisations a test created
 };
 
-const principal = (sub: number): TokenPayload => ({ sub, roles: [], permissions: ["menu:read", "menu:manage"] });
+const principal = (sub: number): TokenPayload => ({ sub, roles: [], permissions: ["menu:read", "menu:manage", "inventory:cost"] });
 
 type Handler = (req: Request, res: Response, next: (e?: unknown) => void) => Promise<void>;
 
