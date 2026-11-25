@@ -30,6 +30,7 @@ import { sendVerificationEmail, sendPasswordResetEmail } from "./emailService.js
 import { encryptUserPii, decryptUserPii, hashForLookup } from "./piiService.js";
 import { getAllSettings } from "./settingsService.js";
 import { removeSignedOutDeviceTokens } from "./pushDeviceService.js";
+import { takeStep } from "./mfaUsedSteps.js";
 
 export class AuthError extends Error {
   constructor(
@@ -1038,13 +1039,16 @@ export async function generateMfaSecret(userId: number, proof: MfaChangeProof, s
  * settings, linking a sign-in method and deleting an account.
  *
  * Accepts the code of the current 30-second step and of the one before it, for a code typed as the step changes or a
- * phone whose clock is a little slow. Never a future step.
+ * phone whose clock is a little slow. Never a future step, and never a step at or before the last one accepted from this
+ * user: a code works once (`mfaUsedSteps`). Calling this with a code that is accepted uses it up.
  */
 export async function verifyMfaToken(userId: number, token: string): Promise<boolean> {
+  // A request body may hold anything here, and otplib throws on a malformed code.
+  if (typeof token !== "string" || !/^\d{6}$/.test(token)) return false;
   const [row] = await db.select().from(user).where(eq(user.userId, userId));
   if (!row || !row.mfaSecret) return false;
   const result = await otpVerify({ token, secret: row.mfaSecret, epochTolerance: [30, 0] });
-  return result.valid;
+  return result.valid && "timeStep" in result && takeStep(userId, result.timeStep);
 }
 
 /**

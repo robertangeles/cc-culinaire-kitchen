@@ -9,7 +9,7 @@ import crypto from "node:crypto";
  * but a plain `pnpm test` skips that, so these run it through generateMfaSecret and disableMfa with the
  * database mocked. Each denial case also asserts nothing was written.
  */
-const state = vi.hoisted(() => ({ row: {} as Record<string, unknown>, writes: [] as Record<string, unknown>[], codeIsValid: true }));
+const state = vi.hoisted(() => ({ row: {} as Record<string, unknown>, writes: [] as Record<string, unknown>[], codeIsValid: true, timeStep: 0 }));
 
 vi.mock("../db/index.js", () => ({
   db: {
@@ -26,7 +26,7 @@ vi.mock("../db/index.js", () => ({
 vi.mock("otplib", () => ({
   generateSecret: () => "NEWSECRET",
   generateURI: () => "otpauth://totp/x",
-  verify: async () => ({ valid: state.codeIsValid }),
+  verify: async () => ({ valid: state.codeIsValid, timeStep: ++state.timeStep }), // a new step each time: a step is accepted once
 }));
 vi.mock("qrcode", () => ({ default: { toDataURL: async () => "data:image/png;base64,x" } }));
 vi.mock("./emailService.js", () => ({}));
