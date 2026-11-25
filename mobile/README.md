@@ -29,9 +29,10 @@ Run the screenshot walk (`device/README.md`, "The screenshot walk") after changi
 | `src/api` | The one network client: auth, refresh, coded errors (`ApiError.code`, `serverCode`). |
 | `src/outbox` | The offline queue (below). |
 | `src/ingredients` | The shared ingredient picker's data (below); its component is `src/ui/IngredientPicker.tsx`. |
-| `src/count`, `src/waste`, `src/prep`, `src/consumption`, `src/movements`, `src/chat`, `src/recipes`, `src/notifications`, `src/transfers`, `src/stock`, `src/orders`, `src/menu`, `src/brain`, `src/bench` | One folder per module: API calls, store (screen state), pure view functions, commands. |
+| `src/count`, `src/waste`, `src/prep`, `src/consumption`, `src/movements`, `src/chat`, `src/recipes`, `src/notifications`, `src/transfers`, `src/stock`, `src/orders`, `src/menu`, `src/brain`, `src/bench`, `src/roster`, `src/compliance` | One folder per module: API calls, store (screen state), pure view functions, commands. |
 | `src/lock` | The app lock (below): its state (`appLock.ts`, no React), the lock screen, the system prompt, and `useAppLock().confirm(reason)` for guarded actions. |
-| `src/profile` | The photo picker and the kitchen profile form's rules. |
+| `src/profile` | The profile picture's picker and the kitchen profile form's rules. |
+| `src/photos` | A picked photo without its metadata, in memory only (profile picture, certificates). Upload one with `photoForm` (`src/api/photo.ts`), never as `{ uri }`. |
 | `src/ui` | Components shared by every module, `Column` (the tablet column) among them. |
 | `packages/shared/src/schemas` | The zod schemas of what the server sends, parsed leniently at the boundary (`lenient.ts`). |
 | `packages/shared/src/utils/menuCosting.ts` | Menu and recipe costing (line cost, food cost %, margin, plate P&L cost, classification, the 35% alert and 30% category target). The phone imports costing from `@culinaire/shared`, never its own copy; the server and the web import the same functions. Where the web editor and the server round or guard differently each keeps its own named function (`previewLineCost`, `editorItemCosts` for a live preview; `storedLineCost`, `storedItemCosts` for what the server saves): a phone editor uses the preview ones, and the differences are listed in `menuCosting.test.ts`. |
@@ -563,6 +564,88 @@ Nobody else sees a lock or a setting. `LockProvider` is around every screen (`ap
 
 Compared with the web: the web has no app lock and asks nothing before Approve or Reject; the lock exists because a phone is picked up and lost. No other difference.
 
+## Roster, the staff side (`src/roster`, `app/(app)/(roster)`)
+
+Roster is always listed under More (`underMore` in `src/shell/tabs.ts`: the bar stays as it is) and is shown to `roster:read-own` holders, the key the server asks for on
+every route it uses. It is the web's My Shifts and My Availability (`/roster`). Building, publishing and approving a roster stay on the web. A shift notification opens the shift, or My shifts.
+
+**Times are the venue's.** A shift is an instant and is read on its own venue's clock (`ianaTimezone` on every row), days and Monday-to-Sunday weeks too; nothing uses the phone's zone
+(`shiftView.ts`). A venue with no zone is read as the server reads it (`Australia/Melbourne`). An open swap carries its venue's zone and name, so its time shows for any venue. From a server that predates that it is
+shown only at a venue the person works at or has a shift at; the rest are counted in one line that says to see them on the web.
+
+**Drafts are never shown** (the owner has not decided on draft visibility): the server is asked for `excludeDrafts`, and a draft it still sends (one with a public-holiday question on it)
+is left out. The list then says a question is waiting and to answer it on the web. A swap of a draft or cancelled shift is not shown either (`shiftStatus`).
+
+**Nothing is kept on the phone.** Shifts, swaps and the server's availability are held in memory only, and gone at sign-out: no roster data is cached until the app lock covers the people who see it (owner, Q6: today's lock is for
+approval, manager and verifier permissions, not `read-own`).
+With no signal a screen says it needs a connection; what was read before stays on screen while the app is open. Offline roster and documents wait for that lock.
+
+- **My shifts**: this week, next week, then anything further on, so a shift three weeks out that needs an answer is not hidden. A shift's page has Confirm and Decline, the public-holiday question
+  (apart from the shift's own answer) and Offer to swap. Every answer is **online**: it is given to the shift as it stands. After each write the shifts are read again, and one whose reply was lost, or
+  that the server refuses as a repeat (its 409s carry no code), counts as done only when the fresh copy shows it.
+- **Open swaps** (`workforce_enabled`): taking one is first come, first served. The server's codes (`SWAP_CLAIMED_BY_YOU`, `_BY_OTHER`, `SWAP_CANCELLED`, `SHIFT_ALREADY_ASSIGNED`,
+  `ASSIGNMENT_BLOCKED_COMPLIANCE` with the document that is missing) each have a sentence; `SWAP_CLAIMED_BY_YOU` is success.
+- **Availability** is changed online too (no queued copies, for the same reason). The server makes a repeat safe (one row per exact window, migration 0005): a repeated add answers with the row it has and a
+  removal of one already gone is done; an edit that would make a twin is refused with the server's words. The form refuses an exact twin itself and keeps what was typed until it is saved. The first day starts as the venue's today.
+
+A module that is off answers 404 to everyone: "The roster isn't in use here", and swaps simply do not show.
+
+Differences from the web (`MyShiftsView.tsx`, `MyAvailabilityManager.tsx`), found while comparing:
+
+| Web | Phone | Why |
+|---|---|---|
+| Times in the browser's own zone (`formatShiftRange` with no zone) | The venue's clock, with a line saying so | A cook reading the roster away from home saw the wrong hours. **The web still needs it.** |
+| Every shift ever, oldest first, drafts included | This week, next week and later; published only | Asked for in the wave. |
+| A public-holiday question on a draft shift can be answered | Pointed to the web | Drafts are not shown on the phone yet: an owner call. |
+| Confirm, Decline and Offer act at once | Decline, Offer and Take ask first | One stray tap on a phone; a decline cannot be undone. |
+| Offer and Confirm also on shifts that are over | Not once the shift has started (offer) or ended (answer) | |
+| Open swaps list past ones, and times at any venue in the browser's zone | Published, not started yet, on the venue's clock | |
+| Open swaps show only when the person has a shift of their own | Always reachable | The web returns early on an empty list. **Web bug, flagged.** |
+| A 409 or a lost reply shows the server's sentence | Read again first; done if it was done | |
+| A blocked claim shows "Cannot assign. Sam's RSA…" | "You can't take this shift until you add your RSA." | |
+| No venue name on a shift | The venue | |
+| Availability: add and remove | Add, change and remove | The server's `PUT` exists. |
+| The first day defaults to the UTC date | The venue's today | Morning in Sydney is yesterday in UTC. |
+| Remove acts at once; a failed remove is silent | Asks first; the row says why when it fails | |
+| No time off, no requests to one person | The same | Neither the web nor the server has them. |
+
+## Documents, the staff side of compliance (`src/compliance`, `app/(app)/(documents)`)
+
+Documents is always listed under More and is shown to `compliance:read-own` holders. It is the web's Profile > My Documents: the person's own certificates, what needs them first (not accepted,
+expired, to renew), then what is with their manager, then the rest. Verifying, venue documents, the team dashboard and the rules stay on the web. A document notification opens the document;
+one about a colleague's says so.
+
+**There are no temperature logs, checklists or sign-off tasks on the web or the server**, so there are none here: a staff member's compliance work is their documents.
+
+**Online only, nothing kept.** No compliance data may be stored on the phone until the app lock covers `read-own` holders too (owner, Q6), so nothing is queued or cached. An upload
+that cannot be sent says so in one sentence, keeps the form, and sends the same photo again on a tap. Sending is safe to repeat: every upload has its own file id, so after a lost reply the phone looks for that
+file among the person's documents before it sends anything again (`documentStore.ts`).
+
+**The photo.** Camera or photo library (the system picker), JPEG or PNG, compressed, at most 10 MB, checked before it is sent. The camera's permission is asked
+the first time, after the form has said what it is for; a refusal offers Settings and the library. Before it leaves the phone everything the camera wrote into it (place, time, device) is taken out
+(`src/photos/photoMetadata.ts`; Android's picker copies it into the compressed photo), and one that cannot be cleaned is not sent. The picker leaves copies in the app's cache: they are deleted as soon as the
+photo is read, and again at the next start (`src/photos/photoFiles.ts`); from then on it is in memory, while the form is open. It is sent as bytes (`src/api/photo.ts`): Expo's fetch refuses React Native's `{ uri }` file parts. The profile picture goes the same way. The stored photo is read into memory when the person asks for it, never through the image cache; a PDF opens in the browser.
+
+A refusal is read by its status. Server follow-ups for the upload and documents routes are tracked.
+
+Differences from the web (`MyDocumentsTab.tsx`, `MyDocumentsList.tsx`, `DocumentUploadForm.tsx`), found while comparing:
+
+| Web | Phone | Why |
+|---|---|---|
+| A tab of the profile page, for `compliance:read-own` holders | Under More, for the same people | A place of its own is easier to find than a tab of the profile. |
+| One list, newest first | Needs you, With your manager, On record | |
+| Status words of the server (Rejected, Requires Renewal); a verified document past its day still says Verified | Not accepted, Renew it, Expired | |
+| Photo or PDF | Photo only; a PDF is added on the web | No file picker on the phone (a new native module). |
+| Photo metadata handling on the web upload: tracked as a follow-up | Removed before it is sent | |
+| A file over 10 MB is refused by the server | Refused before it is sent | |
+| A failed upload: choose the file again | Send the photo again | |
+| A lost reply on Send for review: a second tap makes a second record when there is no certificate number | Looked for first | |
+| The preview loads when the row is opened | Show the photo (each view is logged on the server) | |
+| Dates in the browser's date box | Typed on the number pad, day first, with the date in words under it | |
+| A gold dot marks what was read off the photo | "Read from the photo. Check it." | |
+| Edit, delete, nudge after 48 hours | The same rules | |
+| Which documents the person still has to add is not shown | The same | The required list needs `compliance:manage-rules`. |
+
 ## Inbox and push (`src/notifications`, `app/(app)/(inbox)`, `app/notification-settings.tsx`)
 
 The **Inbox** tab is everyone's (an entry in `src/shell/tabs.ts` with no permission: the server's notification routes need only a sign-in), with the unread count on its button, or on More and the Inbox row of the More list when the Inbox is under More.
@@ -570,7 +653,7 @@ It lists the server's unread notifications (`GET /api/inventory/notifications?li
 (`notificationView.ts`; every type in `NOTIFICATION_TYPES` has its own words, a type this build does not know reads "Notification"). The list is kept on the phone, so it opens with no signal.
 It is read when the tab opens, when the app wakes, when a push arrives and every minute while the app is open. **Mark read** is the queued command `notification.read`
 (a 404 counts as done), so it works offline and the row stays gone if a refresh lands before the server has it. **Open** shows only where the phone has the screen the notification is about
-(an overdue delivery opens the Receive list; an approval, its answer or a discrepancy opens its order, for someone with the Orders tab; a push about a discrepancy names only the delivery and opens the orders list); the server's link (`pushLink`) names routes for shifts and documents that come in later waves.
+(an overdue delivery opens the Receive list; an approval, its answer or a discrepancy opens its order, for someone with the Orders tab; a push about a discrepancy names only the delivery and opens the orders list); a shift opens on the roster and the person's own document in Documents; a manager's notifications about someone else's shift or document stay in the inbox.
 
 **Push** (`push.ts`, native side in `nativePush.ts`): off until the person taps **Turn on** (the card at the top of the inbox, or Notification settings); the app never asks at launch.
 Turning it on asks the system, gets the Expo push token and registers it with `POST /api/notifications/register-device`, sending the refresh token so the server ties it to this sign-in.
@@ -588,7 +671,7 @@ Differences from the web bell (`components/layout/NotificationBell.tsx`), found 
 | A bell in the header; the 20 newest unread | A tab with a badge; the 50 newest unread; the count from the server, so it can be more than the list | |
 | Thirteen types have a label; the other six (Brain problems, document expiring, holiday shift asked or declined, swap picked up, document to review) show "Approval needed" | Every type has its own heading and sentence | The web fallback is wrong for them. |
 | Text: `body`, `summary`, else the order number, reason and supplier | The same, plus the document and whose it is, the holiday shift's date, the Brain error count; a plain sentence when the payload has nothing | |
-| A click marks it read and opens Purchasing for an order; any other type opens nothing | **Open** only where the phone has the screen; **Mark read** always | Shifts and documents are later waves. |
+| A click marks it read and opens Purchasing for an order; any other type opens nothing | **Open** only where the phone has the screen; **Mark read** always | Managers' roster and compliance screens are later waves. |
 | X dismisses | Not on the phone: Mark read takes it off the list the same way | The dismiss route stays on the web. |
 | A failed read is silent | Queued; works with no signal; a refusal stays in the Account sync list | |
 | No read history, no "mark all read" | The same | **The server keeps only unread rows**; history and mark-all need server routes. |
@@ -624,5 +707,5 @@ The web's "create your first location" link for an admin is a sentence here: mak
 ## Tests
 
 `check:test` runs the logic tests (`src/**`) and the screen tests (`tests/*.test.tsx`); `check:e2e` runs the real client and queue against a server, signed in once as the E2E user for the whole run (`e2e/signIn.ts`: a code is accepted once)
-(`e2e/phoneFlow`, `e2e/wasteQueue`, `e2e/prepQueue`, `e2e/stockQueue`, `e2e/chatRecipes`, `e2e/storeRoom`; `e2e/brain` (Your Brain, no queue); `e2e/bench` (two colleagues and an outsider over real sockets, no queue); `e2e/receiving` uses the client alone, receiving has no queue; `e2e/orders` uses the client, lists and order form, which have none either; `e2e/accountNotifications`
+(`e2e/phoneFlow`, `e2e/wasteQueue`, `e2e/prepQueue`, `e2e/stockQueue`, `e2e/chatRecipes`, `e2e/storeRoom`; `e2e/brain` (Your Brain, no queue); `e2e/bench` (two colleagues and an outsider over real sockets, no queue); `e2e/rosterDocuments` (a manager publishes shifts, a plain account answers, swaps, keeps availability and sends a certificate); `e2e/receiving` uses the client alone, receiving has no queue; `e2e/orders` uses the client, lists and order form, which have none either; `e2e/accountNotifications`
 covers details, kitchen profile, password, two-step, the inbox read queue and push settings with a just-registered person; set `E2E_NOTIFICATION_ID` to a notification made for that person to check a real row, as the suite cannot make one through the API). See `device/README.md`.

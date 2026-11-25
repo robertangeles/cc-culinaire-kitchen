@@ -13,7 +13,7 @@ Run commands from the repository root. `eas` is the Expo build service; use it t
 | Build numbers | EAS keeps them (`appVersionSource: remote`, `autoIncrement` on preview and production) | never edit a build number by hand |
 | Updates over the air | `runtimeVersion: { policy: "appVersion" }`, one channel per profile (`development`, `preview`, `production`) | a JavaScript update reaches only builds with the same `version`, so it can never meet a build whose native code differs |
 | Server address | per EAS environment, never in a file | a test build can never silently point at production |
-| Permissions | Face ID (the app lock), photos and camera (the profile picture), notifications (only when turned on) | each with its own wording in `app.json`, asked for when it is first used; later ones arrive with their feature |
+| Permissions | Face ID (the app lock), photos and camera (the profile picture, a photo of a certificate), notifications (only when turned on) | each with its own wording in `app.json`, asked for when it is first used; later ones arrive with their feature |
 | Encryption | `ITSAppUsesNonExemptEncryption: false` (HTTPS only) | no export-compliance question on every iOS build |
 | App lock | on for people who approve orders or manage rosters or compliance documents, always; needs a device passcode, fingerprint or face | owner's lost-phone policy (Q6) |
 | Billing | none in the app: no pricing, purchase or upgrade link (a test enforces it) | owner decision; see the Apple rule 3.1.3(b) note below |

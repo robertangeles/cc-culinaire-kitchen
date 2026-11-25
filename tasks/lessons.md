@@ -1545,3 +1545,15 @@ builds all tables with CHECKs enforcing. Stop it again when done.
 - **Fix**: `takeStep` (`mfaUsedSteps.ts`) keeps the last accepted step per user and checks and records it in one synchronous call after the code is verified, so two requests at once cannot both pass. `verifyMfaToken` refuses anything but a string of six digits first. The phone suite signs in once (`mobile/e2e/signIn.ts`) and shares the session; the tests that need two codes take the previous step's and then the current one's by explicit epoch.
 - **Limits, accepted by the owner**: the record is in the server's memory. A restart or deploy clears it, which reopens only the rest of a code's window (up to about 60 seconds), and it holds for one server instance (the Render service record says `numInstances` 1, checked 2026-11-26). Running more than one needs it in the database (a nullable last-step column updated in one conditional UPDATE).
 - **Rule**: Check and record a one-time value in one step with no `await` between them, and only when it is accepted. A test that needs several codes takes them from different steps by epoch, never by sleeping or retrying.
+
+## 2026-11-26 — A picked photo carries its place and leaves copies behind
+
+- **Problem**: The phone's certificate upload was described as leaving location out and keeping no photo on the phone; neither was true. `expo-image-picker` on Android copies every EXIF tag, GPS included, into the compressed photo (`exif: false` only keeps it out of the JavaScript answer), leaves the camera's original and the copy in its cache, and React Native's HTTP client keeps a disk cache.
+- **Fix**: The photo is rewritten without metadata before it is sent and refused when that fails (`photoMetadata.ts`), the picker's cache is emptied as soon as the photo is read and at start (`photoFiles.ts`), and the stored photo is read with `no-store` into memory.
+- **Rule**: A claim about what a native module does not keep or send is read in its source, on both platforms, before it is written in a comment.
+
+## 2026-11-26 — Expo's global fetch refuses React Native file uploads
+
+- **Problem**: Every screen and unit test of the certificate upload passed; on the emulator it failed as "no connection". Expo SDK 58 installs its own `fetch` globally, and its multipart encoder throws on React Native's `{ uri, name, type }` part, which the client reads as a dead network. The merged profile picture upload was broken on the phone the same way.
+- **Fix**: Both send a part with `bytes()` from one place (`src/api/photo.ts`), and `photo.test.ts` puts each through Expo's own encoder.
+- **Rule**: An upload is proved on a device against a server, not with a mocked client: the tests fake exactly the part that breaks.
