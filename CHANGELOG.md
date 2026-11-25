@@ -5,6 +5,17 @@ Format: [Keep a Changelog](https://keepachangelog.com/en/1.0.0/).
 
 ## [Unreleased]
 
+### Fixed (the Bench's live channel followed the client's room names, not the person's membership)
+
+Server only. No migration, no permission change, no change to the Bench's HTTP routes.
+
+- **Joining a room:** `bench:join` allows only Everyone, an organisation the person belongs to and a DM thread they are in. Any other name, including another person's `user_<id>` room, is refused with `FORBIDDEN`.
+- **Presence:** an organisation or DM room lists only the people in it; only the Everyone room lists everyone online.
+- **Reactions, edits and deletes** are sent to the stored message's own audience (its organisation's channel, or the two people of its DM), not to a room the socket happens to be in or a `channelKey` the client names. A person who is no longer in the audience cannot react to or edit its messages. `bench:message:edit` and `bench:message:delete` no longer take `channelKey`.
+- **Leaving an organisation** (leaving, removal by an admin, Administrator removal, account deletion) ends that person's live subscription to the organisation's channel.
+- **Pinned messages** no longer list a deleted message.
+- Still open: opening a DM thread with any user id, who may pin or set the Everyone banner, mention counts, and the Everyone room's platform-wide presence.
+
 ### Added (open swaps say the shift's status and the venue's zone and name)
 
 Server only, additive. No migration, no permission change, no change to who sees which swaps.
