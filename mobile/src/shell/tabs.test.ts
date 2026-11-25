@@ -27,7 +27,7 @@ describe("which tabs a person sees", () => {
     expect(gatedTabs(person({ permissions: ["prep:read"] })).map((t) => t.route)).toEqual(["(prep)"]);
     expect(gatedTabs(person({ permissions: ["prep:manage"] })).map((t) => t.route)).toEqual(["(prep)"]);
     expect(gatedTabs(person({ permissions: ["inventory:count", "waste:log", "prep:read"] })).map((t) => t.route)).toEqual(["(prep)", "(waste)", "(usage)", "(count)", "(moves)", "(transfers)", "(stock)"]);
-    expect(gatedTabs(person({ permissions: ["waste:read", "menu:read"] }))).toEqual([]);
+    expect(gatedTabs(person({ permissions: ["waste:read", "menu:manage"] }))).toEqual([]);
   });
 
   it("shows the Receive tab to someone who holds purchasing:receive, with or without Count", () => {
@@ -67,6 +67,11 @@ describe("which tabs a person sees", () => {
     expect(gatedTabs(person({ permissions: ["inventory:manage", "inventory:cost"] }))).toEqual([]);
   });
 
+  it("shows the Menu to someone who holds menu:read, the key on every menu route, and to no one who holds only menu:manage", () => {
+    expect(gatedTabs(person({ permissions: ["menu:read"] })).map((t) => t.route)).toEqual(["(menu)"]);
+    expect(gatedTabs(person({ permissions: ["menu:manage", "inventory:cost"] }))).toEqual([]);
+  });
+
   it("does not treat a role name other than Administrator as a superuser", () => {
     expect(hasAnyPermission(person({ roles: ["Paid Subscriber"] }), ["inventory:count"])).toBe(false);
   });
@@ -75,8 +80,8 @@ describe("which tabs a person sees", () => {
     expect(new Set(moduleTabs.map((t) => t.route)).size).toBe(moduleTabs.length);
   });
 
-  it("puts the tabs in the order a line cook uses them (prep, waste, usage, count, move, receive, orders), then Ask, Recipes and the Inbox, then the weekly store-room Transfers and Stock", () => {
-    expect(moduleTabs.map((t) => t.title)).toEqual(["Prep", "Waste", "Usage", "Count", "Move", "Receive", "Orders", "Ask", "Recipes", "Inbox", "Transfers", "Stock"]);
+  it("puts the tabs in the order a line cook uses them (prep, waste, usage, count, move, receive, orders), then Ask, Recipes and the Inbox, then the weekly store-room Transfers and Stock, then the Menu", () => {
+    expect(moduleTabs.map((t) => t.title)).toEqual(["Prep", "Waste", "Usage", "Count", "Move", "Receive", "Orders", "Ask", "Recipes", "Inbox", "Transfers", "Stock", "Menu"]);
   });
 });
 
@@ -91,7 +96,7 @@ describe("the tab bar and More", () => {
   it("shows four modules and More when a person's modules and Account would make more than five buttons", () => {
     const { bar, more } = tabBar(person({ roles: ["Administrator"] }));
     expect(bar.map((t) => t.title)).toEqual(["Prep", "Waste", "Usage", "Count"]);
-    expect(more.map((t) => t.title)).toEqual(["Move", "Receive", "Orders", "Ask", "Recipes", "Inbox", "Transfers", "Stock"]);
+    expect(more.map((t) => t.title)).toEqual(["Move", "Receive", "Orders", "Ask", "Recipes", "Inbox", "Transfers", "Stock", "Menu"]);
     expect(bar.length + 1).toBe(MAX_TABS); // the fifth button is More, which also holds Account
   });
 
