@@ -69,7 +69,8 @@ export default function Conversation() {
             </Pressable>
           </Column>
         </View>
-        <ScrollView ref={scroll} contentContainerStyle={{ padding: space.xl, paddingTop: space.sm }} onContentSizeChange={() => scroll.current?.scrollToEnd({ animated: true })} keyboardShouldPersistTaps="handled">
+        {/* Also when the keyboard takes the lower half (onLayout): the latest message stays in view, which matters most on a tablet on its side. */}
+        <ScrollView ref={scroll} contentContainerStyle={{ padding: space.xl, paddingTop: space.sm }} onContentSizeChange={() => scroll.current?.scrollToEnd({ animated: true })} onLayout={() => !fresh && scroll.current?.scrollToEnd({ animated: true })} keyboardShouldPersistTaps="handled">
           <Column style={{ gap: space.lg }}>
             {snap.title ? <Text variant="title" style={{ fontSize: 26 }}>{snap.title}</Text> : null}
             {snap.phase === "loading" ? <Text variant="muted">Loading the conversation…</Text> : null}
