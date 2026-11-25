@@ -543,6 +543,7 @@ describe.skipIf(!process.env.SCREENS_OUT)(`screens on ${FORM}`, { timeout: 600_0
       await hideKeyboard();
       const [from, to] = i < 7 ? [0.7, 0.4] : [0.35, 0.65]; // down the page, then back up
       await swipe(Math.round(w / 2), Math.round(h * from), Math.round(w / 2), Math.round(h * to), 300);
+      await sleep(800); // a list still gliding takes the next tap as "stop"
     }
     throw new Error(`no control labelled ${label}`);
   }

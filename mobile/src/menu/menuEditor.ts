@@ -242,11 +242,11 @@ export function unitsFor(line: DraftLine, conversions: CustomConversion[]): stri
   return units.some((u) => u.toLowerCase() === line.unit.toLowerCase()) ? units : [line.unit, ...units];
 }
 
-/** A line's cost as the web editor previews it: null for a linked item with no cost yet; `mismatch` when its unit cannot become the kitchen unit. */
+/** A line's cost as the web editor previews it: null when the line has no cost yet; `mismatch` when its unit cannot become the kitchen unit. */
 export function linePreview(line: DraftLine, conversions: CustomConversion[]): { cost: number | null; mismatch: boolean } {
   const mismatch = line.ingredientId !== null && toKitchenQty(line, 1, conversions) === null;
   const unitCost = dotted(line.unitCost);
-  if (line.ingredientId && !(parseFloat(unitCost) > 0)) return { cost: null, mismatch };
+  if (!(parseFloat(unitCost) > 0)) return { cost: null, mismatch };
   return { cost: previewLineCost({ quantity: dotted(line.quantity), unitCost, yieldPct: dotted(line.yieldPct) }, (qty) => toKitchenQty(line, qty, conversions)), mismatch };
 }
 
