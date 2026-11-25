@@ -196,7 +196,7 @@ No schema change and no migration. The phone gets a **Receive** tab (for `purcha
 - **Usage on the phone.** A Usage tab for `inventory:count` holders (the web's "Internal Usage"): log with the shared ingredient picker, quantity in the item's kitchen unit, reason and shift; edit and delete your own entries; per-unit daily totals with "Return to Stockroom" kept apart; quick "Log again" buttons; the web's "that's a move, not usage" question for FOH usage of kitchen ingredients. Every write is a queued command with a client-made `consumptionLogId`, so a repeat after a lost reply takes no second deduction.
 - **Move between areas on the phone.** A Move tab for `inventory:count` holders: pick an item, an amount and the two areas; the areas and latest moves are kept on the phone. One queued command with a client-made `stockMovementId`. A move changes no stock.
 - **Shared schemas.** `packages/shared/src/schemas/consumption.ts` and `stockMovement.ts` (what the server sends, parsed leniently, and the reason and shift lists); the catalogue schema gains an optional `itemType`.
-- No server route changed: older installed apps keep working. Location Transfer is not on the phone yet (its routes are not safe to replay). Differences from the web are listed in `mobile/README.md`.
+- No server route changed: older installed apps keep working. Location Transfer came later (see mobile Wave 3, phone, above). Differences from the web are listed in `mobile/README.md`.
 
 ### Added (mobile Wave 2, phone: the offline queue and waste)
 
