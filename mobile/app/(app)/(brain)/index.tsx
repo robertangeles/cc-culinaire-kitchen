@@ -49,6 +49,8 @@ export default function YourBrain() {
   if (state.phase !== "ready") return null;
   const { user } = state;
   const filtered = snap.search.trim() !== "" || snap.sourceType !== null;
+  // Nothing here at all: no filters over an empty list.
+  const nothing = snap.phase === "ready" && snap.items.length === 0 && !filtered && search === "";
   const empty = emptyWords(filtered, snap.scope);
 
   return (
@@ -62,8 +64,12 @@ export default function YourBrain() {
           <ScreenHeader label="Kitchen AI" title="Your Brain" />
           <Text variant="muted">What CulinAIre remembers, so it always has your context.</Text>
           <Segmented options={TIERS} value={snap.scope} onChange={(scope) => void store.setFilter({ scope })} />
-          <TextField label="Search" value={search} onChangeText={setSearch} placeholder="Search your memories" autoCorrect={false} maxLength={200} />
-          <ChoiceChips label="From" options={SOURCE_LABELS} value={SOURCES.find((s) => s.value === snap.sourceType)!.label} onChange={(label) => void store.setFilter({ sourceType: SOURCES.find((s) => s.label === label)!.value })} />
+          {nothing ? null : (
+            <>
+              <TextField label="Search" value={search} onChangeText={setSearch} placeholder="Search your memories" autoCorrect={false} maxLength={200} />
+              <ChoiceChips label="From" options={SOURCE_LABELS} value={SOURCES.find((s) => s.value === snap.sourceType)!.label} onChange={(label) => void store.setFilter({ sourceType: SOURCES.find((s) => s.label === label)!.value })} />
+            </>
+          )}
 
           {snap.savedAt ? <OfflineBanner text={`Can't reach the server. This is the list from ${new Date(snap.savedAt).toLocaleString([], { day: "numeric", month: "short", hour: "numeric", minute: "2-digit" })}.`} /> : snap.error ? <Text variant="error">{snap.error}</Text> : null}
           {snap.error ? <Button kind="ghost" label="Try again" onPress={() => void store.refresh()} /> : null}
@@ -135,10 +141,10 @@ function MemoryRow({ memory, removable, onRemove }: { memory: Memory; removable:
         ) : null}
       </Pressable>
       {open ? (
-        <View style={{ paddingHorizontal: space.lg, paddingBottom: removable ? 0 : space.lg, gap: space.sm }}>
+        <View style={{ paddingHorizontal: space.lg, paddingBottom: space.lg, gap: space.lg }}>
           <Text>{memory.body}</Text>
           {error ? <Text variant="error" accessibilityLiveRegion="polite">{error}</Text> : null}
-          {removable ? <Button kind="quiet" label={removing ? "Removing…" : "Remove"} disabled={removing} onPress={confirm} /> : null}
+          {removable ? <Button kind="danger" label={removing ? "Removing…" : "Remove"} disabled={removing} onPress={confirm} /> : null}
         </View>
       ) : null}
     </View>

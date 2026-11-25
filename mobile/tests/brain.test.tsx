@@ -124,12 +124,14 @@ describe("Your Brain", () => {
     await open();
     fireEvent.click(screen.getByRole("tab", { name: tab }));
     await waitFor(() => expect(screen.getByText(heading)).toBeTruthy());
+    expect(screen.queryByLabelText("Search")).toBeNull();
   });
 
   it("says no memory matches a search or a source", async () => {
     await open();
     fireEvent.click(screen.getByRole("radio", { name: "Menu" }));
     await waitFor(() => expect(screen.getByText("No memories match")).toBeTruthy());
+    expect(screen.getByLabelText("Search")).toBeTruthy();
   });
 
   it("with no signal, shows the saved list and when it is from; with nothing saved, offers to try again", async () => {

@@ -1085,7 +1085,7 @@ describe.skipIf(!process.env.SCREENS_OUT)(`screens on ${FORM}`, { timeout: 600_0
     await waitFor("Remove", 20_000);
     await shot("b2-memory-open");
     await choose("Remove");
-    await waitFor("Keep it", 20_000);
+    await waitFor(/^keep it$/i, 20_000);
     await shot("b2b-remove-asked");
     await tap(/^keep it$/i);
     await choose(/^Saturday prep/);
