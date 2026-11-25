@@ -1,6 +1,6 @@
 // @vitest-environment jsdom
 import { describe, it, expect, vi, afterEach } from "vitest";
-import { render, cleanup } from "@testing-library/react";
+import { render, cleanup, screen } from "@testing-library/react";
 import { Children, createContext, useContext, type ReactNode } from "react";
 
 // A fresh launch with no session once landed on legal.tsx ("Not found") instead of Sign in: expo-router sends a guarded screen to the first
@@ -8,9 +8,15 @@ import { Children, createContext, useContext, type ReactNode } from "react";
 // Stack that records each guard: in every phase, every guarded group must redirect to a screen that is open in that phase.
 const mocks = vi.hoisted(() => ({
   phase: { current: "signedOut" },
+  user: { current: undefined as { userId: number; roles: string[]; permissions: string[] } | undefined },
   groups: [] as { guard: boolean; redirectTo?: string; screens: string[] }[],
 }));
-vi.mock("../src/runtime/appContext", () => ({ session: { restore: vi.fn() }, useSession: () => ({ state: { phase: mocks.phase.current } }) }));
+vi.mock("../src/runtime/appContext", () => ({ session: { restore: vi.fn() }, useSession: () => ({ state: { phase: mocks.phase.current, ...(mocks.user.current && { user: mocks.user.current }) } }) }));
+vi.mock("../src/config", () => ({ appLockOff: false }));
+vi.mock("../src/runtime/appLock", async () => {
+  const { createAppLock } = await import("../src/lock/appLock");
+  return { appLock: createAppLock({ authenticate: async () => "ok", now: Date.now }) };
+});
 vi.mock("../src/runtime/appOutbox", () => ({ startOutbox: vi.fn() }));
 vi.mock("../src/runtime/notifications", () => ({ startNotifications: vi.fn() }));
 vi.mock("expo-splash-screen", () => ({ preventAutoHideAsync: async () => {}, hideAsync: async () => {} }));
@@ -37,6 +43,7 @@ import RootLayout from "../app/_layout";
 afterEach(() => {
   cleanup();
   mocks.groups.length = 0;
+  mocks.user.current = undefined;
 });
 
 // The screen each phase must reach (the file under app/), and the path that file lives at.
@@ -59,5 +66,28 @@ describe("root layout guards", () => {
     const guarded = mocks.groups.filter((g) => !g.guard);
     expect(guarded.length).toBeGreaterThan(0);
     for (const g of guarded) expect(g.redirectTo).toBe(path);
+  });
+});
+
+describe("root layout and the app lock", () => {
+  const lockScreen = () => screen.queryByRole("button", { name: "Unlock" });
+
+  it.each(["ready", "chooseLocation", "firstRun"])("someone it is for starts locked in the %s phase", (phase) => {
+    mocks.phase.current = phase;
+    mocks.user.current = { userId: 1, roles: [], permissions: ["purchasing:approve"] };
+    render(<RootLayout />);
+    expect(lockScreen()).toBeTruthy();
+  });
+
+  it("nobody else does, and neither does the sign-in screen", () => {
+    mocks.phase.current = "ready";
+    mocks.user.current = { userId: 1, roles: [], permissions: ["waste:log"] };
+    render(<RootLayout />);
+    expect(lockScreen()).toBeNull();
+    cleanup();
+    mocks.phase.current = "signedOut";
+    mocks.user.current = undefined;
+    render(<RootLayout />);
+    expect(lockScreen()).toBeNull();
   });
 });
