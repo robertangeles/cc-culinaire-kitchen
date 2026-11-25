@@ -16,12 +16,20 @@ Server, web and phone. No migration, no permission change, no change to the Benc
 - **Posting once:** `bench:message` and `bench:dm:send` take an optional client-made `messageId` (`BenchPostIdSchema` in `@culinaire/shared`). The same post sent again under it is stored once: only the sender is answered, with the message as it is now (`bench:message:deleted` if it was deleted since), and any other post under that id is refused with `CONFLICT`. Apps that send no id work as before. Channel messages on the live channel now also carry their `channelKey`.
 - **Phone:** each post carries its own id, so Try again can no longer post twice, and a post is matched to the server's message by that id rather than by its words.
 
+### Fixed (an authenticator code could be used more than once)
+
+Server only. No migration, no permission change, no change in the web client or the phone app.
+
+- **A code is accepted once.** The server remembers the last 30-second step it accepted from each person and refuses any code at or before it with the existing `INVALID_MFA_CODE`, for sign-in, turning two-step on and off, linking Sign in with Apple and deleting an account. A refused code counts toward the existing failed-attempt limits; only an accepted one is recorded. Two actions in the same 30 seconds need two codes: the second waits for the next one.
+- **Where it is kept:** in the server's memory, so a restart or deploy clears it and a code used just before can be accepted again for the rest of its window (up to about 60 seconds). It holds for one server instance, which is what the service runs.
+- **A malformed code** (not a string of exactly six digits) is refused like a wrong one, with `INVALID_MFA_CODE`, instead of a 500.
+
 ### Fixed (an authenticator code typed just before the 30-second step changed was refused)
 
 Server only. No migration, no permission change.
 
 - **Sign-in, changing two-step settings, linking a sign-in method and deleting an account** now accept an authenticator code in its own 30-second step and the one before it, never a future step. A code typed as the step changes, or from a phone whose clock is a little slow, is no longer refused.
-- **Used codes:** we checked whether a code that has already been used is refused. It is not: `verifyMfaToken` stores nothing, so a used code can be used again within its window. That was so before this change; this change widens that window from about 30 to about 60 seconds. Refusing a used code is tracked separately.
+- **Used codes:** we checked whether a code that has already been used is refused. It is not: `verifyMfaToken` stores nothing, so a used code can be used again within its window. That was so before this change; this change widens that window from about 30 to about 60 seconds. A used code is now refused: see the entry above.
 
 ### Added (mobile Wave 9, phone: the Bench)
 

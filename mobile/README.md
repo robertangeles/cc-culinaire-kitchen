@@ -623,6 +623,6 @@ The web's "create your first location" link for an admin is a sentence here: mak
 
 ## Tests
 
-`check:test` runs the logic tests (`src/**`) and the screen tests (`tests/*.test.tsx`); `check:e2e` runs the real client and queue against a server
+`check:test` runs the logic tests (`src/**`) and the screen tests (`tests/*.test.tsx`); `check:e2e` runs the real client and queue against a server, signed in once as the E2E user for the whole run (`e2e/signIn.ts`: a code is accepted once)
 (`e2e/phoneFlow`, `e2e/wasteQueue`, `e2e/prepQueue`, `e2e/stockQueue`, `e2e/chatRecipes`, `e2e/storeRoom`; `e2e/brain` (Your Brain, no queue); `e2e/bench` (two colleagues and an outsider over real sockets, no queue); `e2e/receiving` uses the client alone, receiving has no queue; `e2e/orders` uses the client, lists and order form, which have none either; `e2e/accountNotifications`
 covers details, kitchen profile, password, two-step, the inbox read queue and push settings with a just-registered person; set `E2E_NOTIFICATION_ID` to a notification made for that person to check a real row, as the suite cannot make one through the API). See `device/README.md`.
