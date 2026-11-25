@@ -55,7 +55,7 @@ Run commands from the repository root. `eas` is the Expo build service; use it t
 1. First release only: in the Play Console create an internal testing release and upload the first `.aab` by hand (Play does not let the API create a first release). Build it: `pnpm --dir mobile exec eas build --profile production --platform android`; download the `.aab` from the build page.
 2. After that: `pnpm --dir mobile exec eas submit --platform android --profile internal` (uses the latest production build and the `internal` track).
 3. Add testers (Testing, Internal testing, Testers): an email list. They install from the opt-in link.
-4. Before any production release the Play Console also needs: Data safety form (the app holds name, email, and later identity documents from compliance uploads: declare them), content rating, target audience, the privacy policy URL (use the existing web Privacy URL, `https://<your site>/privacy`), and the **account deletion** answer: in-app path "Account (a tab, or under More), Delete my account", web page `https://<your site>/delete-account`.
+4. Before any production release the Play Console also needs: Data safety form (the app holds name, email, and certificate photos from compliance uploads: declare them), content rating, target audience, the privacy policy URL (use the existing web Privacy URL, `https://<your site>/privacy`), and the **account deletion** answer: in-app path "Account (a tab, or under More), Delete my account", web page `https://<your site>/delete-account`.
 5. Production: `eas submit --platform android --profile production` (the draft goes to the Play Console for you to review and roll out).
 
 ## TestFlight and the App Store

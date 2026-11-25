@@ -25,7 +25,7 @@ Run the screenshot walk (`device/README.md`, "The screenshot walk") after changi
 
 | Folder | What lives there |
 |---|---|
-| `app/` | Screens (expo-router). A module is a route group `app/(app)/(module)/`, plus one entry in `src/shell/tabs.ts` naming the permission that opens it (none when the server asks only for a signed-in person), in the order a line cook uses them (Prep, Waste, Usage, Count, Move, Receive, Orders, Ask, Recipes, Inbox, Transfers, Stock, Menu, Brain, Bench). Past five tab buttons, the fifth is More (`app/(app)/more.tsx`), listing the rest and Account. A tab under More keeps its route and loses only its button: never `href: null`, which expo-router turns into a hidden tab that redirects to the first tab when opened. |
+| `app/` | Screens (expo-router). A module is a route group `app/(app)/(module)/`, plus one entry in `src/shell/tabs.ts` naming the permission that opens it (none when the server asks only for a signed-in person), in the order a line cook uses them (Prep, Waste, Usage, Count, Move, Receive, Orders, Ask, Recipes, Inbox, Transfers, Stock, Menu, Brain, Bench; Roster and Documents are only ever under More). Past five tab buttons, the fifth is More (`app/(app)/more.tsx`), listing the rest and Account. A tab under More keeps its route and loses only its button: never `href: null`, which expo-router turns into a hidden tab that redirects to the first tab when opened. |
 | `src/api` | The one network client: auth, refresh, coded errors (`ApiError.code`, `serverCode`). |
 | `src/outbox` | The offline queue (below). |
 | `src/ingredients` | The shared ingredient picker's data (below); its component is `src/ui/IngredientPicker.tsx`. |
@@ -695,7 +695,8 @@ Differences from the web profile (`pages/ProfilePage.tsx`, `components/profile`)
 | A sign-in that is too old for a change (no-password account) shows the server's sentence | Says so and offers Sign out | |
 | Kitchen profile: accordion sections; a non-admin sees only the skill level and Save sends the whole form | Flat sections; a non-admin sees the skill level and Save sends only the skill level | Never overwrites the organisation's answers from a cook's phone. |
 | Skill levels, cuisines, dietary needs and equipment come from the admin-managed list; when it is empty the form shows no choices | The same lists; an empty skill-level list falls back to the six levels the server accepts, and an empty list is hidden | Otherwise nobody can set a skill level until an admin fills the list. |
-| Organisation tab (members, keys, locations), My Documents | Not on the phone | Organisation admin is Wave 8; documents are the compliance staff side (Wave 8). |
+| Organisation tab (members, keys, locations) | Not on the phone | Organisation admin is Wave 8. |
+| My Documents | Under More: see "Documents, the staff side of compliance" | |
 | Onboarding wizard | Not on the phone | Out of scope (the kitchen profile covers its answers). |
 
 **No location yet** (`app/first-run.tsx`, the web's `NoLocationScreen`): never empty tabs. A person with no location gets the join screen: the organisation's key first if they are in no organisation, then the location's key.
