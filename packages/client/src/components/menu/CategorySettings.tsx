@@ -146,10 +146,9 @@ export function CategorySettings({
             Food Cost Targets by Category
           </h3>
           <p className="text-xs text-dark-500 mt-1">
-            Control your margins category by category. Set the maximum food cost
-            percentage you'll accept — any menu item that runs over its category
-            target gets flagged in the Menu Items table so you can reprice or
-            re-engineer it.
+            {hideCosts
+              ? "The maximum food cost percentage you'll accept in each category."
+              : "Control your margins category by category. Set the maximum food cost percentage you'll accept — any menu item that runs over its category target gets flagged in the Menu Items table so you can reprice or re-engineer it."}
           </p>
         </div>
 

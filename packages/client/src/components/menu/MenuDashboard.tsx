@@ -137,7 +137,7 @@ export function MenuDashboard({ analysis, loading, onFilterDogs }: MenuDashboard
       </div>
 
       {/* Key metrics */}
-      <div className="grid grid-cols-2 lg:grid-cols-4 gap-3">
+      <div className={`grid ${costsHidden ? "grid-cols-1" : "grid-cols-2"} lg:grid-cols-4 gap-3`}>
         <MetricCard
           icon={BarChart3}
           label="Total Items Analyzed"
@@ -145,7 +145,7 @@ export function MenuDashboard({ analysis, loading, onFilterDogs }: MenuDashboard
         />
         {costsHidden ? (
           <CostsHiddenNote
-            className="col-span-2 lg:col-span-3"
+            className="lg:col-span-3"
             detail="Your role shows prices, sales and popularity. Ask an administrator for access to costs."
           />
         ) : (

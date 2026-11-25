@@ -1495,3 +1495,9 @@ builds all tables with CHECKs enforcing. Stop it again when done.
 - **Problem**: Every phone end-to-end file signs in as one user, back to back in about ten seconds. Adding `e2e/orders` (124 requests) took the run over the server's 300 requests a minute per person, and the files that failed with 429 were the untouched ones.
 - **Fix**: The CI job and local runs start the server with `RATE_LIMIT_PER_MINUTE=1000` (`.github/workflows/ci.yml`, `mobile/device/README.md`).
 - **Rule**: Before adding an end-to-end file, run the whole `check:e2e`, not only the new file: shared limits (requests a minute, sign-ins) fail somewhere else.
+
+## 2026-11-25 — Hiding a field from someone who may edit the record destroys it on their next save
+
+- **Problem**: The web menu form saves by removing every recipe line and adding it back with the cost it was shown. Once the server stopped sending costs to people without `inventory:cost`, one edit of a quantity by a menu manager would have reset every per-dish cost to the catalogue's and every typed ingredient's cost to $0, with nothing on screen to show it. The figures also left by routes nobody lists as cost routes: the AI recommendation prompt, the replacement-recipe text and the dish list in Prep.
+- **Fix**: A line sent without a cost by a caller who cannot see costs keeps the one the dish has for that ingredient (server, so the phone gets it too), and the web leaves untouched lines alone. `routes/menuCostGate.test.ts` calls every menu route as a holder and a non-holder, and fails when a route is not in its table.
+- **Rule**: Before omitting a field from a response, list every editor that reads it and writes it back, and every derived text built from it (prompts, emails, exports). Test the save of a person who cannot see the field.
