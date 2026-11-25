@@ -25,6 +25,13 @@ Phone app only; no server change, no migration, no new permission.
 - **Proactive nudges** opt-in, the web's switch.
 - The first page of each tier is readable with no signal. Pinning, correcting and sharing stay on the web for now; every difference from the web page is listed in `mobile/README.md`.
 
+### Changed (Bench socket input validation)
+
+Server only. No migration, no permission change, no change in the web client.
+
+- **Bench socket input validation hardening:** every Bench socket event is checked before it is handled; malformed events are dropped and the sender gets `bench:error` with code `VALIDATION`. A typing notice is accepted only for a room the sender has joined.
+- **Server error logging:** last-resort error logging with context.
+
 ### Added (open swaps say the shift's status and the venue's zone and name)
 
 Server only, additive. No migration, no permission change, no change to who sees which swaps.

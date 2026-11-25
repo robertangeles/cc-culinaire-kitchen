@@ -16,6 +16,7 @@ import { Server as HttpServer } from "http";
 import { CLIENT_URL } from "../utils/env.js";
 import { Server, Socket } from "socket.io";
 import pino from "pino";
+import { onBenchEvent } from "./benchSocketGuard.js";
 import { extractHandshakeToken } from "../middleware/socketAuth.js";
 import { verifyAccessToken } from "./authService.js";
 import {
@@ -103,9 +104,9 @@ export function evictFromOrganisationRoom(userId: number, organisationId: number
 }
 
 /** May this user receive this room? Everyone, an organisation they belong to, a DM thread they are in; nothing else. */
-async function canJoin(channelKey: unknown, userId: number): Promise<boolean> {
+async function canJoin(channelKey: string, userId: number): Promise<boolean> {
   if (channelKey === "everyone") return true;
-  const [, kind, digits] = (typeof channelKey === "string" && /^(org|dm)_([1-9]\d{0,8})$/.exec(channelKey)) || [];
+  const [, kind, digits] = /^(org|dm)_([1-9]\d{0,8})$/.exec(channelKey) ?? [];
   if (kind === "org") return (await getUserOrganisationIds(userId)).includes(Number(digits));
   if (kind === "dm") {
     const thread = await getThreadById(Number(digits));
@@ -172,15 +173,14 @@ export function initBenchSocket(httpServer: HttpServer): void {
     broadcastPresence("everyone");
 
     // ── Join channel ──────────────────────────────────────
-    socket.on("bench:join", async (data?: { channelKey?: string }) => {
-      const channelKey = data?.channelKey;
+    onBenchEvent(socket, "bench:join", async ({ channelKey }) => {
       try {
         if (!(await canJoin(channelKey, userId))) {
           socket.emit("bench:error", { error: "You cannot join this channel", code: "FORBIDDEN" });
           return;
         }
         socket.join(`bench:${channelKey}`);
-        broadcastPresence(channelKey!);
+        broadcastPresence(channelKey);
         logger.debug({ userId, channelKey }, "Bench: joined channel");
       } catch (err) {
         logger.error({ err, userId, channelKey }, "Bench: join failed");
@@ -189,23 +189,17 @@ export function initBenchSocket(httpServer: HttpServer): void {
     });
 
     // ── Leave channel ─────────────────────────────────────
-    socket.on("bench:leave", ({ channelKey }: { channelKey: string }) => {
+    onBenchEvent(socket, "bench:leave", ({ channelKey }) => {
       socket.leave(`bench:${channelKey}`);
       broadcastPresence(channelKey);
     });
 
     // ── Send message ──────────────────────────────────────
-    socket.on("bench:message", async (data: {
-      channelKey: string;
-      body: string;
-      messageType?: string;
-      recipeId?: string;
-    }) => {
+    onBenchEvent(socket, "bench:message", async (data) => {
       try {
         // Input validation
-        if (!data.channelKey || !/^[a-z0-9_]+$/.test(data.channelKey)) return;
-        if (!data.body?.trim() && data.messageType !== "recipe_share") return;
-        if (data.body && data.body.length > 5000) {
+        if (!data.body.trim() && data.messageType !== "recipe_share") return;
+        if (data.body.length > 5000) {
           socket.emit("bench:error", { error: "Message too long (max 5000 characters)" });
           return;
         }
@@ -223,8 +217,8 @@ export function initBenchSocket(httpServer: HttpServer): void {
           channel.channelId,
           userId,
           data.body.trim(),
-          (data.messageType as "text" | "recipe_share") || "text",
-          data.recipeId,
+          data.messageType ?? "text",
+          data.recipeId ?? undefined,
         );
 
         // Broadcast to the channel room
@@ -239,7 +233,8 @@ export function initBenchSocket(httpServer: HttpServer): void {
     });
 
     // ── Typing indicator ──────────────────────────────────
-    socket.on("bench:typing", async ({ channelKey }: { channelKey: string }) => {
+    onBenchEvent(socket, "bench:typing", async ({ channelKey }) => {
+      if (!socket.rooms.has(`bench:${channelKey}`)) return;
       if (channelKey.startsWith("org_")) {
         const orgId = parseInt(channelKey.replace("org_", ""), 10);
         if (isNaN(orgId)) return;
@@ -251,7 +246,7 @@ export function initBenchSocket(httpServer: HttpServer): void {
     });
 
     // ── Reactions ─────────────────────────────────────────
-    socket.on("bench:reaction:add", async ({ messageId, emoji }: { messageId: string; emoji: string }) => {
+    onBenchEvent(socket, "bench:reaction:add", async ({ messageId, emoji }) => {
       try {
         const audience = await getMessageAudience(messageId);
         if (!audience || !(await isInAudience(audience, userId))) return;
@@ -263,7 +258,7 @@ export function initBenchSocket(httpServer: HttpServer): void {
       }
     });
 
-    socket.on("bench:reaction:remove", async ({ messageId, emoji }: { messageId: string; emoji: string }) => {
+    onBenchEvent(socket, "bench:reaction:remove", async ({ messageId, emoji }) => {
       try {
         const audience = await getMessageAudience(messageId);
         if (!audience || !(await isInAudience(audience, userId))) return;
@@ -284,7 +279,7 @@ export function initBenchSocket(httpServer: HttpServer): void {
     }
 
     // ── Delete message ────────────────────────────────────
-    socket.on("bench:message:delete", async ({ messageId }: { messageId: string }) => {
+    onBenchEvent(socket, "bench:message:delete", async ({ messageId }) => {
       try {
         const isAdmin = (socket.data.user.roles as string[] ?? []).includes("Administrator");
         const deleted = await softDeleteMessage(messageId, userId, isAdmin);
@@ -296,9 +291,9 @@ export function initBenchSocket(httpServer: HttpServer): void {
     });
 
     // ── Edit message ──────────────────────────────────────
-    socket.on("bench:message:edit", async ({ messageId, newBody }: { messageId: string; newBody: string }) => {
+    onBenchEvent(socket, "bench:message:edit", async ({ messageId, newBody }) => {
       try {
-        if (!newBody?.trim() || newBody.length > 5000) {
+        if (!newBody.trim() || newBody.length > 5000) {
           socket.emit("bench:error", { error: "Invalid message" });
           return;
         }
@@ -315,9 +310,9 @@ export function initBenchSocket(httpServer: HttpServer): void {
     });
 
     // ── Direct Messages ────────────────────────────────────
-    socket.on("bench:dm:send", async ({ recipientId, body }: { recipientId: number; body: string }) => {
+    onBenchEvent(socket, "bench:dm:send", async ({ recipientId, body }) => {
       try {
-        if (!body?.trim() || body.length > 5000) return;
+        if (!body.trim() || body.length > 5000) return;
         const thread = await getOrCreateThread(userId, recipientId);
         const message = await createDmMessage(thread.dmThreadId, userId, body.trim());
         // Send to both sender and recipient
@@ -329,17 +324,17 @@ export function initBenchSocket(httpServer: HttpServer): void {
       }
     });
 
-    socket.on("bench:dm:typing", ({ recipientId }: { recipientId: number }) => {
+    onBenchEvent(socket, "bench:dm:typing", ({ recipientId }) => {
       io.to(`bench:user_${recipientId}`).emit("bench:dm:typing", { userId, userName });
     });
 
     // ── Presence heartbeat (triggers a fresh broadcast) ───
-    socket.on("bench:presence:heartbeat", () => {
+    onBenchEvent(socket, "bench:presence:heartbeat", () => {
       broadcastPresence("everyone");
     });
 
     // ── Disconnect ────────────────────────────────────────
-    socket.on("disconnect", () => {
+    onBenchEvent(socket, "disconnect", () => {
       logger.info({ userId, socketId: socket.id }, "Bench: user disconnected");
       const fullyGone = removeUserSocket(userId);
       // Only broadcast presence change if user has NO remaining sockets.
