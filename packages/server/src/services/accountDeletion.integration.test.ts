@@ -46,9 +46,8 @@ describe.skipIf(!RUN)("deleteOwnAccount (real DB)", { timeout: 120_000 }, () => 
   const statusOf = async (userId: number) =>
     (await db.select({ s: user.userStatus }).from(user).where(eq(user.userId, userId)))[0].s;
   /**
-   * A TOTP is only valid inside its 30-second step and each DB round trip to the remote dev
-   * database can take seconds, so a code generated just before a step boundary can be stale by
-   * the time the server checks it. Retry with a fresh code; any other failure surfaces at once.
+   * A TOTP is only valid inside its 30-second step and the next one, and each DB round trip to the
+   * remote dev database can take seconds, so a code can be stale by the time the server checks it. Retry with a fresh code; any other failure surfaces at once.
    */
   async function deleteWithFreshCode(userId: number, base: { password?: string; confirmEmail?: string }, secret: string, signedInAt: Date | null) {
     for (let attempt = 1; ; attempt++) {

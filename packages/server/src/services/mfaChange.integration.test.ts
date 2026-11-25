@@ -41,7 +41,7 @@ describe.skipIf(!RUN)("changing MFA settings (real DB)", { timeout: 120_000 }, (
   const mfaState = async (userId: number) =>
     (await db.select({ secret: user.mfaSecret, enabled: user.mfaEnabledInd }).from(user).where(eq(user.userId, userId)))[0];
   const refusal = async (p: Promise<unknown>) => p.then(() => null, (e) => e as AuthError);
-  /** A TOTP is only valid in its 30-second step and the dev DB is remote, so retry with a fresh code. */
+  /** A TOTP is only valid in its 30-second step and the next one, and the dev DB is remote, so retry with a fresh code. */
   async function disableWithFreshCode(userId: number, secret: string) {
     for (let attempt = 1; ; attempt++) {
       try {
