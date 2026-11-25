@@ -27,7 +27,9 @@ import {
   softDeleteMessage,
   editMessage,
   getUserOrganisationIds,
-  getChannelForMessage,
+  getMessageAudience,
+  isInAudience,
+  type MessageAudience,
 } from "./benchService.js";
 import { getOrCreateThread, createDmMessage, getThreadById } from "./benchDmService.js";
 import { db } from "../db/index.js";
@@ -76,11 +78,40 @@ function getAllOnlineUsers(): UserProfile[] {
   return Array.from(userProfiles.values());
 }
 
-/** Broadcast presence to everyone in a room */
+/** The people with a socket in this room now */
+function getRoomUsers(channelKey: string): UserProfile[] {
+  const users = new Map<number, UserProfile>();
+  for (const socketId of io.sockets.adapter.rooms.get(`bench:${channelKey}`) ?? []) {
+    const profile = userProfiles.get(io.sockets.sockets.get(socketId)?.data.user.sub);
+    if (profile) users.set(profile.userId, profile);
+  }
+  return Array.from(users.values());
+}
+
+/** Broadcast presence to everyone in a room: who is in it, or everyone online for the Everyone room */
 function broadcastPresence(channelKey: string) {
-  const users = getAllOnlineUsers();
+  const users = channelKey === "everyone" ? getAllOnlineUsers() : getRoomUsers(channelKey);
   logger.debug({ channelKey, userCount: users.length, userIds: users.map(u => u.userId) }, "Bench: broadcasting presence");
   io.to(`bench:${channelKey}`).emit("bench:presence:update", { channelKey, users });
+}
+
+/** A removed member's sockets stop receiving the organisation's channel. Membership is otherwise only checked when they join it. */
+export function evictFromOrganisationRoom(userId: number, organisationId: number): void {
+  if (!io) return; // scripts and tests that never start the socket server
+  io.in(`bench:user_${userId}`).socketsLeave(`bench:org_${organisationId}`);
+  broadcastPresence(`org_${organisationId}`);
+}
+
+/** May this user receive this room? Everyone, an organisation they belong to, a DM thread they are in; nothing else. */
+async function canJoin(channelKey: unknown, userId: number): Promise<boolean> {
+  if (channelKey === "everyone") return true;
+  const [, kind, digits] = (typeof channelKey === "string" && /^(org|dm)_([1-9]\d{0,8})$/.exec(channelKey)) || [];
+  if (kind === "org") return (await getUserOrganisationIds(userId)).includes(Number(digits));
+  if (kind === "dm") {
+    const thread = await getThreadById(Number(digits));
+    return thread !== null && (thread.userAId === userId || thread.userBId === userId);
+  }
+  return false;
 }
 
 /**
@@ -141,32 +172,20 @@ export function initBenchSocket(httpServer: HttpServer): void {
     broadcastPresence("everyone");
 
     // ── Join channel ──────────────────────────────────────
-    socket.on("bench:join", async ({ channelKey }: { channelKey: string }) => {
-      if (!channelKey || !/^[a-z0-9_]+$/.test(channelKey)) return;
-      if (channelKey === "everyone") return; // already joined
-
-      // Verify org membership for org channels
-      if (channelKey.startsWith("org_")) {
-        const orgId = parseInt(channelKey.replace("org_", ""), 10);
-        if (isNaN(orgId)) return;
-        const userOrgIds = await getUserOrganisationIds(userId);
-        if (!userOrgIds.includes(orgId)) {
-          socket.emit("bench:error", { error: "Not a member of this organisation" });
+    socket.on("bench:join", async (data?: { channelKey?: string }) => {
+      const channelKey = data?.channelKey;
+      try {
+        if (!(await canJoin(channelKey, userId))) {
+          socket.emit("bench:error", { error: "You cannot join this channel", code: "FORBIDDEN" });
           return;
         }
+        socket.join(`bench:${channelKey}`);
+        broadcastPresence(channelKey!);
+        logger.debug({ userId, channelKey }, "Bench: joined channel");
+      } catch (err) {
+        logger.error({ err, userId, channelKey }, "Bench: join failed");
+        socket.emit("bench:error", { error: "Failed to join channel" });
       }
-
-      // Verify DM participation for dm channels
-      if (channelKey.startsWith("dm_")) {
-        const threadId = parseInt(channelKey.replace("dm_", ""), 10);
-        if (isNaN(threadId)) return;
-        const thread = await getThreadById(threadId);
-        if (!thread || (thread.userAId !== userId && thread.userBId !== userId)) return;
-      }
-
-      socket.join(`bench:${channelKey}`);
-      broadcastPresence(channelKey);
-      logger.debug({ userId, channelKey }, "Bench: joined channel");
     });
 
     // ── Leave channel ─────────────────────────────────────
@@ -234,21 +253,11 @@ export function initBenchSocket(httpServer: HttpServer): void {
     // ── Reactions ─────────────────────────────────────────
     socket.on("bench:reaction:add", async ({ messageId, emoji }: { messageId: string; emoji: string }) => {
       try {
-        // Verify org membership if this message belongs to an org channel
-        const msgChannel = await getChannelForMessage(messageId);
-        if (msgChannel?.channelType === "organisation" && msgChannel.organisationId) {
-          const userOrgIds = await getUserOrganisationIds(userId);
-          if (!userOrgIds.includes(msgChannel.organisationId)) return;
-        }
+        const audience = await getMessageAudience(messageId);
+        if (!audience || !(await isInAudience(audience, userId))) return;
         await addReaction(messageId, userId, emoji);
         const reactions = await getReactions(messageId);
-        // Broadcast to all rooms this socket is in (scoped, not global)
-        for (const room of socket.rooms) {
-          if (room.startsWith("bench:")) {
-            io.to(room).emit("bench:reaction:updated", { messageId, reactions });
-            break;
-          }
-        }
+        broadcastToAudience(audience, "bench:reaction:updated", { messageId, reactions });
       } catch (err) {
         logger.warn({ err, messageId, emoji }, "Bench: reaction add failed");
       }
@@ -256,64 +265,49 @@ export function initBenchSocket(httpServer: HttpServer): void {
 
     socket.on("bench:reaction:remove", async ({ messageId, emoji }: { messageId: string; emoji: string }) => {
       try {
-        // Verify org membership if this message belongs to an org channel
-        const msgChannel = await getChannelForMessage(messageId);
-        if (msgChannel?.channelType === "organisation" && msgChannel.organisationId) {
-          const userOrgIds = await getUserOrganisationIds(userId);
-          if (!userOrgIds.includes(msgChannel.organisationId)) return;
-        }
+        const audience = await getMessageAudience(messageId);
+        if (!audience || !(await isInAudience(audience, userId))) return;
         await removeReaction(messageId, userId, emoji);
         const reactions = await getReactions(messageId);
-        for (const room of socket.rooms) {
-          if (room.startsWith("bench:")) {
-            io.to(room).emit("bench:reaction:updated", { messageId, reactions });
-            break;
-          }
-        }
+        broadcastToAudience(audience, "bench:reaction:updated", { messageId, reactions });
       } catch (err) {
         logger.warn({ err, messageId, emoji }, "Bench: reaction remove failed");
       }
     });
 
-    // ── Helper: broadcast to DM or channel ─────────────────
-    async function broadcastToTarget(channelKey: string, event: string, payload: Record<string, unknown>) {
-      if (channelKey.startsWith("dm_")) {
-        // DM: broadcast to both users' personal rooms
-        const threadId = parseInt(channelKey.replace("dm_", ""), 10);
-        const thread = await getThreadById(threadId);
-        if (thread) {
-          io.to(`bench:user_${thread.userAId}`).emit(event, payload);
-          io.to(`bench:user_${thread.userBId}`).emit(event, payload);
-        }
-      } else {
-        // Channel: broadcast to the channel room
-        io.to(`bench:${channelKey}`).emit(event, payload);
-      }
+    // ── Helper: broadcast to a stored message's DM or channel ─
+    function broadcastToAudience(audience: MessageAudience, event: string, payload: Record<string, unknown>) {
+      const rooms = audience.userAId !== null
+        ? [`bench:user_${audience.userAId}`, `bench:user_${audience.userBId}`]
+        : [`bench:${audience.channelKey}`];
+      io.to(rooms).emit(event, payload);
     }
 
     // ── Delete message ────────────────────────────────────
-    socket.on("bench:message:delete", async ({ messageId, channelKey }: { messageId: string; channelKey: string }) => {
+    socket.on("bench:message:delete", async ({ messageId }: { messageId: string }) => {
       try {
         const isAdmin = (socket.data.user.roles as string[] ?? []).includes("Administrator");
         const deleted = await softDeleteMessage(messageId, userId, isAdmin);
-        if (deleted) {
-          await broadcastToTarget(channelKey, "bench:message:deleted", { messageId });
-        }
+        const audience = deleted ? await getMessageAudience(messageId) : null;
+        if (audience) broadcastToAudience(audience, "bench:message:deleted", { messageId });
       } catch (err) {
         logger.warn({ err, messageId }, "Bench: message delete failed");
       }
     });
 
     // ── Edit message ──────────────────────────────────────
-    socket.on("bench:message:edit", async ({ messageId, channelKey, newBody }: { messageId: string; channelKey: string; newBody: string }) => {
+    socket.on("bench:message:edit", async ({ messageId, newBody }: { messageId: string; newBody: string }) => {
       try {
         if (!newBody?.trim() || newBody.length > 5000) {
           socket.emit("bench:error", { error: "Invalid message" });
           return;
         }
+        // A former member may not put new text into the organisation's channel.
+        const audience = await getMessageAudience(messageId);
+        if (!audience || !(await isInAudience(audience, userId))) return;
         const edited = await editMessage(messageId, userId, newBody.trim());
         if (edited) {
-          await broadcastToTarget(channelKey, "bench:message:edited", { messageId, newBody: newBody.trim(), editedInd: true });
+          broadcastToAudience(audience, "bench:message:edited", { messageId, newBody: newBody.trim(), editedInd: true });
         }
       } catch (err) {
         logger.warn({ err, messageId }, "Bench: message edit failed");

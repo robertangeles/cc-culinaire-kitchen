@@ -10,6 +10,7 @@ import { db } from "../db/index.js";
 import { decryptUserPii } from "./piiService.js";
 import { revokeAllRefreshTokens, refreshTokenFamily } from "./authService.js";
 import { removeSignedOutDeviceTokens } from "./pushDeviceService.js";
+import { evictFromOrganisationRoom } from "./benchSocketService.js";
 import { encryptPii, hashForLookup } from "../utils/crypto.js";
 import {
   user,
@@ -318,7 +319,11 @@ export async function updateSubscription(
 
 /** Admin: remove a user from their organisation. */
 export async function removeUserOrganisation(userId: number) {
-  await db.delete(userOrganisation).where(eq(userOrganisation.userId, userId));
+  const removed = await db
+    .delete(userOrganisation)
+    .where(eq(userOrganisation.userId, userId))
+    .returning({ organisationId: userOrganisation.organisationId });
+  for (const { organisationId } of removed) evictFromOrganisationRoom(userId, organisationId);
 }
 
 /** Assign a role to a user. */

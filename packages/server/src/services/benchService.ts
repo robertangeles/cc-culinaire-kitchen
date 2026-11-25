@@ -13,6 +13,7 @@ import {
   benchReaction,
   benchMention,
   benchPin,
+  benchDmThread,
   user,
   userOrganisation,
   organisation,
@@ -414,7 +415,7 @@ export async function getPinWithChannel(messageId: string) {
   return row ?? null;
 }
 
-/** Look up a channel via message id (for reaction auth on org channels). Returns null for DM messages. */
+/** Look up a channel via message id (for pin auth). Returns null for DM messages. */
 export async function getChannelForMessage(messageId: string) {
   const [row] = await db
     .select({
@@ -427,6 +428,36 @@ export async function getChannelForMessage(messageId: string) {
     .where(eq(benchMessage.messageId, messageId))
     .limit(1);
   return row ?? null;
+}
+
+/** Who a stored message belongs to: a channel's members, or the two people of a DM thread. Null when there is no such message. */
+export async function getMessageAudience(messageId: string) {
+  const [row] = await db
+    .select({
+      channelKey: benchChannel.channelKey,
+      channelType: benchChannel.channelType,
+      organisationId: benchChannel.organisationId,
+      userAId: benchDmThread.userAId,
+      userBId: benchDmThread.userBId,
+    })
+    .from(benchMessage)
+    .leftJoin(benchChannel, eq(benchMessage.channelId, benchChannel.channelId))
+    .leftJoin(benchDmThread, eq(benchMessage.dmThreadId, benchDmThread.dmThreadId))
+    .where(eq(benchMessage.messageId, messageId))
+    .limit(1);
+  return row ?? null;
+}
+
+export type MessageAudience = NonNullable<Awaited<ReturnType<typeof getMessageAudience>>>;
+
+/** Is this person in the message's audience now? An organisation's is its current members. */
+export async function isInAudience(audience: MessageAudience, userId: number): Promise<boolean> {
+  if (audience.userAId !== null) return audience.userAId === userId || audience.userBId === userId;
+  if (audience.channelType === "organisation") {
+    const orgIds = await getUserOrganisationIds(userId);
+    return audience.organisationId !== null && orgIds.includes(audience.organisationId);
+  }
+  return audience.channelType === "global";
 }
 
 export async function getPinnedMessages(channelId: number) {
@@ -443,7 +474,7 @@ export async function getPinnedMessages(channelId: number) {
     .from(benchPin)
     .leftJoin(benchMessage, eq(benchPin.messageId, benchMessage.messageId))
     .leftJoin(user, eq(benchMessage.userId, user.userId))
-    .where(eq(benchPin.channelId, channelId))
+    .where(and(eq(benchPin.channelId, channelId), eq(benchMessage.deletedInd, false)))
     .orderBy(desc(benchPin.createdDttm));
   return pins;
 }

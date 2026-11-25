@@ -1513,3 +1513,9 @@ builds all tables with CHECKs enforcing. Stop it again when done.
 - **Problem**: The app lock covered the app as soon as it left the front, and every screen test passed, yet Android's app switcher still showed the open order: Android takes that picture as the app leaves, before React Native draws the cover, and shows it again for a moment on the way back. The walk's first check was also wrong the other way: a plain `uiautomator dump` lists views hidden from screen readers.
 - **Fix**: `hideFromRecents` (`mobile/app.config.ts`) turns the picture off natively on Android 13 and later; the walk photographs the app switcher from the home screen, films the way back, and reads the screen with `uiautomator dump --compressed` (what a person can reach).
 - **Rule**: A claim that something is never shown is checked on a device, in the app switcher and in a film of the return, not only in the component tree.
+
+## 2026-11-26 — A socket room name from the client is an access request, so list what is allowed, not what is refused
+
+- **Problem**: `bench:join` checked `org_` and `dm_` names and joined anything else, so joining `user_<id>` delivered another person's direct messages. Reactions, edits and deletes sent to a room the socket happened to be in or the sender named, and membership was checked only at join, so a removed member kept receiving.
+- **Fix**: `canJoin` is a whitelist (Everyone, own organisations, own threads). A message's audience comes from its stored row (`getMessageAudience`, `isInAudience`). Every membership deletion calls `evictFromOrganisationRoom`.
+- **Rule**: Work out rooms on the server from stored rows, allow known names only, and wherever a right is removed also remove the live subscriptions it granted. A new place that deletes `user_organisation` rows must evict too.

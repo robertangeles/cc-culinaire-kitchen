@@ -368,6 +368,9 @@ importers:
       drizzle-kit:
         specifier: ^0.30
         version: 0.30.6
+      socket.io-client:
+        specifier: ^4.8.3
+        version: 4.8.3
       tsx:
         specifier: ^4
         version: 4.21.0

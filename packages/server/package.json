@@ -63,6 +63,7 @@
     "@types/node": "^22",
     "@types/qrcode": "^1.5.6",
     "drizzle-kit": "^0.30",
+    "socket.io-client": "^4.8.3",
     "tsx": "^4",
     "typescript": "^5.7",
     "vitest": "^3"
