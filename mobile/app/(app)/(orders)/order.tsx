@@ -2,6 +2,7 @@ import { useCallback, useEffect, useState } from "react";
 import { Alert, KeyboardAvoidingView, Linking, RefreshControl, ScrollView, View } from "react-native";
 import { useFocusEffect, useLocalSearchParams, useRouter } from "expo-router";
 import { SafeAreaView } from "react-native-safe-area-context";
+import { reorderCheckLine } from "@culinaire/shared";
 import type { Discrepancy } from "@culinaire/shared/schemas/purchasing";
 import { useSession } from "../../../src/runtime/appContext";
 import { DiscrepancyRows } from "../../../src/orders/DiscrepancyRows";
@@ -124,11 +125,12 @@ export default function Order() {
   };
   const cancel = () => confirmThen(`Cancel ${order.poNumber}?`, "The order is closed and can't be brought back.", "Cancel order", () => act("cancel", "Cancelling an order", async () => { await api.cancel(poId); return "Order cancelled."; }), true);
   const reorder = async () => {
-    const copies: { poId: string; skippedItems: string[] }[] = [];
+    const copies: { poId: string; skippedItems: string[]; quantityWarnings: { ingredientName: string | null }[] }[] = [];
     if (!(await act("reorder", "Reordering", async () => void copies.push(await api.clone(poId, state.location.storeLocationId))))) return;
     const [copy] = copies;
     const left = copy.skippedItems.length;
-    router.push({ pathname: "/order", params: { poId: copy.poId, ...(left > 0 ? { info: `${itemCount(left)} left out: already at or above par.` } : {}) } });
+    const info = [left > 0 ? `${itemCount(left)} left out: already at or above par.` : null, reorderCheckLine(copy.quantityWarnings)].filter(Boolean).join(" ");
+    router.push({ pathname: "/order", params: { poId: copy.poId, ...(info ? { info } : {}) } });
   };
 
   return (

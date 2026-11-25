@@ -630,7 +630,7 @@ export function usePurchaseOrders(locationId: string | null) {
       throw new Error(err.error || "Failed to clone purchase order");
     }
     await refresh();
-    return res.json() as Promise<PurchaseOrder & { skippedItems: string[] }>;
+    return res.json() as Promise<PurchaseOrder & { skippedItems: string[]; quantityWarnings?: { ingredientName: string | null }[] }>;
   }, [refresh]);
 
   const downloadPdf = useCallback(async (poId: string, poNumber?: string) => {

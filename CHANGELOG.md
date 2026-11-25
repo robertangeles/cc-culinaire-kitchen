@@ -14,6 +14,13 @@ Phone app only; no server change, no migration, no new permission. Uses the Wave
 - **Recording a sale** of a dish or a front-of-house item with its own key, so a sale whose answer was lost can be sent again and is recorded once; recent sales, and voiding one.
 - Every difference from the web Menu & Costing page is listed in `mobile/README.md`.
 
+### Fixed (reorder wrote the shortfall in the wrong unit)
+
+Server, web and phone. No migration, no permission change.
+
+- **Reorder** (`POST /api/inventory/purchase-orders/:id/clone`) worked out par less stock in the item's kitchen unit but wrote it as the quantity of a line ordered in another unit: 62.5 kg short of a 12.5 kg bag became 62.5 bags. Each line is now converted to its own unit and rounded up to whole units. A line whose unit cannot be converted keeps its last quantity and the reply names it in `quantityWarnings`; the web alert and the phone notice tell the person to check it. A bad purchase order id or an inactive supplier answers 400 with a code, not a 500; a missing source order's 400 now carries one too.
+- **Order guides** offer an item with a package but no pack size in its kitchen unit, not as packages.
+
 ### Changed (menu costs, margins and on-hand stock are for `inventory:cost` holders)
 
 Server and web. No migration, no new permission. **Before deploying:** a custom role that should keep seeing menu costs needs `inventory:cost`; the seeded roles with menu access have it. A person's access follows their token, so a role change takes effect when it refreshes.

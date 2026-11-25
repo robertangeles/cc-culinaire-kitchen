@@ -20,6 +20,7 @@ import {
   purchaseOrderLine,
   stockLevel,
   ingredient,
+  ingredientSupplier,
   supplier,
   storeLocation,
   user,
@@ -31,6 +32,7 @@ import {
   role,
   rolePermission,
   permission,
+  unitConversion,
 } from "../db/schema.js";
 import { validateTransition, PO_TRANSITIONS } from "../utils/stateTransition.js";
 import * as thresholdService from "./thresholdService.js";
@@ -39,6 +41,7 @@ import * as pdfService from "./pdfService.js";
 import * as emailService from "./emailService.js";
 import * as auditService from "./auditService.js";
 import type { DbOrTx } from "./auditService.js";
+import { reorderQty, suggestedOrderQty } from "./poMath.js";
 import { AppError } from "../utils/appError.js";
 import { escapeHtml } from "../utils/escapeHtml.js";
 import { SUPPLIER_EMAIL_WINDOW_MS } from "@culinaire/shared";
@@ -842,6 +845,8 @@ export async function rejectPO(
 /**
  * Clone a previous PO as a new draft, adjusting quantities based on
  * current stock vs par level. Skips items where supplier is now inactive.
+ * Stock and par are in the kitchen unit, a line in the unit it is ordered in (poMath.reorderQty).
+ * A line whose unit cannot be converted keeps its last quantity and is named in `quantityWarnings`.
  */
 export async function clonePO(
   sourcePOId: string,
@@ -851,7 +856,7 @@ export async function clonePO(
 ) {
   // Fetch source PO and lines
   const source = await getPODetail(sourcePOId, orgId);
-  if (!source) throw new Error("Source purchase order not found");
+  if (!source) throw new AppError(400, "NOT_FOUND", "Source purchase order not found");
 
   // Validate supplier is still active
   const [sup] = await db
@@ -860,16 +865,17 @@ export async function clonePO(
     .where(eq(supplier.supplierId, source.supplierId));
 
   if (!sup || !sup.activeInd) {
-    throw new Error("Supplier is no longer active — cannot clone this PO");
+    throw new AppError(400, "VALIDATION", "Supplier is no longer active — cannot clone this PO");
   }
 
   const skippedItems: string[] = [];
+  const quantityWarnings: { ingredientId: string; ingredientName: string | null; code: "UNIT_NOT_CONVERTIBLE" }[] = [];
   const adjustedLines: CreatePOLineInput[] = [];
 
-  // Batch-load current stock + par for every source line at this location in two
-  // queries, not two per line (P1 T12 — a clone of a 500-line PO was ~1,000 queries).
+  // Batch-load stock, par, packaging and conversions for every source line in four
+  // queries, not four per line (P1 T12 — a clone of a 500-line PO was ~1,000 queries).
   const lineIngredientIds = source.lines.map((l) => l.ingredientId);
-  const [stockRows, parRows] = lineIngredientIds.length
+  const [stockRows, parRows, itemRows, conversionRows] = lineIngredientIds.length
     ? await Promise.all([
         db
           .select({ ingredientId: stockLevel.ingredientId, currentQty: stockLevel.currentQty })
@@ -891,39 +897,79 @@ export async function clonePO(
               eq(locationIngredient.activeInd, true),
             ),
           ),
+        db
+          .select({
+            ingredientId: ingredient.ingredientId,
+            baseUnit: ingredient.baseUnit,
+            purchaseUnit: ingredient.purchaseUnit,
+            packQty: ingredient.packQty,
+            contentQty: ingredient.contentQty,
+            contentUnit: ingredient.contentUnit,
+            densityGPerMl: ingredient.densityGPerMl,
+            minimumOrderQty: ingredientSupplier.minimumOrderQty,
+          })
+          .from(ingredient)
+          .leftJoin(
+            ingredientSupplier,
+            and(
+              eq(ingredientSupplier.ingredientId, ingredient.ingredientId),
+              eq(ingredientSupplier.supplierId, source.supplierId),
+              eq(ingredientSupplier.activeInd, true),
+            ),
+          )
+          .where(inArray(ingredient.ingredientId, lineIngredientIds)),
+        db
+          .select({
+            ingredientId: unitConversion.ingredientId,
+            fromUnit: unitConversion.fromUnit,
+            toBaseFactor: unitConversion.toBaseFactor,
+          })
+          .from(unitConversion)
+          .where(inArray(unitConversion.ingredientId, lineIngredientIds)),
       ])
-    : [[], []];
+    : [[], [], [], []];
   const stockByIngredient = new Map(stockRows.map((r) => [r.ingredientId, r.currentQty]));
   const parByIngredient = new Map(parRows.map((r) => [r.ingredientId, r.parLevel]));
+  const itemByIngredient = new Map(itemRows.map((r) => [r.ingredientId, r]));
 
   for (const line of source.lines) {
     const currentQty = Number(stockByIngredient.get(line.ingredientId) ?? 0);
     const parRaw = parByIngredient.get(line.ingredientId);
     const parLevel = parRaw != null ? Number(parRaw) : null;
 
-    // Calculate suggested qty: par level - current stock, or original qty if no par
-    let suggestedQty: number;
-    if (parLevel && parLevel > currentQty) {
-      suggestedQty = parLevel - currentQty;
-    } else if (parLevel && parLevel <= currentQty) {
+    // Order back up to par, or the original qty if no par
+    let orderedQty = line.orderedQty;
+    // Six decimals: what is left of the arithmetic is not a shortfall
+    const shortfall = Number(suggestedOrderQty(parLevel ?? 0, currentQty).toFixed(6));
+    if (parLevel && shortfall > 0) {
+      const item = itemByIngredient.get(line.ingredientId)!; // a line's ingredient is a foreign key, and never hard-deleted
+      const { qty, isConverted } = reorderQty(
+        shortfall,
+        line.orderedUnit,
+        item,
+        conversionRows.filter((c) => c.ingredientId === line.ingredientId),
+        item.minimumOrderQty != null ? Number(item.minimumOrderQty) : null,
+      );
+      if (qty !== null) orderedQty = String(qty);
+      if (!isConverted) {
+        quantityWarnings.push({ ingredientId: line.ingredientId, ingredientName: line.ingredientName, code: "UNIT_NOT_CONVERTIBLE" });
+      }
+    } else if (parLevel) {
       // Stock is at or above par — skip this item
       skippedItems.push(line.ingredientName ?? line.ingredientId);
       continue;
-    } else {
-      // No par level — use the original ordered qty
-      suggestedQty = Number(line.orderedQty);
     }
 
     adjustedLines.push({
       ingredientId: line.ingredientId,
-      orderedQty: String(Math.ceil(suggestedQty * 100) / 100),
+      orderedQty,
       orderedUnit: line.orderedUnit,
       unitCost: line.unitCost ?? undefined,
     });
   }
 
   if (adjustedLines.length === 0) {
-    throw new Error("No items need reordering — all items are at or above par level");
+    throw new AppError(400, "VALIDATION", "No items need reordering — all items are at or above par level");
   }
 
   // Create the new draft PO
@@ -937,11 +983,11 @@ export async function clonePO(
   });
 
   logger.info(
-    { sourcePOId, newPOId: newPO.poId, linesCloned: adjustedLines.length, skipped: skippedItems.length },
+    { sourcePOId, newPOId: newPO.poId, linesCloned: adjustedLines.length, skipped: skippedItems.length, notConverted: quantityWarnings.length },
     "PO cloned",
   );
 
-  return { ...newPO, skippedItems };
+  return { ...newPO, skippedItems, quantityWarnings };
 }
 
 // ─── cancelPO ─────────────────────────────────────────────────────
