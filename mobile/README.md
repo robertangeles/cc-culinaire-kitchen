@@ -372,10 +372,10 @@ The Menu tab is the web's Menu & Costing page (`MenuIntelligencePage.tsx`): its 
 menu route, and comes last in the tab order. Adding, changing and deleting items, saving a target and voiding a sale are offered only to `menu:manage` holders, and per item only where the server says `canManage`
 (its creator or an organisation admin). The menu belongs to the organisation; a sale is recorded at the current location.
 
-**Costs.** A food cost, percentage or margin is the server's stored figure (`storedItemCosts`), shown only to `inventory:cost` holders and only when the server sent it. The server sends menu costs to everyone with
-`menu:read`, so the store drops them for anyone else (`withoutCosts`, `lineWithoutCosts`, and a sale's on-hand figures), also when it reads what an earlier session kept on the phone. Nothing is worked out from
+**Costs.** A food cost, percentage or margin is the server's stored figure (`storedItemCosts`), shown only to `inventory:cost` holders and only when the server sent it. The server leaves menu costs
+out for anyone else (`forViewer`); the store drops them too (`withoutCosts`, `lineWithoutCosts`, and a sale's on-hand figures), for a server from before that change and for what an earlier session kept on the phone. Nothing is worked out from
 what is left. The form's live preview uses the shared web editor functions (`previewLineCost`, `editorItemCosts`) and says it is a preview; a category's actual is `categoryActualFoodCostPct`. A person who may not see
-costs can still change a recipe: a changed line keeps the cost it had, unseen.
+costs can still change a recipe: the new version of a line is sent without a cost and before the old one is removed, so the server carries the unseen cost over (the same unit, for a typed name).
 
 **Offline.** The list, targets, items sold as they are and the lines of items already opened are kept on the phone (`menu.<user>`, `menu.lines.<user>.<item>`) and read with no signal, with their time. Nothing is
 queued: every write waits for the server, and says when it needs a connection.
@@ -392,7 +392,6 @@ Differences from the web (`components/menu`, `components/menu-intelligence/Recor
 
 | Web | Phone | Why |
 |---|---|---|
-| Costs, margins, line costs and a sale's on-hand stock shown to everyone with `menu:read` | Only with `inventory:cost` | Open for the owner. The server sends them to every `menu:read` holder (`GET /api/menu/items`, `/analysis`, `/items/:id/ingredients`, `/items/:id/pandl-cost`, `POST /items/:id/sales` and `/consumables/:id/sales`; `menuIntelligenceService.ts`, `saleService.ts`, no `forViewer` from `utils/costFields.ts`) and the web shows them (`MenuItemList.tsx`, `MenuItemDetail.tsx`, `MenuDashboard.tsx`, `MenuItemFormModal.tsx`, `CategorySettings.tsx`, `RecordSaleModal.tsx`). The phone takes the safer side. |
 | Add Menu Item and Save target shown to everyone with `menu:read` (a 403 without `menu:manage`) | Hidden without `menu:manage` | The server's gate. |
 | Nine-column table, sortable by any column | One row per item, A to Z; search, category and class filters | |
 | Waste column, dashboard, engineering matrix, AI recommendations, replacement recipe, sales CSV import, Recalculate | Not on the phone | Later slices; the web keeps them. |
@@ -401,11 +400,12 @@ Differences from the web (`components/menu`, `components/menu-intelligence/Recor
 | A typed ingredient with no cost shows $0.00 in the form | "No cost yet" (it still adds nothing to the preview) | |
 | Deleting an item asks nothing | Asks first | |
 | An edit sends every field, units sold among them, so a sale recorded while the form is open is taken out of the count again | Sends only what changed | |
-| An edit removes every line and adds them all again; a failure in between loses lines, a prep sub-recipe line becomes a plain one, and the costs of untouched lines are worked out anew | Untouched lines are left alone; a changed line is added before the old one goes | A prep line that is itself changed still becomes a plain one: the route does not send or take its prep link. |
+| An edit by someone who sees costs removes every line and adds them all again; a failure in between loses lines, a prep sub-recipe line becomes a plain one, and the costs of untouched lines are worked out anew | Untouched lines are left alone; a changed line is added before the old one goes | A prep line that is itself changed still becomes a plain one: the route does not send or take its prep link. |
 | Units Sold is on the add form but not sent | On the change form only | The create route does not take it. |
 | A line with a name and no quantity is dropped without a word | "Enter how much" | |
 | Category up to 100 characters on add, 50 on edit (server) | 50 on both | So an item can always be changed. |
 | Recipe import: "2 cups" becomes 2 ml, "8 oz" 8 g, "1 lb" 1 kg, "1/2" becomes 1, "to taste" becomes 0 | Cups stay cups, oz and lb become their grams, fractions are read, no number is left for the person to fill | The web changes what the amounts mean. |
+| A note says why costs are missing (`CostsHiddenNote.tsx`) | The figures are simply not there | |
 | Recipe import is grouped by lab, with each owner's name | One list, searched by name or lab | |
 | Refresh cost sits in the edit form | On the item's page, for `inventory:cost` holders | |
 | "+ Add to Catalog", keyboard shortcuts, the line's cost breakdown text | Not on the phone | |

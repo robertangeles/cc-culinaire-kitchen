@@ -22,7 +22,7 @@ export interface DraftLine {
   note: string | null;
   quantity: string;
   unit: string;
-  /** Kept, and sent with a changed line, even when the person may not see it. "" = none: the server takes the catalogue's. */
+  /** "" = none sent: the server keeps the cost the line has for someone who may not see it, else takes the catalogue's. */
   unitCost: string;
   yieldPct: string;
   baseUnit: string | null;

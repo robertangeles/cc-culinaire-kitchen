@@ -33,7 +33,7 @@ export interface MenuStoreDeps {
   kv: KvStore;
   userId: number;
   locationId: string;
-  /** Holds `inventory:cost`. The server sends menu costs to everyone with `menu:read`, so they are dropped here for anyone else. */
+  /** Holds `inventory:cost`. Costs are dropped here too for anyone else, for a server from before the menu routes left them out. */
   canSeeCost: boolean;
   now: () => number;
   newId: () => string;
