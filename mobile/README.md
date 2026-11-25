@@ -436,7 +436,7 @@ It lists the server's unread notifications (`GET /api/inventory/notifications?li
 (`notificationView.ts`; every type in `NOTIFICATION_TYPES` has its own words, a type this build does not know reads "Notification"). The list is kept on the phone, so it opens with no signal.
 It is read when the tab opens, when the app wakes, when a push arrives and every minute while the app is open. **Mark read** is the queued command `notification.read`
 (a 404 counts as done), so it works offline and the row stays gone if a refresh lands before the server has it. **Open** shows only where the phone has the screen the notification is about
-(an overdue delivery opens the Receive list; an approval, its answer or a discrepancy opens its order, for someone with the Orders tab); the server's link (`pushLink`) names routes for shifts and documents that come in later waves.
+(an overdue delivery opens the Receive list; an approval, its answer or a discrepancy opens its order, for someone with the Orders tab; a push about a discrepancy names only the delivery and opens the orders list); the server's link (`pushLink`) names routes for shifts and documents that come in later waves.
 
 **Push** (`push.ts`, native side in `nativePush.ts`): off until the person taps **Turn on** (the card at the top of the inbox, or Notification settings); the app never asks at launch.
 Turning it on asks the system, gets the Expo push token and registers it with `POST /api/notifications/register-device`, sending the refresh token so the server ties it to this sign-in.

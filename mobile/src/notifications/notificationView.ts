@@ -108,8 +108,12 @@ export function phoneRoute(type: string, link: string, user: AuthUser): string |
   return null;
 }
 
-/** The phone screen for an inbox row. */
-export const routeFor = (n: AppNotification, user: AuthUser) => phoneRoute(n.type, pushLink(n.type, n.relatedEntityType, n.relatedEntityId), user);
+/** The phone screen for an inbox row. A discrepancy is about a delivery, and its payload says of which order (a push has no payload: it opens the list). */
+export function routeFor(n: AppNotification, user: AuthUser): string | null {
+  const { poId } = n.payload;
+  const link = n.type === "DISCREPANCY_ALERT" && typeof poId === "string" ? pushLink(n.type, "purchase_order", poId) : pushLink(n.type, n.relatedEntityType, n.relatedEntityId);
+  return phoneRoute(n.type, link, user);
+}
 
 /** Every type the inbox has words for (the tests check it covers the server's list). */
 export const KNOWN_TYPES = Object.keys(COPY);

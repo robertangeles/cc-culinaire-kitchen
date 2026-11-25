@@ -63,7 +63,11 @@ describe("where a notification opens", () => {
       expect(routeFor(n(type), user(["purchasing:approve"]))).toBeNull(); // the server would refuse the order itself
       expect(routeFor(n(type), user(["inventory:count"]))).toBeNull();
     }
-    expect(routeFor(n("DISCREPANCY_ALERT", "receiving_session"), user([], ["Administrator"]))).toBe("/(app)/(orders)"); // it names a delivery, not an order
+    // It names a delivery; its payload names the order. Without that (or with something else in it) the list.
+    const delivery = n("DISCREPANCY_ALERT", "receiving_session");
+    expect(routeFor({ ...delivery, payload: { poId: id } }, user([], ["Administrator"]))).toBe(`/(app)/(orders)/order?poId=${id}&from=link`);
+    expect(routeFor({ ...delivery, payload: { poId: "../x" } }, user([], ["Administrator"]))).toBe("/(app)/(orders)");
+    expect(routeFor(delivery, user([], ["Administrator"]))).toBe("/(app)/(orders)");
   });
 
   it("has no phone screen yet for shifts, documents or Brain", () => {
