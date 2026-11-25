@@ -251,7 +251,7 @@ export function OrderForm({ store, title, editing }: { store: DraftStore; title:
                 {snap.saveError ? <Text variant="error" accessibilityLiveRegion="polite">{snap.saveError}</Text> : null}
                 {rights.submit ? <Button label={snap.saving ? "Saving…" : "Save and submit"} disabled={snap.saving} onPress={() => void save(true)} /> : null}
                 <Button kind={rights.submit ? "ghost" : "primary"} label={snap.saving && !rights.submit ? "Saving…" : editing ? "Save changes" : "Save as draft"} disabled={snap.saving} onPress={() => void save(false)} />
-                {editing || isEmpty(draft) ? null : <Button kind="quiet" label="Discard this order" disabled={snap.saving} onPress={discard} />}
+                {editing || isEmpty(draft) ? null : <Button kind="danger" label="Discard this order" disabled={snap.saving} onPress={discard} />}
               </>
             ) : null}
             <Button kind="quiet" label={editing ? "Back without saving" : "Back to orders"} onPress={() => router.back()} />
