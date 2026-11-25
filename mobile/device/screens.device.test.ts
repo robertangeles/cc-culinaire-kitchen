@@ -111,6 +111,8 @@ const NAMES = {
   areaB: "Back bar",
   location2: "Harbour St kitchen",
   lamb: "Lamb shoulder",
+  gin: "London dry gin",
+  tonic: "Tonic water",
   supplier: "Harbour Produce",
   supplierLong: "Yarra Valley Growers and Smallgoods Cooperative",
 };
@@ -229,6 +231,25 @@ async function sentOrder(supplierId: string, lines: Array<{ ingredientId: string
   });
   await m.client.request("POST", `${INV}/purchase-orders/${po.poId}/submit`);
 }
+/** The organisation's second location, made by whichever test needs it first. */
+let secondLocationId = "";
+async function secondLocation(): Promise<string> {
+  if (!secondLocationId) {
+    const ctx = await m.client.request<{ organisationId: number }>("GET", "/api/users/location-context");
+    secondLocationId = (await m.client.request<{ storeLocation: { storeLocationId: string } }>("POST", "/api/store-locations", { body: { organisationId: ctx.organisationId, locationName: NAMES.location2 } })).storeLocation.storeLocationId;
+  }
+  return secondLocationId;
+}
+
+/** A transfer between two locations made as the web makes it, then sent and received (all of it) when asked. */
+async function transfer(from: string, to: string, lines: Array<{ ingredientId: string; sentQty: number; sentUnit: string }>, until: "INITIATED" | "SENT" | "RECEIVED") {
+  const t = await m.client.request<{ transferId: string; lines: Array<{ lineId: string; sentQty: number }> }>("POST", `${INV}/transfers`, { body: { fromLocationId: from, toLocationId: to, lines } });
+  if (until === "INITIATED") return;
+  await m.client.request("POST", `${INV}/transfers/${t.transferId}/send`);
+  if (until === "SENT") return;
+  await m.client.request("POST", `${INV}/transfers/${t.transferId}/receive`, { body: { receivedLines: t.lines.map((l) => ({ lineId: l.lineId, receivedQty: Number(l.sentQty) })) } });
+}
+
 const dayFromNow = (days: number) => new Date(Date.now() + days * 86_400_000).toISOString().slice(0, 10);
 
 /** Open one of Account's rows. */
@@ -279,6 +300,24 @@ async function signedIn() {
   await submitSignIn();
   await enterCode(freshCode);
   await waitFor(/^More(,|$)|^Account(,|$)/, 60_000);
+}
+
+/** A store room with something to look at: gin critical and tonic low against par, one transfer on its way here, one waiting to be sent. */
+let stocked = false;
+async function stockRoom() {
+  if (stocked) return;
+  const there = await secondLocation();
+  const item = async (name: string, unit: string, cost: string) =>
+    (await m.client.request<{ ingredientId: string }>("POST", `${INV}/ingredients`, { body: { ingredientName: name, ingredientCategory: "beverages", baseUnit: unit, unitCost: cost } })).ingredientId;
+  const gin = await item(NAMES.gin, "L", "32.00");
+  const tonic = await item(NAMES.tonic, "each", "1.20");
+  await m.client.request("POST", `${INV}/locations/${locationId}/activate-items`, { body: { ingredientIds: [gin, tonic] } });
+  for (const [id, parLevel] of [[gin, "6"], [tonic, "24"]]) await m.client.request("PATCH", `${INV}/locations/${locationId}/ingredients/${id}`, { body: { parLevel } });
+  const line = (ingredientId: string, sentQty: number) => ({ ingredientId, sentQty, sentUnit: ingredientId === gin ? "L" : "each" });
+  await transfer(there, locationId, [line(gin, 1), line(tonic, 12)], "RECEIVED");
+  await transfer(there, locationId, [line(gin, 2), line(tonic, 10)], "SENT");
+  await transfer(locationId, there, [line(tonic, 3)], "INITIATED");
+  stocked = true;
 }
 
 async function pick(field: string, typed: string, name: string) {
@@ -412,7 +451,7 @@ describe.skipIf(!process.env.SCREENS_OUT)(`screens on ${FORM}`, { timeout: 600_0
     await waitFor(/^More(,|$)|^Account(,|$)/, 60_000);
   });
 
-  it("home, ask, recipes, receive, inbox", async () => {
+  it("home, ask, recipes, receive, inbox, transfers, stock", async () => {
     await signedIn();
     await sleep(2500);
     await shot("07-home");
@@ -441,6 +480,12 @@ describe.skipIf(!process.env.SCREENS_OUT)(`screens on ${FORM}`, { timeout: 600_0
     await tab("Inbox");
     await waitFor("You're all caught up", 30_000);
     await shot("95-inbox-empty");
+    await tab("Transfers");
+    await waitFor("No transfers yet", 30_000);
+    await shot("55-transfers-empty");
+    await tab("Stock");
+    await waitFor("No stock figures yet", 30_000);
+    await shot("45-stock-empty");
   });
 
   it("count with no stock take open", async () => {
@@ -884,9 +929,7 @@ describe.skipIf(!process.env.SCREENS_OUT)(`screens on ${FORM}`, { timeout: 600_0
     await signedIn();
     const me = await m.client.request<{ userId?: number; user?: { userId: number } }>("GET", "/api/auth/me");
     const userId = me.userId ?? me.user!.userId;
-    const ctx = await m.client.request<{ organisationId: number }>("GET", "/api/users/location-context");
-    const second = await m.client.request<{ storeLocation: { storeLocationId: string } }>("POST", "/api/store-locations", { body: { organisationId: ctx.organisationId, locationName: NAMES.location2 } });
-    await m.client.request("POST", `/api/store-locations/${second.storeLocation.storeLocationId}/staff`, { body: { userId } });
+    await m.client.request("POST", `/api/store-locations/${await secondLocation()}/staff`, { body: { userId } });
     await launch();
     await waitFor(/^More(,|$)|^Account(,|$)/, 60_000);
     if (await has(/^More(,|$)/)) {
@@ -906,6 +949,87 @@ describe.skipIf(!process.env.SCREENS_OUT)(`screens on ${FORM}`, { timeout: 600_0
     await sleep(2500);
     await shot("63-delete-account");
     await tap("Cancel");
+  });
+
+  it("transfers: the list, a receive, one to send, a new one, offline", async () => {
+    await stockRoom();
+    await signedIn();
+    await tab("Transfers");
+    await waitFor(/^to receive$/i, 30_000);
+    await shot("55b-transfers-list");
+    await tap(new RegExp(`^From ${NAMES.location2}, 2 items, On its way`));
+    await waitFor(/^what arrived$/i, 30_000);
+    await type(`${NAMES.tonic} received, in each`, "8");
+    await hideKeyboard();
+    await waitFor("Short by 2 each");
+    await shot("56-transfer-receive");
+    await press("Back to transfers");
+    await tap(new RegExp(`^To ${NAMES.location2}, 1 item`));
+    await scrollTo("Send now");
+    await shot("56b-transfer-to-send");
+    await press("Back to transfers");
+    await press("New transfer");
+    await waitFor(/^going to$/i);
+    await shot("57-transfer-new");
+    await press("Send now");
+    await sleep(1000);
+    await shot("57b-transfer-new-error");
+    await tapLabel(NAMES.location2);
+    await pick("Add an item", "Tonic", NAMES.tonic);
+    await type(`How much ${NAMES.tonic}, in each`, "2");
+    await hideKeyboard();
+    await shot("57c-transfer-new-filled");
+    await setAirplane(true);
+    await press("Send now");
+    await waitFor(/waiting to send/i, 30_000);
+    await sleep(2500);
+    await shot("57d-transfers-offline");
+    await setAirplane(false);
+    await waitGone(/waiting to send/i, 120_000);
+  });
+
+  it("stock: the figures, an item, the lookup, a request", async () => {
+    await stockRoom();
+    await signedIn();
+    await tab("Stock");
+    await waitFor(/^Critical, reorder now/, 30_000);
+    await shot("45b-stock");
+    await tap(/^Critical, reorder now/);
+    await waitFor(new RegExp(`^${NAMES.gin}, on hand`));
+    await shot("46-stock-critical-open");
+    await scrollToEnd();
+    await shot("46b-stock-end");
+    await scrollTo(new RegExp(`^${NAMES.gin}, on hand`));
+    await tap(new RegExp(`^${NAMES.gin}, on hand`));
+    await waitFor(/^kept in$/i);
+    await sleep(1500); // its stock at every location comes from the server
+    await shot("47-stock-item");
+    await scrollToEnd();
+    await shot("47b-stock-item-end");
+    await press("Back");
+    await press("My requests");
+    await waitFor("You haven't asked for a new item yet.", 20_000);
+    await shot("49c-stock-requests-empty");
+    await press("Back");
+    await press("Look up an item");
+    await type("Search the catalogue", "to");
+    await hideKeyboard();
+    await shot("48-stock-lookup");
+    await type("Search the catalogue", "yuzu");
+    await hideKeyboard();
+    await shot("48b-stock-lookup-nothing");
+    await press("Not in the catalogue? Ask for it");
+    await waitFor("Ask for a new item");
+    await tapLabel("Kitchen Ingredient");
+    await tapLabel("Beverages");
+    await type("Unit it's counted in (optional)", "L");
+    await type("How many you have now (optional)", "2");
+    await hideKeyboard();
+    await shot("49-stock-request");
+    await press("Send request");
+    await waitFor("My requests", 30_000);
+    await sleep(3000); // the queue sends it: "Sent for review"
+    await shot("49b-stock-requests");
   });
 
   it("first run: join by key, wrong key", async () => {
