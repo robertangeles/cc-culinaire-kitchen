@@ -768,6 +768,7 @@ describe.skipIf(!process.env.SCREENS_OUT)(`screens on ${FORM}`, { timeout: 600_0
     await waitFor(/^who can see it$/i, 90_000);
     await shot("88-recipe");
     await scrollTo(/^method$/i);
+    await scroll("down");
     await shot("88b-recipe-method");
     await scrollTo("Make dairy-free");
     await tap("Make dairy-free");
