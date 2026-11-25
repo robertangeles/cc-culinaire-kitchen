@@ -10,8 +10,12 @@ export const PAGE = 50;
 export function createBenchApi(client: ApiClient) {
   const channel = (key: string) => `/api/bench/channels/${encodeURIComponent(key)}`;
   const path = (room: Room) => (room.kind === "dm" ? `/api/bench/dm/threads/${room.threadId}` : channel(room.key));
-  // A picture the server keeps itself has a site-relative path; the phone needs the whole address.
-  const whole = (photo: string | null) => (photo?.startsWith("/") ? `${client.baseUrl}${photo}` : photo);
+  // A picture's address is text its owner can edit. As the web's content policy has it, only the site's own uploads and Cloudinary are loaded: anything
+  // else would let a stranger's message make this phone call any host. A site path gets the whole address.
+  const whole = (photo: string | null) => {
+    if (photo?.startsWith("/uploads/") && !photo.includes("..")) return `${client.baseUrl}${photo}`;
+    return photo?.startsWith("https://res.cloudinary.com/") ? photo : null;
+  };
   return {
     whole,
     channels(): Promise<BenchChannel[]> {

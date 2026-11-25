@@ -457,6 +457,7 @@ Nothing of the Bench is kept on the phone (messages are private: memory only) an
   Try again looks on the server first. Every emit is volatile: the socket library otherwise keeps what it could not send and posts it at the next connect, after the person gave up on it.
   Known limit: the server takes no id for a post, so one that reaches it after Try again looked can, rarely, be posted twice.
 - **Privacy rules** (until the owner decides who may see who is online in Everyone and whom a direct message may reach): presence is shown in a kitchen's own channel only; a direct message can be started only with someone met in a kitchen's channel (who is in it, who wrote in it) or in a thread there already is. The server scopes each room; the phone filters nothing.
+- **Pictures**: only the site's own uploads and Cloudinary are loaded (`whole` in `benchApi.ts`), as the web's content policy allows; a person with any other address shows their initial.
 
 Differences from the web, found while comparing:
 

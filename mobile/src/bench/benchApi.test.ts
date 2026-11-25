@@ -11,11 +11,16 @@ function setup(reply: unknown = []) {
 
 describe("bench api", () => {
   it("reads a room's messages, the latest page or the one before a time, with whole picture addresses", async () => {
-    const { api, request } = setup({ messages: [message, { ...message, messageId: "m2", userPhotoPath: "https://cdn/x.png" }] });
-    expect((await api.messages({ kind: "channel", key: "org_5" })).map((m) => m.userPhotoPath)).toEqual(["https://kitchen.test/uploads/a.png", "https://cdn/x.png"]);
+    const { api, request } = setup({ messages: [message, { ...message, messageId: "m2", userPhotoPath: "https://res.cloudinary.com/x/b.png" }] });
+    expect((await api.messages({ kind: "channel", key: "org_5" })).map((m) => m.userPhotoPath)).toEqual(["https://kitchen.test/uploads/a.png", "https://res.cloudinary.com/x/b.png"]);
     expect(request.mock.calls[0].slice(0, 2)).toEqual(["GET", "/api/bench/channels/org_5/messages?limit=50"]);
     await api.messages({ kind: "dm", threadId: 3 }, "2026-11-26T01:00:00.000Z");
     expect(request.mock.calls[1][1]).toBe("/api/bench/dm/threads/3/messages?limit=50&before=2026-11-26T01%3A00%3A00.000Z");
+  });
+
+  // A picture's address is text its owner can edit: as the web's content policy has it, only the site's own uploads and Cloudinary are loaded.
+  it.each(["https://evil.test/x.png", "http://res.cloudinary.com/x.png", "https://res.cloudinary.com.evil.test/x.png", "https://res.cloudinary.com@evil.test/x.png", "//evil.test/x.png", "/api/users/1", "/uploads/../api/x", "file:///data/x", "data:image/png;base64,AA", "javascript:1"])("never loads a picture from %s", (path) => {
+    expect(setup().api.whole(path)).toBeNull();
   });
 
   it("pins, unpins and searches inside one channel", async () => {
