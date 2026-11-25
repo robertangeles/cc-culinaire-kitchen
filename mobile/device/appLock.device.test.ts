@@ -1,5 +1,5 @@
 import { describe, it, expect, beforeAll, afterAll, onTestFailed, beforeEach } from "vitest";
-import { execFileSync } from "node:child_process";
+import { execFileSync, spawn } from "node:child_process";
 import { mkdirSync, writeFileSync } from "node:fs";
 import { resolve } from "node:path";
 import { adb, back, clearApp, clearField, dismissSavePassword, dump, findAll, forceStop, has, hideKeyboard, key, openApp, openTab, PACKAGE, screenSize, setAnimations, setRotation, swipe, tap, tapAt, typeInto, waitFor as waitForExact } from "./adb";
@@ -15,6 +15,7 @@ const METRO = process.env.METRO_URL ?? "http://10.0.2.2:8098";
 const OUT = resolve(process.env.SCREENS_OUT ?? "device/_shots/lock", process.env.SCREENS_FORM ?? "tablet");
 const API = "/api/inventory";
 const PIN = "4826";
+const ADB = process.env.ADB ?? `${process.env.ANDROID_HOME ?? `${process.env.HOME}/Android/Sdk`}/platform-tools/adb`;
 const onEmulator = (process.env.ANDROID_SERIAL ?? "").startsWith("emulator-");
 const sleep = (ms: number) => new Promise<void>((r) => setTimeout(r, ms));
 const shell = (...args: string[]) => adb(["shell", ...args]);
@@ -27,7 +28,7 @@ async function shot(name: string) {
   await sleep(900);
   for (let i = 0; i < 3 && (await dismissSavePassword()); i++);
   mkdirSync(OUT, { recursive: true });
-  writeFileSync(resolve(OUT, `${name}.png`), execFileSync(process.env.ADB ?? `${process.env.ANDROID_HOME ?? `${process.env.HOME}/Android/Sdk`}/platform-tools/adb`, ["exec-out", "screencap", "-p"], { maxBuffer: 1 << 26 }));
+  writeFileSync(resolve(OUT, `${name}.png`), execFileSync(ADB, ["exec-out", "screencap", "-p"], { maxBuffer: 1 << 26 }));
 }
 /** Copper capitals labels reach the screen dump in capitals, so plain words are matched whatever their case. */
 const waitFor = (what: string | RegExp, ms?: number) => waitForExact(typeof what === "string" ? new RegExp(`^${what.replace(/[.?]/g, "\\$&")}$`, "i") : what, ms);
@@ -75,6 +76,22 @@ async function press(label: string | RegExp) {
   }
   throw new Error(`no button labelled ${String(label)}`);
 }
+/** What a screen reader (and a person) can get at. `dump` also lists what is mounted but hidden, as the app is under its lock. */
+async function readable(what: RegExp): Promise<boolean> {
+  for (let i = 0; i < 6; i++) {
+    try {
+      shell("uiautomator", "dump", "--compressed", "/sdcard/readable.xml");
+      return [...adb(["exec-out", "cat", "/sdcard/readable.xml"]).matchAll(/(?:text|content-desc)="([^"]*)"/g)].some((t) => what.test(t[1]));
+    } catch {
+      await sleep(400);
+    }
+  }
+  throw new Error("could not read the screen");
+}
+async function waitReadable(what: RegExp, ms = 30_000) {
+  for (const end = Date.now() + ms; Date.now() < end; await sleep(500)) if (await readable(what)) return;
+  throw new Error(`${String(what)} cannot be read on the screen`);
+}
 /** The system's own PIN prompt, not a window of the app. */
 const promptUp = () => shell("dumpsys", "window").includes("BiometricPrompt");
 async function waitPrompt(up: boolean) {
@@ -96,17 +113,28 @@ async function unlock() {
 }
 /** The lock screen, and nothing of the app to read behind it. */
 async function expectLocked() {
-  await waitFor("Locked", 60_000);
-  expect(await has(TABS)).toBe(false);
-  expect(await has(new RegExp(poNumber))).toBe(false);
+  await waitReadable(/^Locked$/, 60_000);
+  expect(await readable(TABS)).toBe(false);
+  expect(await readable(new RegExp(poNumber))).toBe(false);
 }
 const status = async () => (await m.client.request<{ status: string }>("GET", `${API}/purchase-orders/${poId}`)).status;
+const comeBack = async () => {
+  shell("am", "start", "-a", "android.intent.action.MAIN", "-c", "android.intent.category.LAUNCHER", "-n", `${PACKAGE}/.MainActivity`);
+  await sleep(2500);
+};
 const goHome = async (ms: number) => {
   await key("KEYCODE_HOME");
   await sleep(ms);
-  shell("monkey", "-p", PACKAGE, "-c", "android.intent.category.LAUNCHER", "1");
-  await sleep(2500);
+  await comeBack();
 };
+/** Films the way back to the app, to look at frame by frame: nothing of the app may show before the lock. */
+async function filmComeBack(name: string) {
+  const film = spawn(ADB, ["shell", "screenrecord", "--time-limit", "6", "/sdcard/back.mp4"]);
+  await sleep(1500);
+  await comeBack();
+  await new Promise((done) => film.on("exit", done));
+  adb(["pull", "/sdcard/back.mp4", resolve(OUT, `${name}.mp4`)]);
+}
 
 describe.skipIf(!process.env.SCREENS_OUT || process.env.EXPO_PUBLIC_APP_LOCK !== "on" || !onEmulator)("app lock walk", { timeout: 900_000 }, () => {
   beforeEach((ctx) => {
@@ -147,7 +175,7 @@ describe.skipIf(!process.env.SCREENS_OUT || process.env.EXPO_PUBLIC_APP_LOCK !==
     await setRotation(false);
     await press("Unlock");
     await waitFor("Set up a screen lock", 20_000);
-    expect(await has(TABS)).toBe(false);
+    expect(await readable(TABS)).toBe(false);
     await shot("l03-no-screen-lock");
   });
 
@@ -162,7 +190,7 @@ describe.skipIf(!process.env.SCREENS_OUT || process.env.EXPO_PUBLIC_APP_LOCK !==
     await expectLocked();
     await shot("l05-cancelled");
     await unlock();
-    await waitFor(TABS, 60_000);
+    await waitReadable(TABS, 60_000);
     await shot("l06-unlocked");
   });
 
@@ -186,7 +214,7 @@ describe.skipIf(!process.env.SCREENS_OUT || process.env.EXPO_PUBLIC_APP_LOCK !==
     expect(await status()).toBe("PENDING_APPROVAL");
 
     await unlock();
-    await waitFor("Plain flour", 30_000);
+    await waitReadable(/^Plain flour$/);
     await press("Approve");
     await waitFor(new RegExp(`^Approve ${poNumber}\\?`));
     await tap(/^approve$/i);
@@ -197,13 +225,19 @@ describe.skipIf(!process.env.SCREENS_OUT || process.env.EXPO_PUBLIC_APP_LOCK !==
 
   it("stays open over a short trip away, is covered in the app switcher, and locks after more than a minute", async () => {
     await goHome(10_000);
-    await waitFor("Plain flour", 30_000);
+    await waitReadable(/^Plain flour$/);
+    // From the home screen: opened from the app itself, the switcher shows its live window.
+    await key("KEYCODE_HOME");
+    await sleep(2000);
     await key("KEYCODE_APP_SWITCH");
     await sleep(2500);
     await shot("l12-app-switcher");
-    await goHome(1000);
-    await waitFor("Plain flour", 30_000);
-    await goHome(65_000);
+    expect(await readable(new RegExp(poNumber))).toBe(false);
+    await comeBack();
+    await waitReadable(/^Plain flour$/);
+    await key("KEYCODE_HOME");
+    await sleep(65_000);
+    await filmComeBack("l13-the-way-back");
     await expectLocked();
     await shot("l13-locked-after-a-minute");
     await back();

@@ -489,7 +489,8 @@ Nobody else sees a lock or a setting. `LockProvider` is around every screen (`ap
 
 - **Locked** at a cold start, at a sign-in, and when the app was in the background for more than 60 seconds (`GRACE_MS`). Elapsed time is read from the phone's clock and from the app's own running time, whichever is longer; a clock that went backwards locks.
 - **The lock screen** says nothing of the kitchen: Unlock and Sign out. The screens stay mounted under it (what was typed is there after an unlock), behind an opaque page and hidden from screen readers; Back does nothing.
-  While the app is not in front the same blank page covers it, so the app switcher and the way back show nothing.
+  While the app is not in front a blank page covers it, so the way back shows nothing, nor the app switcher on iPhone and iPad. Android takes its app switcher picture before the page is drawn, so there the app asks for no picture at all
+  (`hideFromRecents` in `app.config.ts`, Android 13 and later, for everyone; ordinary screenshots still work). On Android 12 and earlier the app switcher can still show the last screen.
 - **Unlock** is the system's own prompt: Face ID, Touch ID or Android biometrics, with the device passcode as the fallback (`nativeAuth.ts`, `expo-local-authentication`). A cancelled prompt, five failed tries or a lockout leave it locked; nothing but Sign out signs out.
 - **No passcode and no biometrics on the device:** the screen says to set one up or sign out. The app does not open for that person until then.
 - **Guarded actions** call `confirm(reason)` right before the request: Approve, Reject and Raise credit note today, and any later approval (a compliance document verified or rejected, a roster published) should. Asked again when the last unlock is more than two minutes old (`RECENT_MS`);

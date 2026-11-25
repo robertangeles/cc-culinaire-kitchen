@@ -26,7 +26,7 @@ Run commands from the repository root. `eas` is the Expo build service; use it t
 |---|---|
 | Biometric app lock for people who hold approval, roster or compliance permissions (owner's Q6: before the first store release, and before any roster or compliance data is kept on the phone) | **Done in code** (`mobile/README.md`, "App lock"). Still needs: a new development build (below) and the device checks at the end of this file, on the iPhone, the iPad and the moto g86. |
 
-**The app lock needs a new dev client.** `expo-local-authentication` is native code and the Face ID sentence is in the iOS build, so a development build made before it dies at start with "Cannot find native module 'ExpoLocalAuthentication'". Nothing has been built in the cloud: run the dev client commands under "Test builds" once for each platform (they use your Expo account's build allowance), or rebuild the Android one locally for free (`mobile/device/README.md`, "Rebuild and install"). If a build has already reached a tester by then, raise `version` first (the version rule above).
+**The app lock needs a new dev client.** `expo-local-authentication` is native code, the Face ID sentence is in the iOS build and one line in Android's MainActivity keeps the app out of the app switcher's pictures, so a development build made before it dies at start with "Cannot find native module 'ExpoLocalAuthentication'". Nothing has been built in the cloud: run the dev client commands under "Test builds" once for each platform (they use your Expo account's build allowance), or rebuild the Android one locally for free (`mobile/device/README.md`, "Rebuild and install"). If a build has already reached a tester by then, raise `version` first (the version rule above).
 
 ## One-time setup (owner)
 

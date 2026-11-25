@@ -26,7 +26,8 @@ export function LockProvider({ lock, user, onSignOut, children }: { lock: AppLoc
   const hidden = locked || (snapshot.covered && user !== null && lockRequired(user));
   return (
     <LockContext.Provider value={guard}>
-      <View style={styles.fill} aria-hidden={hidden}>
+      {/* Never flattened: Android would otherwise move every screen to a new native parent each time it locks. */}
+      <View collapsable={false} style={styles.fill} aria-hidden={hidden}>
         {children}
       </View>
       {hidden ? (

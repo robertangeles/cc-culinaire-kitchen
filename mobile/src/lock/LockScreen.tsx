@@ -23,7 +23,7 @@ export function LockScreen({ problem, busy, onUnlock, onSignOut }: Pick<LockSnap
   return (
     <Screen>
       <Brand size={140} />
-      <Text variant="label">CulinAIre Kitchen</Text>
+      <Text variant="label">App lock</Text>
       {problem === "unprotected" ? (
         <>
           <Text variant="title">Set up a screen lock</Text>
@@ -32,7 +32,7 @@ export function LockScreen({ problem, busy, onUnlock, onSignOut }: Pick<LockSnap
       ) : (
         <>
           <Text variant="title">Locked</Text>
-          <Text>Unlock with Face ID, your fingerprint or this device&apos;s passcode.</Text>
+          <Text>Unlock with your face, your fingerprint or this device&apos;s passcode.</Text>
           {problem ? (
             <Text variant="error" accessibilityLiveRegion="polite">
               {PROBLEM[problem]}

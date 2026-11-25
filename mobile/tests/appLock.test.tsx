@@ -84,7 +84,7 @@ describe("the lock screen", () => {
   it.each([["an approver", approver], ["an Administrator", admin]])("is what %s meets on a cold start, in the app's look, with nothing readable behind it", (_who, user) => {
     open(user);
     expect(screen.getByRole("heading", { name: "Locked" })).toBeTruthy();
-    expect(screen.getByText("CulinAIre Kitchen")).toBeTruthy();
+    expect(screen.getByText("App lock")).toBeTruthy();
     expect(unlock()).toBeTruthy();
     expect(screen.getByRole("button", { name: "Sign out" })).toBeTruthy();
     expect(seen()).toBeNull();

@@ -104,6 +104,25 @@ describe("store submission", () => {
   });
 });
 
+describe("the app lock on Android", () => {
+  const activity = "class MainActivity : ReactActivity() {\n  override fun onCreate(savedInstanceState: Bundle?) {\n    super.onCreate(null)\n  }\n}\n";
+
+  it("keeps the app's picture out of the app switcher, which Android takes before the app can cover itself", async () => {
+    const { default: appConfig, hideFromRecents } = await import("../app.config");
+    expect(hideFromRecents(activity)).toMatch(/super\.onCreate\(null\)\n.*VERSION_CODES\.TIRAMISU\) \{\n +setRecentsScreenshotEnabled\(false\)/);
+    // Android's blank page in its place is the paper colour.
+    expect(hideFromRecents(activity)).toContain("setBackgroundColor(0xFFF3EFE4.toInt())");
+    expect(hideFromRecents(hideFromRecents(activity))).toBe(hideFromRecents(activity));
+    const config = appConfig({ config: app as never, projectRoot: root, staticConfigPath: null, packageJsonPath: null }) as { mods?: { android?: { mainActivity?: unknown } } };
+    expect(config.mods?.android?.mainActivity).toBeTruthy();
+  });
+
+  it("stops the build rather than leaving it out when Expo's template changes", async () => {
+    const { hideFromRecents } = await import("../app.config");
+    expect(() => hideFromRecents("class MainActivity")).toThrow(/MainActivity/);
+  });
+});
+
 describe("app config for iPhone and iPad", () => {
   const appJson = JSON.parse(readFileSync(resolve(root, "app.json"), "utf8")).expo as { ios: { supportsTablet: boolean }; plugins: unknown[] };
   const build = async (scheme?: string) => {
