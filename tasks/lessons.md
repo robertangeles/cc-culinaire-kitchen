@@ -1519,3 +1519,9 @@ builds all tables with CHECKs enforcing. Stop it again when done.
 - **Problem**: `bench:join` checked `org_` and `dm_` names and joined anything else, so joining `user_<id>` delivered another person's direct messages. Reactions, edits and deletes sent to a room the socket happened to be in or the sender named, and membership was checked only at join, so a removed member kept receiving.
 - **Fix**: `canJoin` is a whitelist (Everyone, own organisations, own threads). A message's audience comes from its stored row (`getMessageAudience`, `isInAudience`). Every membership deletion calls `evictFromOrganisationRoom`.
 - **Rule**: Work out rooms on the server from stored rows, allow known names only, and wherever a right is removed also remove the live subscriptions it granted. A new place that deletes `user_organisation` rows must evict too.
+
+## 2026-11-26 — Bench socket input validation belongs in one place
+
+- **Problem**: Each Bench socket handler checked its own payload, and not evenly.
+- **Fix**: `onBenchEvent` (`benchSocketGuard.ts`) validates every event against its schema and logs handler errors; handlers receive typed data.
+- **Rule**: Register a new Bench event with `onBenchEvent` and a schema, never with `socket.on`, and add it to `benchSocketValidation.integration.test.ts`.
