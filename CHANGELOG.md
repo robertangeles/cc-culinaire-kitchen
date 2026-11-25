@@ -16,6 +16,15 @@ Server only. No migration, no permission change, no change to the Bench's HTTP r
 - **Pinned messages** no longer list a deleted message.
 - Still open: opening a DM thread with any user id, who may pin or set the Everyone banner, mention counts, and the Everyone room's platform-wide presence.
 
+### Added (mobile Wave 9, phone: Your Brain)
+
+Phone app only; no server change, no migration, no new permission.
+
+- **Brain tab** for `brain:read` holders, last in the tab order: what CulinAIre remembers, private or shared with the kitchen, by source, searched on the server, twenty at a time. Pinned and still-learning memories are marked.
+- **Removing a memory** (for `brain:manage` holders, on rows the server says are theirs to manage) asks first and names it; it needs a connection.
+- **Proactive nudges** opt-in, the web's switch.
+- The first page of each tier is readable with no signal. Pinning, correcting and sharing stay on the web for now; every difference from the web page is listed in `mobile/README.md`.
+
 ### Added (open swaps say the shift's status and the venue's zone and name)
 
 Server only, additive. No migration, no permission change, no change to who sees which swaps.
