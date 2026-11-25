@@ -5,6 +5,15 @@ Format: [Keep a Changelog](https://keepachangelog.com/en/1.0.0/).
 
 ## [Unreleased]
 
+### Added (mobile Wave 7, phone: the menu)
+
+Phone app only; no server change, no migration, no new permission. Uses the Wave 7 menu server (organisation-owned menu items, `menu:manage`, keyed sales) and the shared costing.
+
+- **Menu tab** for `menu:read` holders, last in the tab order: the organisation's menu with search, category and class filters; an item's page with its set-up, allergens and recipe lines; food cost, percentage and margin as the server stored them, for `inventory:cost` holders only.
+- **Adding and changing items** (from scratch or from a saved recipe), recipe lines linked to the catalogue with a live cost preview, deleting, and category food cost targets, for `menu:manage` holders. Saving needs a connection; Save again after a lost reply adds nothing twice.
+- **Recording a sale** of a dish or a front-of-house item with its own key, so a sale whose answer was lost can be sent again and is recorded once; recent sales, and voiding one.
+- Every difference from the web Menu & Costing page is listed in `mobile/README.md`.
+
 ### Changed (menu costs, margins and on-hand stock are for `inventory:cost` holders)
 
 Server and web. No migration, no new permission. **Before deploying:** a custom role that should keep seeing menu costs needs `inventory:cost`; the seeded roles with menu access have it. A person's access follows their token, so a role change takes effect when it refreshes.

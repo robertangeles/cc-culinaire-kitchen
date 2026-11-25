@@ -39,6 +39,8 @@ export const moduleTabs: ModuleTab[] = [
   { route: "(transfers)", title: "Transfers", icon: "transfer", anyPermission: ["inventory:count"] },
   // The dashboard, the location's items and catalogue requests are `inventory:count`; stock value and quantities also need `inventory:cost`.
   { route: "(stock)", title: "Stock", icon: "stock", anyPermission: ["inventory:count"] },
+  // Reading the menu and recording a sale are `menu:read` on the server; changing it is `menu:manage`, and costs show only with `inventory:cost`.
+  { route: "(menu)", title: "Menu", icon: "menu", anyPermission: ["menu:read"] },
 ];
 
 /** Administrators hold every permission implicitly, as on the web and the server. */
