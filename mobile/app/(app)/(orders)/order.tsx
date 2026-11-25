@@ -4,6 +4,7 @@ import { useFocusEffect, useLocalSearchParams, useRouter } from "expo-router";
 import { SafeAreaView } from "react-native-safe-area-context";
 import { reorderCheckLine } from "@culinaire/shared";
 import type { Discrepancy } from "@culinaire/shared/schemas/purchasing";
+import { useAppLock } from "../../../src/lock/LockProvider";
 import { useSession } from "../../../src/runtime/appContext";
 import { DiscrepancyRows } from "../../../src/orders/DiscrepancyRows";
 import { WaitBadge } from "../../../src/orders/OrderRow";
@@ -39,6 +40,7 @@ export default function Order() {
   const poId = asText(params.poId);
   const { state } = useSession();
   const { api, rights, known } = useOrders();
+  const { confirm: confirmPerson } = useAppLock();
   const router = useRouter();
   const c = useColors();
   const { order, lines, detail, error, busy, notice, setNotice, load, act } = useOrder(api, poId, known(poId));
@@ -115,8 +117,12 @@ export default function Order() {
       { text: yes, style: destructive ? "destructive" : "default", onPress: () => void run() },
     ]);
   const approve = () =>
-    confirmThen(`Approve ${order.poNumber}?`, `${supplier}${total ? `, ${total}` : ""}. It is marked as sent.`, "Approve", () => act("approve", "Approving an order", async () => { await api.approve(poId); return "Order approved. It is now marked as sent."; }));
+    confirmThen(`Approve ${order.poNumber}?`, `${supplier}${total ? `, ${total}` : ""}. It is marked as sent.`, "Approve", async () => {
+      if (!(await confirmPerson(`Approve ${order.poNumber}`))) return;
+      await act("approve", "Approving an order", async () => { await api.approve(poId); return "Order approved. It is now marked as sent."; });
+    });
   const reject = async () => {
+    if (!(await confirmPerson(`Reject ${order.poNumber}`))) return;
     const done = await act("reject", "Rejecting an order", async () => { await api.reject(poId, reason.trim()); return "Order rejected. It is back in draft with your reason."; });
     if (done) {
       setRejecting(false);

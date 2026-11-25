@@ -40,7 +40,7 @@ function Orders() {
 }
 
 function open(user: Parameters<typeof LockProvider>[0]["user"] = approver) {
-  const lock = createAppLock({ authenticate, now: () => clock.now });
+  const lock = createAppLock({ authenticate, now: () => clock.now, uptime: () => clock.now });
   const tree = (u: typeof user) => (
     <LockProvider lock={lock} user={u} onSignOut={onSignOut}>
       <Orders />

@@ -15,7 +15,7 @@ vi.mock("../src/runtime/appContext", () => ({ session: { restore: vi.fn() }, use
 vi.mock("../src/config", () => ({ appLockOff: false }));
 vi.mock("../src/runtime/appLock", async () => {
   const { createAppLock } = await import("../src/lock/appLock");
-  return { appLock: createAppLock({ authenticate: async () => "ok", now: Date.now }) };
+  return { appLock: createAppLock({ authenticate: async () => "ok", now: Date.now, uptime: () => performance.now() }) };
 });
 vi.mock("../src/runtime/appOutbox", () => ({ startOutbox: vi.fn() }));
 vi.mock("../src/runtime/notifications", () => ({ startNotifications: vi.fn() }));

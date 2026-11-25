@@ -34,7 +34,15 @@ export interface LockSnapshot {
 export interface AppLockDeps {
   /** Opens the system prompt, with the reason shown on it. */
   authenticate: (reason: string) => Promise<AuthResult>;
+  /** The phone's clock, which keeps going while it sleeps but can be set by hand. */
   now: () => number;
+  /** Time since the app started, which cannot be set but may stop while the phone sleeps. */
+  uptime: () => number;
+}
+
+interface Moment {
+  clock: number;
+  up: number;
 }
 
 export const lockRequired = (user: AuthUser) => hasAnyPermission(user, LOCK_PERMISSIONS);
@@ -42,11 +50,11 @@ export const lockRequired = (user: AuthUser) => hasAnyPermission(user, LOCK_PERM
 /** True when the lock is on for this person. */
 export const lockedFor = (user: AuthUser | null, snapshot: LockSnapshot) => user !== null && lockRequired(user) && snapshot.unlockedUserId !== user.userId;
 
-export function createAppLock({ authenticate, now }: AppLockDeps) {
+export function createAppLock({ authenticate, now, uptime }: AppLockDeps) {
   let snapshot: LockSnapshot = { unlockedUserId: null, covered: false, busy: false, problem: null };
   let user: AuthUser | null = null;
-  let unlockedAt = 0;
-  let leftAt: number | null = null;
+  let unlockedAt: Moment | null = null;
+  let leftAt: Moment | null = null;
   let prompt: Promise<boolean> | null = null;
   const listeners = new Set<() => void>();
 
@@ -55,8 +63,9 @@ export function createAppLock({ authenticate, now }: AppLockDeps) {
     listeners.forEach((l) => l());
   }
 
-  /** A clock that went backwards counts as too long ago. */
-  const longerThan = (ms: number, since: number) => now() - since > ms || now() < since;
+  const moment = (): Moment => ({ clock: now(), up: uptime() });
+  /** By either clock, so setting the phone's clock back does not buy time; one that went backwards counts as too long ago. */
+  const longerThan = (ms: number, since: Moment) => now() - since.clock > ms || now() < since.clock || uptime() - since.up > ms;
 
   async function ask(reason: string): Promise<boolean> {
     const who = user;
@@ -71,7 +80,7 @@ export function createAppLock({ authenticate, now }: AppLockDeps) {
       set({ busy: false, unlockedUserId: null, problem: result === "cancelled" ? null : result });
       return false;
     }
-    unlockedAt = now();
+    unlockedAt = moment();
     // The prompt can send the app to the background itself: that time away is answered for.
     if (leftAt !== null) leftAt = unlockedAt;
     set({ busy: false, unlockedUserId: who.userId });
@@ -104,7 +113,7 @@ export function createAppLock({ authenticate, now }: AppLockDeps) {
         set({ covered: false, ...(away ? { unlockedUserId: null } : {}) });
         return;
       }
-      if (state === "background") leftAt ??= now();
+      if (state === "background") leftAt ??= moment();
       set({ covered: true });
     },
 
@@ -113,7 +122,7 @@ export function createAppLock({ authenticate, now }: AppLockDeps) {
     /** Before a guarded action: true when this person may go on. A prompt that does not go through locks the app. */
     async confirm(reason: string): Promise<boolean> {
       if (!user || !lockRequired(user)) return true;
-      if (snapshot.unlockedUserId === user.userId && !longerThan(RECENT_MS, unlockedAt)) return true;
+      if (snapshot.unlockedUserId === user.userId && unlockedAt && !longerThan(RECENT_MS, unlockedAt)) return true;
       return open(reason);
     },
   };

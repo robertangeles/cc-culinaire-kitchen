@@ -4,6 +4,7 @@ import { useLocalSearchParams, useRouter } from "expo-router";
 import { SafeAreaView } from "react-native-safe-area-context";
 import type { Discrepancy } from "@culinaire/shared/schemas/purchasing";
 import { ApiError } from "../../../src/api/client";
+import { useAppLock } from "../../../src/lock/LockProvider";
 import { newUuid } from "../../../src/outbox/uuid";
 import { useOrders } from "../../../src/orders/OrdersProvider";
 import { creditAmount, discrepancyText, loadMessage, money, orderFailure } from "../../../src/orders/orderView";
@@ -24,6 +25,7 @@ export default function CreditNoteEntry() {
   const discrepancyId = asText(params.discrepancyId);
   const supplierId = asText(params.supplierId);
   const { api, discrepancies, rights } = useOrders();
+  const { confirm: confirmPerson } = useAppLock();
   const router = useRouter();
   const c = useColors();
   const [item, setItem] = useState<Discrepancy | null>(() => discrepancies.getSnapshot().items.find((d) => d.discrepancyId === discrepancyId) ?? null);
@@ -59,6 +61,7 @@ export default function CreditNoteEntry() {
     setError(null);
     setSaving(true);
     try {
+      if (!(await confirmPerson("Raise a credit note"))) return;
       const note = await api.credit({
         creditNoteId: noteId.current,
         discrepancyId,

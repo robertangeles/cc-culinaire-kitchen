@@ -5,6 +5,7 @@ import type { AuthUser } from "../src/api/auth";
 import type { OrdersApi } from "../src/orders/ordersApi";
 import { createOrders } from "../src/orders/orders";
 import { OrdersContextProvider } from "../src/orders/OrdersProvider";
+import { LockContextProvider } from "../src/lock/LockProvider";
 import type { KvStore } from "../src/storage/kv";
 import { sessionState } from "../testing/mocks";
 
@@ -36,9 +37,13 @@ export const api = {
   suppliers: vi.fn(), supplierItemIds: vi.fn(), items: vi.fn(), guides: vi.fn(), guideItems: vi.fn(), discrepancies: vi.fn(), creditNotes: vi.fn(), credit: vi.fn(),
 } satisfies Record<keyof OrdersApi, ReturnType<typeof vi.fn>>;
 
+/** The app lock's answer to a guarded action (approve, reject, credit note): yes unless a test says otherwise. */
+export const confirm = vi.fn<(reason: string) => Promise<boolean>>();
+
 /** The plain answers; a test changes the ones it is about. */
 export function resetApi() {
   Object.values(api).forEach((f) => f.mockReset());
+  confirm.mockReset().mockResolvedValue(true);
   api.list.mockResolvedValue([order()]);
   api.detail.mockResolvedValue(detail());
   api.create.mockResolvedValue({ poId: "P9", poNumber: "PO-900", skippedItems: [], quantityWarnings: [] });
@@ -59,5 +64,9 @@ export function resetApi() {
 export function ordersFor(user: AuthUser, kv: KvStore = memoryKv()) {
   sessionState.current = { state: { phase: "ready", user, location: main, locations: [main] }, busy: false };
   const ctx = createOrders({ api: api as unknown as OrdersApi, kv, user, locationId: "L1", now: () => "2026-11-25T08:00:00Z" });
-  return { ctx, wrapper: ({ children }: { children: ReactNode }) => <OrdersContextProvider value={ctx}>{children}</OrdersContextProvider> };
+  return { ctx, wrapper: ({ children }: { children: ReactNode }) => (
+    <LockContextProvider value={{ confirm }}>
+      <OrdersContextProvider value={ctx}>{children}</OrdersContextProvider>
+    </LockContextProvider>
+  ) };
 }

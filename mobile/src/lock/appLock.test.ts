@@ -7,9 +7,9 @@ const approver = person(["purchasing:approve"]);
 const cook = person(["waste:log", "roster:read-own", "compliance:read-own", "purchasing:credit"]);
 
 function make(user: AuthUser | null = approver) {
-  const clock = { now: 1_000_000 };
+  const clock = { now: 1_000_000, up: 0 };
   const authenticate = vi.fn<(reason: string) => Promise<AuthResult>>(async () => "ok");
-  const lock = createAppLock({ authenticate, now: () => clock.now });
+  const lock = createAppLock({ authenticate, now: () => clock.now, uptime: () => clock.up });
   lock.setUser(user);
   return { clock, authenticate, lock };
 }
@@ -101,6 +101,16 @@ describe("the lock", () => {
     expect(lock.isLocked()).toBe(true);
   });
 
+  it("comes on when the phone's clock was set back to just after the app left", async () => {
+    const { lock, clock } = make();
+    await lock.unlock();
+    lock.appState("background");
+    clock.now += 1_000;
+    clock.up += GRACE_MS + 1;
+    lock.appState("active");
+    expect(lock.isLocked()).toBe(true);
+  });
+
   it("covers the screen from the moment the app is not in front until it is back", async () => {
     const { lock } = make();
     await lock.unlock();
@@ -188,6 +198,14 @@ describe("a guarded action", () => {
 
     // That answer counts as recent too: the next order is not asked about again.
     expect(await lock.confirm("Approve PO-101")).toBe(true);
+    expect(authenticate).toHaveBeenCalledTimes(2);
+  });
+
+  it("asks again when the phone's clock was held back", async () => {
+    const { lock, clock, authenticate } = make();
+    await lock.unlock();
+    clock.up += RECENT_MS + 1;
+    await lock.confirm("Approve PO-100");
     expect(authenticate).toHaveBeenCalledTimes(2);
   });
 
