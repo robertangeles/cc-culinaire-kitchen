@@ -944,7 +944,14 @@ describe.skipIf(!process.env.SCREENS_OUT)(`screens on ${FORM}`, { timeout: 600_0
   }
 
   /** A menu with every class, a pack, an item over its target and one nobody has costed. Made once per form. */
+  function assertThrowawayServer() {
+    const db = new URL(process.env.DATABASE_URL ?? "");
+    if (!["127.0.0.1", "localhost"].includes(new URL(API_URL).hostname) || db.hostname !== "127.0.0.1" || db.port !== "55432") throw new Error(`not the local test cluster: ${API_URL}, ${db.host}`);
+    return db;
+  }
+
   async function seedMenu() {
+    const url = assertThrowawayServer();
     if ((await m.client.request<{ name: string }[]>("GET", "/api/menu/items")).some((i) => i.name === "Margherita")) return;
     const ing = async (name: string, baseUnit: string, unitCost: string) => (await m.client.request<{ ingredientId: string }>("POST", `${INV}/ingredients`, { body: { ingredientName: name, ingredientCategory: "dry_goods", baseUnit, unitCost } })).ingredientId;
     const mozzarella = await ing("Fior di latte mozzarella", "kg", "14.00");
@@ -961,8 +968,6 @@ describe.skipIf(!process.env.SCREENS_OUT)(`screens on ${FORM}`, { timeout: 600_0
     await dish("Dozen dinner rolls", "Sides", "15.00", 2, [[flour, "Tipo 00 flour", "0.9", "kg"]], { servings: 12, servingsPerSale: 12 });
     await m.client.request("PUT", "/api/menu/categories/Grilled", { body: { targetFoodCostPct: "32" } });
     // A saved recipe: only the model makes one through the API, so straight into the walk's own throwaway database, never any other.
-    const url = new URL(process.env.DATABASE_URL ?? "");
-    if (url.hostname !== "127.0.0.1" || url.port !== "55432") throw new Error(`not the local test cluster: ${url.host}`);
     const recipeData = JSON.stringify({ yield: "4 servings", ingredients: [{ name: "Potato", amount: "1", unit: "kg" }, { name: "Tipo 00 flour", amount: "1 1/2", unit: "cups" }, { name: "Salt", amount: "to taste", unit: "pinch" }] });
     execFileSync("psql", [url.href, "-qAt", "-v", "ON_ERROR_STOP=1", "-c", `insert into recipe (user_id, domain, title, recipe_data) select user_id, 'recipe', 'Potato gnocchi', '${recipeData}' from "user" where user_email = '${credentials.email}'`]);
   }
@@ -1185,17 +1190,19 @@ describe.skipIf(!process.env.SCREENS_OUT)(`screens on ${FORM}`, { timeout: 600_0
   // A person who reads the menu without inventory:cost. Takes every other key off the Subscriber role of the throwaway database, and leaves
   // the organisation again: its only admin, deleted next, could not go while it has another member.
   it("menu without costs: list, item, sale", async () => {
+    assertThrowawayServer();
     await seedMenu();
     const { permissions } = await m.client.request<{ permissions: { permissionId: number; permissionKey: string }[] }>("GET", "/api/permissions");
-    const { roles } = await m.client.request<{ roles: { roleId: number; roleName: string }[] }>("GET", "/api/roles");
+    const { roles } = await m.client.request<{ roles: { roleId: number; roleName: string; permissions: { permissionId: number }[] }[] }>("GET", "/api/roles");
     const subscriber = roles.find((r) => r.roleName === "Subscriber")!;
-    await m.client.request("PUT", `/api/roles/${subscriber.roleId}/permissions`, { body: { permissionIds: permissions.filter((p) => p.permissionKey === "menu:read").map((p) => p.permissionId) } });
+    const setSubscriber = (permissionIds: number[]) => m.client.request("PUT", `/api/roles/${subscriber.roleId}/permissions`, { body: { permissionIds } });
     const { organisation } = await m.client.request<{ organisation: { organisationId: number; joinKey: string } }>("GET", "/api/organisations/mine");
     const [email, password] = [process.env.E2E_DELETE_USER_EMAIL ?? "", process.env.E2E_DELETE_USER_PASSWORD ?? ""];
     const cook = await m.client.request<{ user: { userId: number }; tokens: Tokens }>("POST", "/api/auth/login", { auth: false, body: { email, password } });
     const asCook = createApiClient({ baseUrl: API_URL, appVersion: "0.1.0-device", tokenStore: { load: async () => cook.tokens, save: async () => {}, clear: async () => {} } });
     await asCook.request("POST", "/api/organisations/join", { body: { joinKey: organisation.joinKey } });
     try {
+      await setSubscriber(permissions.filter((p) => p.permissionKey === "menu:read").map((p) => p.permissionId));
       await m.client.request("POST", `/api/store-locations/${locationId}/staff`, { body: { userId: cook.user.userId } });
       await toSignIn();
       await typePassword(email, password);
@@ -1214,6 +1221,7 @@ describe.skipIf(!process.env.SCREENS_OUT)(`screens on ${FORM}`, { timeout: 600_0
       await shot("m9c-sale-no-costs");
     } finally {
       await asCook.request("DELETE", `/api/organisations/${organisation.organisationId}/leave`).catch(() => {});
+      await setSubscriber(subscriber.permissions.map((p) => p.permissionId));
     }
   });
 
