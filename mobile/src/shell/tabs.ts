@@ -17,7 +17,7 @@ export interface ModuleTab {
   anyPermission?: string[];
 }
 
-/** In the order a line cook reaches for them: prep all shift, waste and usage as they happen, counts at stock take, moves now and then, deliveries when they arrive; then Ask and Recipes, which everyone signed in gets. */
+/** In the order a line cook reaches for them: prep all shift, waste and usage as they happen, counts at stock take, moves now and then, deliveries when they arrive, orders for those who raise or approve them; then Ask and Recipes, which everyone signed in gets. */
 export const moduleTabs: ModuleTab[] = [
   // `prep:read` looks and ticks, `prep:manage` also makes the list: the server lets either tick, for anyone who works at the location (any role can be given them).
   { route: "(prep)", title: "Prep", icon: "prep", anyPermission: ["prep:read", "prep:manage"] },
@@ -28,6 +28,8 @@ export const moduleTabs: ModuleTab[] = [
   { route: "(count)", title: "Count", icon: "count", anyPermission: ["inventory:count"] },
   { route: "(moves)", title: "Move", icon: "move", anyPermission: ["inventory:count"] },
   { route: "(receive)", title: "Receive", icon: "receive", anyPermission: ["purchasing:receive"] },
+  // The web's Purchasing page opens on any purchasing key; `purchasing:receive` alone is left to Receive, the only orders the server lists for it.
+  { route: "(orders)", title: "Orders", icon: "orders", anyPermission: ["purchasing:draft", "purchasing:submit", "purchasing:approve", "purchasing:credit"] },
   // Chat, saved conversations and recipes check only that someone is signed in (`authenticate`/`authenticateOrGuest`, no permission key).
   { route: "(chat)", title: "Ask", icon: "chat" },
   { route: "(recipes)", title: "Recipes", icon: "recipes" },

@@ -6,7 +6,8 @@ All commands: `pnpm --filter @culinaire/mobile run <script> [-- <path filter>]`.
 - `check:test`: logic plus screen tests (`tests/*.test.tsx`, react-native-web in jsdom). Needs no env var.
   One module: `check:test -- src/count`.
 - `check:e2e`: the phone's real client, session, count store and outbox against a server on :3009 and the seeded
-  E2E user (credentials from `packages/client/.env.test`).
+  E2E user (credentials from `packages/client/.env.test`). Start that server with `RATE_LIMIT_PER_MINUTE=1000`, as CI does: all the files
+  together make more than the 300 requests a minute one person gets.
 - `check:device`: walks the real phone or emulator through adb. It always runs through `device/lease.sh`, which takes
   a machine-wide lock (`flock`, Linux only), waits up to 15 min (`DEVICE_LEASE_WAIT_S`) and shows who holds it.
   `adb()` refuses to run without the lease, so never call adb on the phone by hand while someone else holds it.
@@ -39,6 +40,9 @@ NODE_OPTIONS="--import $PWD/mobile/device/fakeModel.mjs" OPENROUTER_API_KEY=fake
 
 The database also needs the `recipePrompt` and `recipeRefinementPrompt` rows (`prompt` table, `default_ind = false`): they are authored in the admin UI and not seeded.
 Then `check:device -- device/chatRecipes`, with Metro on 8088 and `adb reverse` for 8088 and 3009. It deletes only the recipes and conversations it made.
+
+`device/orders.device.test.ts` is the purchasing walk: every Orders screen, written from a guide, submitted, rejected, approved, received short and credited, with no signal and on its side, photographed. It runs
+through the screenshot walk's own set-up: `SCREENS_FILE=device/orders.device.test.ts SCREENS_FORMS=phone bash device/lease.sh bash device/screens.sh <out-dir>` (with the emulator's env for iPad width).
 
 ## The screenshot walk (look at every screen)
 

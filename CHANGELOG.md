@@ -5,6 +5,17 @@ Format: [Keep a Changelog](https://keepachangelog.com/en/1.0.0/).
 
 ## [Unreleased]
 
+### Added (mobile Wave 5, phone: orders, approvals and credit notes)
+
+Phone app and shared schemas only; no server change, no migration, no permission change, no new dependency (the development build does not need a rebuild). Uses the Wave 5 purchasing server and the draft edit and replay-safe create routes.
+
+- **Orders tab** for holders of `purchasing:draft`, `purchasing:submit`, `purchasing:approve` or `purchasing:credit` (after Receive; under More for most people): the location's orders with a status filter, one order with its items, submit, email, cancel, reorder, and a new order written by hand or from an order guide, kept on the phone until it is saved. A saved draft can be changed.
+- **Approvals:** the queue, longest wait first (over a day and over two days stand out), approve and reject on the order itself. An approver is not offered Approve on an order they raised or changed while someone else can approve it. No biometric lock yet: that is its own task before the first store release.
+- **Credit notes** raised from a delivery's discrepancy, one each, for no more than it is worth.
+- **Links:** order to delivery, delivery to order, received order to what can be claimed, and approval, answer and discrepancy notifications to their order.
+- **Offline:** lists open with no signal and say from when; every write needs a connection and says so. A repeated save, approval or credit note never acts twice.
+- Figures the server leaves out are never shown as zero. Every difference from the web Purchasing page, with the web bugs found, is listed in `mobile/README.md`.
+
 ### Changed (phone: a quieter tab bar, a real home, one header on every tab)
 
 Phone app only; no server change, no permission change.

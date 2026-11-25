@@ -6,6 +6,7 @@ import { useSession } from "../../../../src/runtime/appContext";
 import { receivingApi } from "../../../../src/runtime/receiving";
 import { useReceivingSession } from "../../../../src/receiving/useReceivingSession";
 import { LineCard } from "../../../../src/receiving/LineCard";
+import { canOpen, moduleTabs } from "../../../../src/shell/tabs";
 import { confirmedMessage, issueCount } from "../../../../src/receiving/receivingFlow";
 import { OfflineBanner } from "../../../../src/ui/Banner";
 import { Button } from "../../../../src/ui/Button";
@@ -30,6 +31,10 @@ export default function ReceiveDelivery() {
   const r = useReceivingSession(receivingApi, poId, userId);
 
   const toQueue = () => router.replace("/deliveries");
+  // The order this delivery is for, where its discrepancies are credited: for the people who have the Orders tab.
+  const ordersTab = moduleTabs.find((t) => t.route === "(orders)")!;
+  const seeOrder =
+    state.phase === "ready" && canOpen(state.user, ordersTab) ? <Button kind="quiet" label="See the order" onPress={() => router.push({ pathname: "/order", params: { poId, from: "link" } })} /> : null;
 
   if (r.phase.kind === "loading") {
     return (
@@ -62,6 +67,7 @@ export default function ReceiveDelivery() {
           <Text>{r.po?.supplierName ? `${r.po.supplierName}, ` : ""}order {r.po?.poNumber}</Text>
           <Text variant="muted">{done.detail}</Text>
           <Button label="Back to deliveries" onPress={toQueue} />
+          {seeOrder}
         </Column>
       </SafeAreaView>
     );
@@ -110,6 +116,7 @@ export default function ReceiveDelivery() {
 
         {panelOpen ? null : (
           <>
+            {seeOrder}
             <Button kind="quiet" label="Back to deliveries" onPress={() => router.back()} />
             <Button kind="quiet" label="Cancel receiving" onPress={cancel} />
           </>

@@ -1489,3 +1489,9 @@ builds all tables with CHECKs enforcing. Stop it again when done.
 - **Problem**: `checkAndAdvanceSession` advanced a stock take to review with `WHERE session_status = 'OPEN'` and no regard for the session type. A flagged recount round therefore never went back to review (the web only offers "Submit for review" on OPEN, so it was stuck everywhere), and an opening inventory jumped to review after its first category, which then refused the next claim and the "Complete opening inventory" call. Both were only an inference in the roadmap until a real-DB test ran the round.
 - **Fix**: The advance covers OPEN and FLAGGED and skips OPENING sessions; submit-for-review also finishes an opening count already stranded in review.
 - **Rule**: When a write moves a parent's status from a child's status, test every parent status and kind that can reach it (here: OPEN, FLAGGED, OPENING), not only the happy one.
+
+## 2026-11-25 — A new end-to-end file spends a budget the other files share
+
+- **Problem**: Every phone end-to-end file signs in as one user, back to back in about ten seconds. Adding `e2e/orders` (124 requests) took the run over the server's 300 requests a minute per person, and the files that failed with 429 were the untouched ones.
+- **Fix**: The CI job and local runs start the server with `RATE_LIMIT_PER_MINUTE=1000` (`.github/workflows/ci.yml`, `mobile/device/README.md`).
+- **Rule**: Before adding an end-to-end file, run the whole `check:e2e`, not only the new file: shared limits (requests a minute, sign-ins) fail somewhere else.
