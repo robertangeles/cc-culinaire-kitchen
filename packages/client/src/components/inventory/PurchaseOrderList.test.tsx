@@ -13,6 +13,10 @@ let mockItems: object[] = [];
 vi.mock("../../context/LocationContext.js", () => ({
   useLocation: () => ({ selectedLocationId: "loc-1" }),
 }));
+// Neither test is about approving, so the viewer holds no permission.
+vi.mock("../../hooks/useHasPermission.js", () => ({
+  useHasPermission: () => () => false,
+}));
 vi.mock("../../hooks/useInventory.js", () => ({
   usePurchaseOrders: () => ({
     pos: [{ poId: "po-1", poNumber: "PO-1", status: "DRAFT", supplierName: "Mill", lineCount: 1, createdDttm: "2026-04-10T00:00:00.000Z", totalValue: null }],
