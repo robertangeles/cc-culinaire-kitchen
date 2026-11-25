@@ -132,11 +132,12 @@ describe.skipIf(!RUN)("reorder quantities are in the line's own unit (real DB)",
     const { poId, ingredientIds } = await orderOf([
       { item: { ...flour, par: "25", stock: "25" }, qty: "4", unit: "bag" },
       { item: { ...flour, par: "25", stock: "40" }, qty: "4", unit: "bag" },
+      { item: { ...flour, par: "25", stock: "24.9999999999", min: "3" }, qty: "4", unit: "bag" }, // arithmetic residue, not a shortfall
       { item: { ...flour, par: "25" }, qty: "4", unit: "bag" },
     ]);
     const out = await reorder(poId);
-    expect(out.body.lines).toMatchObject([{ ingredientId: ingredientIds[2], orderedQty: "2" }]);
-    expect(out.body.skippedItems).toHaveLength(2);
+    expect(out.body.lines).toMatchObject([{ ingredientId: ingredientIds[3], orderedQty: "2" }]);
+    expect(out.body.skippedItems).toHaveLength(3);
   });
 
   it("without a pack size the last quantity is kept and the answer says which item", async () => {

@@ -939,10 +939,12 @@ export async function clonePO(
 
     // Order back up to par, or the original qty if no par
     let orderedQty = line.orderedQty;
-    if (parLevel && parLevel > currentQty) {
+    // Six decimals: what is left of the arithmetic is not a shortfall
+    const shortfall = Number(suggestedOrderQty(parLevel ?? 0, currentQty).toFixed(6));
+    if (parLevel && shortfall > 0) {
       const item = itemByIngredient.get(line.ingredientId)!; // a line's ingredient is a foreign key, and never hard-deleted
       const { qty, isConverted } = reorderQty(
-        suggestedOrderQty(parLevel, currentQty),
+        shortfall,
         line.orderedUnit,
         item,
         conversionRows.filter((c) => c.ingredientId === line.ingredientId),
@@ -952,7 +954,7 @@ export async function clonePO(
       if (!isConverted) {
         quantityWarnings.push({ ingredientId: line.ingredientId, ingredientName: line.ingredientName, code: "UNIT_NOT_CONVERTIBLE" });
       }
-    } else if (parLevel && parLevel <= currentQty) {
+    } else if (parLevel) {
       // Stock is at or above par — skip this item
       skippedItems.push(line.ingredientName ?? line.ingredientId);
       continue;
