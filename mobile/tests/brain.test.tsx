@@ -104,6 +104,7 @@ describe("Your Brain", () => {
     fireEvent.click(screen.getByRole("button", { name: "Remove" }));
     await waitFor(() => expect(screen.getByText("Can't reach the server. Check your signal and try again.")).toBeTruthy());
     expect(screen.getByText("Memory b")).toBeTruthy();
+    await act(async () => {}); // react-native-web enables the button again in an effect, after the text is there
     fireEvent.click(screen.getByRole("button", { name: "Remove" }));
     await waitFor(() => expect(screen.queryByText("Memory b")).toBeNull());
     expect(screen.getByText("2 memories")).toBeTruthy();

@@ -23,6 +23,12 @@ describe("EAS build profiles", () => {
     expect(eas.build.production.android?.buildType).toBe("app-bundle");
   });
 
+  it("the Bench is on in the development and preview builds and not in production, a store build, until the server has report and block", () => {
+    expect(eas.build.development.env?.EXPO_PUBLIC_BENCH).toBe("on");
+    expect(eas.build.preview.env?.EXPO_PUBLIC_BENCH).toBe("on");
+    expect(eas.build.production.env?.EXPO_PUBLIC_BENCH).not.toBe("on");
+  });
+
   it("no profile bakes a server address into the build: it is set per build, so a test build can never silently point at production", () => {
     for (const [name, profile] of Object.entries(eas.build)) {
       expect(profile.env?.EXPO_PUBLIC_API_URL, `profile ${name}`).toBeUndefined();
