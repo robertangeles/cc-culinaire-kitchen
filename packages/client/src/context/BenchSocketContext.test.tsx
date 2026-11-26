@@ -17,7 +17,9 @@ vi.mock("socket.io-client", () => ({
     return socket;
   },
 }));
-vi.mock("./AuthContext.js", () => ({ useAuth: () => ({ user: { userId: 1 }, isGuest: false }) }));
+// One auth value for every render: a fresh user object each time re-runs the provider's connect effect without end.
+const { auth } = vi.hoisted(() => ({ auth: { user: { userId: 1 }, isGuest: false } }));
+vi.mock("./AuthContext.js", () => ({ useAuth: () => auth }));
 
 import { BenchSocketProvider } from "./BenchSocketContext.js";
 
