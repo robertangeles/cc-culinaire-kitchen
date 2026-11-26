@@ -314,9 +314,9 @@ export function createBenchStore({ api, live, userId, now, newId }: { api: Bench
   live.on("bench:error", (p) => {
     const { code } = obj(p);
     if (code === "FORBIDDEN") setRoom({ phase: "error", messages: [], hasOlder: false, typing: [], error: NO_ACCESS });
-    else if (code === "DM_NOT_ALLOWED" && visit?.room.kind === "dm") {
+    else if (code === "DM_NOT_ALLOWED") {
       setRoom({ notice: DM_REFUSED });
-      setPendings(visit.room, pendings(visit.room).map((x) => ({ ...x, status: "failed" })));
+      if (visit?.room.kind === "dm") setPendings(visit.room, pendings(visit.room).map((x) => ({ ...x, status: "failed" })));
     } else setRoom({ notice: "That didn't go through. Try again." });
   });
   const offConnect = live.onConnect(() => {

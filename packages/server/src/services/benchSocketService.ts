@@ -216,8 +216,8 @@ async function sendEveryonePresence(only?: Socket) {
     for (const socket of sockets) {
       const viewer = socket.data.user.sub as number;
       const mine = kitchens.get(viewer) ?? [];
-      const hidden = blocks.get(viewer) ?? none;
-      const users = online.filter((u) => u.userId === viewer || (!hidden.has(u.userId) && (kitchens.get(u.userId) ?? []).some((id) => mine.includes(id))));
+      const hidden = blocks.get(viewer);
+      const users = online.filter((u) => u.userId === viewer || (!hidden?.has(u.userId) && (kitchens.get(u.userId) ?? []).some((id) => mine.includes(id))));
       socket.emit("bench:presence:update", { channelKey: "everyone", users });
     }
   } catch (err) {
