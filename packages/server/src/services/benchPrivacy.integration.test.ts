@@ -10,8 +10,9 @@ config({ path: resolve(dirname(fileURLToPath(import.meta.url)), "../../../../.en
 applyEnvPrefix();
 
 import jwt from "jsonwebtoken";
+import express from "express";
 import { io, type Socket } from "socket.io-client";
-import { and, eq, inArray } from "drizzle-orm";
+import { and, desc, eq, inArray } from "drizzle-orm";
 import { db } from "../db/index.js";
 import {
   benchChannel,
@@ -24,6 +25,8 @@ import {
   userOrganisation,
 } from "../db/schema.js";
 import { initBenchSocket } from "./benchSocketService.js";
+import { benchRouter } from "../routes/bench.js";
+import { errorHandler } from "../middleware/errorHandler.js";
 import { createMessage, getOrCreateOrgChannel, getPinnedMessages, getReactions, pinMessage, softDeleteMessage } from "./benchService.js";
 import { createDmMessage, getOrCreateThread } from "./benchDmService.js";
 import { leaveOrganisation, removeMember } from "./organisationService.js";
@@ -32,7 +35,7 @@ import { anonymiseUser } from "./userAnonymisationService.js";
 
 /**
  * What one person on The Bench can receive that belongs to somebody else, over real sockets and a real database:
- * Anna and Amir in organisation A, Bea in organisation B, Olga in none.
+ * Anna and Amir in organisation A, Bea in organisation B, Olga in none. The Bench's HTTP routes are served by the same server.
  */
 const RUN = process.env.TENANT_IT === "1";
 
@@ -58,8 +61,23 @@ describe.skipIf(!RUN)("bench privacy — real sockets, real DB", () => {
   /** Every check waits for the server to settle, so "nothing arrived" means something. */
   const settle = (ms = 250) => new Promise((r) => setTimeout(r, ms));
 
+  const tokenOf = (userId: number, roles: string[] = []) =>
+    jwt.sign({ sub: userId, roles, permissions: [] }, process.env.JWT_ACCESS_SECRET ?? "dev-access-secret");
+
+  async function call(method: string, path: string, userId: number | null, body?: object, roles: string[] = []) {
+    const res = await fetch(`http://127.0.0.1:${port}/api/bench${path}`, {
+      method,
+      headers: { "content-type": "application/json", ...(userId === null ? {} : { authorization: `Bearer ${tokenOf(userId, roles)}` }) },
+      body: body === undefined ? undefined : JSON.stringify(body),
+    });
+    return { status: res.status, body: (await res.json()) as Record<string, any> };
+  }
+
+  /** The latest Everyone list this person was sent, as ids. */
+  const everyone = (c: Client) => (c.of("bench:presence:update").filter((p) => p.channelKey === "everyone").pop()?.users ?? []).map((u: any) => u.userId).sort();
+
   async function connect(userId: number, roles: string[] = []): Promise<Client> {
-    const token = jwt.sign({ sub: userId, roles, permissions: [] }, process.env.JWT_ACCESS_SECRET ?? "dev-access-secret");
+    const token = tokenOf(userId, roles);
     const socket = io(`http://127.0.0.1:${port}`, { auth: { token }, transports: ["websocket"], forceNew: true, reconnection: false });
     open.push(socket);
     const got: Event[] = [];
@@ -80,6 +98,14 @@ describe.skipIf(!RUN)("bench privacy — real sockets, real DB", () => {
 
   async function member(userId: number, organisationId: number) {
     await db.insert(userOrganisation).values({ userId, organisationId, role: "member" });
+  }
+
+  async function threadBetween(a: number, b: number) {
+    const found = await db
+      .select({ id: benchDmThread.dmThreadId })
+      .from(benchDmThread)
+      .where(and(eq(benchDmThread.userAId, Math.min(a, b)), eq(benchDmThread.userBId, Math.max(a, b))));
+    return found.length > 0;
   }
 
   beforeAll(async () => {
@@ -114,7 +140,11 @@ describe.skipIf(!RUN)("bench privacy — real sockets, real DB", () => {
     await getOrCreateOrgChannel(orgB, `${tag}-B`);
     threadId = (await getOrCreateThread(anna, bea)).dmThreadId;
 
-    http = createServer();
+    const app = express();
+    app.use(express.json());
+    app.use("/api/bench", benchRouter);
+    app.use(errorHandler);
+    http = createServer(app);
     initBenchSocket(http);
     await new Promise<void>((r) => http.listen(0, "127.0.0.1", () => r()));
     port = (http.address() as AddressInfo).port;
@@ -224,12 +254,6 @@ describe.skipIf(!RUN)("bench privacy — real sockets, real DB", () => {
       expect(dm.users.map((u: any) => u.userId)).toEqual([anna]);
     });
 
-    it("leaves Everyone as it is until the owner decides", async () => {
-      await connect(bea);
-      const a = await connect(anna);
-      const last = a.of("bench:presence:update").filter((p) => p.channelKey === "everyone").pop();
-      expect(last.users.map((u: any) => u.userId)).toEqual(expect.arrayContaining([anna, bea]));
-    });
 
     it("drops a person from the room's list when they leave it", async () => {
       const a = await connect(anna);
@@ -240,6 +264,158 @@ describe.skipIf(!RUN)("bench privacy — real sockets, real DB", () => {
       await settle();
       const last = a.of("bench:presence:update").filter((p) => p.channelKey === `org_${orgA}`).pop();
       expect(last.users.map((u: any) => u.userId)).toEqual([anna]);
+    });
+  });
+
+  describe("A presence in Everyone", () => {
+    it("lists only the people online who share a kitchen with the viewer; someone in no kitchen sees only themselves", async () => {
+      const a = await connect(anna);
+      const b = await connect(bea);
+      const o = await connect(olga);
+      const m = await connect(amir);
+      await settle();
+      expect(everyone(a)).toEqual([anna, amir].sort());
+      expect(everyone(m)).toEqual([anna, amir].sort());
+      expect(everyone(b)).toEqual([bea]);
+      expect(everyone(o)).toEqual([olga]);
+      // Nobody is ever sent a list holding someone outside their kitchens.
+      for (const [c, allowed] of [[b, [bea]], [o, [olga]]] as const) {
+        for (const p of c.of("bench:presence:update")) expect(p.users.every((u: any) => (allowed as readonly number[]).includes(u.userId))).toBe(true);
+      }
+    });
+
+    it("drops a kitchen colleague who goes offline", async () => {
+      const a = await connect(anna);
+      const m = await connect(amir);
+      await settle();
+      expect(everyone(a)).toEqual([anna, amir].sort());
+      m.socket.disconnect();
+      await settle();
+      expect(everyone(a)).toEqual([anna]);
+    });
+
+    it("answers a heartbeat with the asker's own list, read fresh, and tells nobody else", async () => {
+      const a = await connect(anna);
+      const o = await connect(olga);
+      await member(olga, orgA);
+      try {
+        a.got.length = 0;
+        o.socket.emit("bench:presence:heartbeat");
+        await settle();
+        expect(everyone(o)).toEqual([anna, olga].sort());
+        expect(a.of("bench:presence:update")).toEqual([]);
+      } finally {
+        await db.delete(userOrganisation).where(and(eq(userOrganisation.userId, olga), eq(userOrganisation.organisationId, orgA)));
+      }
+      o.socket.emit("bench:presence:heartbeat");
+      await settle();
+      expect(everyone(o)).toEqual([olga]);
+    });
+  });
+
+  describe("B who may be sent a direct message", () => {
+    const refusal = { error: expect.any(String), code: "DM_NOT_ALLOWED" };
+
+    it("opens a thread with someone in the same kitchen", async () => {
+      const res = await call("POST", "/dm/threads", anna, { recipientId: amir });
+      expect(res.status).toBe(200);
+      expect(res.body).toMatchObject({ otherUserName: "amir" });
+    });
+
+    it("refuses a thread with someone who shares no kitchen, the same way as someone who does not exist, naming nobody", async () => {
+      const [{ top }] = await db.select({ top: user.userId }).from(user).orderBy(desc(user.userId)).limit(1);
+      const stranger = await call("POST", "/dm/threads", olga, { recipientId: anna });
+      const nobody = await call("POST", "/dm/threads", olga, { recipientId: top + 1000 });
+      expect(stranger).toEqual({ status: 403, body: refusal });
+      expect(nobody).toEqual(stranger);
+      expect(await call("POST", "/dm/threads", amir, { recipientId: bea })).toEqual(stranger);
+      expect(await threadBetween(olga, anna)).toBe(false);
+      expect(await threadBetween(amir, bea)).toBe(false);
+    });
+
+    it("keeps an existing thread open both ways, though the two share no kitchen", async () => {
+      for (const [from, to] of [[anna, bea], [bea, anna]]) {
+        const res = await call("POST", "/dm/threads", from, { recipientId: to });
+        expect(res.status).toBe(200);
+        expect(res.body.dmThreadId).toBe(threadId);
+      }
+      const a = await connect(anna);
+      const b = await connect(bea);
+      a.socket.emit("bench:dm:send", { recipientId: bea, body: "still here" });
+      b.socket.emit("bench:dm:typing", { recipientId: anna });
+      await settle();
+      expect(b.of("bench:dm:new").map((m) => m.messageBody)).toEqual(["still here"]);
+      expect(a.of("bench:dm:typing")).toEqual([{ userId: bea, userName: "bea" }]);
+    });
+
+    it("refuses sending and typing to someone who shares no kitchen or thread, and to someone who does not exist", async () => {
+      const a = await connect(anna);
+      const o = await connect(olga);
+      o.got.length = 0;
+      o.socket.emit("bench:dm:send", { recipientId: anna, body: "hello stranger" });
+      o.socket.emit("bench:dm:typing", { recipientId: anna });
+      o.socket.emit("bench:dm:send", { recipientId: 2_000_000_000, body: "anyone?" });
+      o.socket.emit("bench:dm:typing", { recipientId: 2_000_000_000 });
+      await settle();
+      expect(o.of("bench:error")).toEqual([refusal, refusal, refusal, refusal]);
+      expect(o.of("bench:dm:new")).toEqual([]);
+      expect(a.of("bench:dm:new")).toEqual([]);
+      expect(a.of("bench:dm:typing")).toEqual([]);
+      expect(await threadBetween(olga, anna)).toBe(false);
+    });
+
+    it("lets people of one kitchen write and type to each other without a thread first", async () => {
+      await db.delete(benchDmThread).where(and(eq(benchDmThread.userAId, Math.min(anna, amir)), eq(benchDmThread.userBId, Math.max(anna, amir))));
+      const a = await connect(anna);
+      const m = await connect(amir);
+      m.socket.emit("bench:dm:typing", { recipientId: anna });
+      m.socket.emit("bench:dm:send", { recipientId: anna, body: "walk-in is low" });
+      await settle();
+      expect(a.of("bench:dm:typing")).toHaveLength(1);
+      expect(a.of("bench:dm:new").map((x) => x.messageBody)).toEqual(["walk-in is low"]);
+      expect(m.of("bench:error")).toEqual([]);
+    });
+  });
+
+  describe("D pinning", () => {
+    const pinsOf = async (key: string, as: number) => (await call("GET", `/channels/${key}/pins`, as)).body.map((p: any) => p.messageId);
+
+    it("in Everyone is for administrators only", async () => {
+      const msg = await createMessage(everyoneId, anna, "house rules");
+      expect(await call("POST", "/channels/everyone/pins", anna, { messageId: msg.messageId })).toEqual({ status: 403, body: { error: expect.any(String), code: "FORBIDDEN" } });
+      expect(await pinsOf("everyone", anna)).not.toContain(msg.messageId);
+
+      expect((await call("POST", "/channels/everyone/pins", olga, { messageId: msg.messageId }, ["Administrator"])).status).toBe(200);
+      expect(await pinsOf("everyone", anna)).toContain(msg.messageId);
+
+      expect(await call("DELETE", `/pins/${msg.messageId}`, anna)).toEqual({ status: 403, body: { error: expect.any(String), code: "FORBIDDEN" } });
+      expect(await pinsOf("everyone", anna)).toContain(msg.messageId);
+      expect((await call("DELETE", `/pins/${msg.messageId}`, olga, undefined, ["Administrator"])).status).toBe(200);
+      expect(await pinsOf("everyone", anna)).not.toContain(msg.messageId);
+    });
+
+    it("in a kitchen's channel is for any member of that kitchen and nobody outside it", async () => {
+      const msg = await createMessage(channelA, anna, "allergen list");
+      const path = `/channels/org_${orgA}/pins`;
+      const forbidden = { status: 403, body: { error: expect.any(String), code: "FORBIDDEN" } };
+      expect(await call("POST", path, bea, { messageId: msg.messageId })).toEqual(forbidden);
+      expect(await call("POST", path, olga, { messageId: msg.messageId }, ["Administrator"])).toEqual(forbidden);
+      expect((await call("POST", path, amir, { messageId: msg.messageId })).status).toBe(200);
+      expect(await pinsOf(`org_${orgA}`, anna)).toContain(msg.messageId);
+
+      expect(await call("DELETE", `/pins/${msg.messageId}`, bea)).toEqual(forbidden);
+      expect(await call("DELETE", `/pins/${msg.messageId}`, olga, undefined, ["Administrator"])).toEqual(forbidden);
+      expect((await call("DELETE", `/pins/${msg.messageId}`, anna)).status).toBe(200);
+      expect(await pinsOf(`org_${orgA}`, anna)).not.toContain(msg.messageId);
+    });
+
+    it("answers a missing sign-in, a bad message id and an unknown channel or pin with a code", async () => {
+      expect(await call("POST", "/channels/everyone/pins", null, { messageId: "x" })).toEqual({ status: 401, body: { error: expect.any(String), code: "UNAUTHENTICATED" } });
+      expect(await call("POST", "/channels/everyone/pins", anna, { messageId: "x" })).toEqual({ status: 400, body: { error: expect.any(String), code: "VALIDATION" } });
+      expect(await call("POST", "/channels/nowhere/pins", anna, { messageId: "00000000-0000-4000-8000-000000000000" })).toEqual({ status: 404, body: { error: expect.any(String), code: "NOT_FOUND" } });
+      expect(await call("DELETE", "/pins/00000000-0000-4000-8000-000000000000", anna)).toEqual({ status: 404, body: { error: expect.any(String), code: "NOT_FOUND" } });
+      expect(await call("DELETE", "/pins/x", anna)).toEqual({ status: 400, body: { error: expect.any(String), code: "VALIDATION" } });
+      expect(await call("POST", "/dm/threads", anna, { recipientId: "amir" })).toEqual({ status: 400, body: { error: expect.any(String), code: "VALIDATION" } });
     });
   });
 

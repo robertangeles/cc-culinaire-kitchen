@@ -8,7 +8,7 @@ import pino from "pino";
 import { db } from "../db/index.js";
 import { benchDmThread, benchMessage, user } from "../db/schema.js";
 import { eq, and, or, desc, lt } from "drizzle-orm";
-import { insertPost } from "./benchService.js";
+import { insertPost, sharesOrganisation } from "./benchService.js";
 
 const logger = pino({ name: "benchDmService" });
 
@@ -16,17 +16,40 @@ const logger = pino({ name: "benchDmService" });
 // Thread operations
 // ---------------------------------------------------------------------------
 
+/** The answer when a direct message may not be sent: HTTP 403 and `bench:error` alike. */
+export const DM_NOT_ALLOWED = {
+  error: "You can message people in your kitchen, and people you already have a conversation with.",
+  code: "DM_NOT_ALLOWED",
+} as const;
+
+/** The thread between two people, if there is one. */
+async function findThread(userIdA: number, userIdB: number) {
+  const [existing] = await db
+    .select()
+    .from(benchDmThread)
+    .where(and(eq(benchDmThread.userAId, Math.min(userIdA, userIdB)), eq(benchDmThread.userBId, Math.max(userIdA, userIdB))))
+    .limit(1);
+  return existing ?? null;
+}
+
+/** Who may write to whom: people who share an organisation, and two people who already have a thread (even if they no longer share one). */
+export async function mayDirectMessage(senderId: number, recipientId: number): Promise<boolean> {
+  return (await findThread(senderId, recipientId)) !== null || sharesOrganisation(senderId, recipientId);
+}
+
+/** The thread between two people, made if they may have one; null otherwise, the same for someone who does not exist. */
+export async function openThread(senderId: number, recipientId: number) {
+  const existing = await findThread(senderId, recipientId);
+  if (existing) return existing;
+  return (await sharesOrganisation(senderId, recipientId)) ? getOrCreateThread(senderId, recipientId) : null;
+}
+
 export async function getOrCreateThread(userIdA: number, userIdB: number) {
   // Always store lower userId as user_a to ensure uniqueness
   const userAId = Math.min(userIdA, userIdB);
   const userBId = Math.max(userIdA, userIdB);
 
-  const [existing] = await db
-    .select()
-    .from(benchDmThread)
-    .where(and(eq(benchDmThread.userAId, userAId), eq(benchDmThread.userBId, userBId)))
-    .limit(1);
-
+  const existing = await findThread(userAId, userBId);
   if (existing) return existing;
 
   try {

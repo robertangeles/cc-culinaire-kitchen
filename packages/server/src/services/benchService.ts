@@ -105,6 +105,24 @@ export async function getUserOrganisationIds(userId: number): Promise<number[]> 
   return rows.map((r) => r.organisationId);
 }
 
+/** Each of these people's organisations, in one read. Someone in none has no entry. */
+export async function getOrganisationIdsByUser(userIds: number[]): Promise<Map<number, number[]>> {
+  const byUser = new Map<number, number[]>();
+  if (userIds.length === 0) return byUser;
+  const rows = await db
+    .select({ userId: userOrganisation.userId, organisationId: userOrganisation.organisationId })
+    .from(userOrganisation)
+    .where(inArray(userOrganisation.userId, userIds));
+  for (const r of rows) byUser.set(r.userId, [...(byUser.get(r.userId) ?? []), r.organisationId]);
+  return byUser;
+}
+
+/** Do these two people belong to at least one organisation together? False for someone who does not exist. */
+export async function sharesOrganisation(userIdA: number, userIdB: number): Promise<boolean> {
+  const byUser = await getOrganisationIdsByUser([userIdA, userIdB]);
+  return (byUser.get(userIdA) ?? []).some((id) => byUser.get(userIdB)?.includes(id));
+}
+
 // ---------------------------------------------------------------------------
 // Channel banner
 // ---------------------------------------------------------------------------
