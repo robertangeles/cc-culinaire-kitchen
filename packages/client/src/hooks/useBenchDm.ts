@@ -76,8 +76,17 @@ export function useBenchDm() {
     }
   }, []);
 
+  // Close conversation (back to thread list)
+  const closeThread = useCallback(() => {
+    setStartError(null);
+    setActiveThreadId(null);
+    setActiveThread(null);
+    setMessages([]);
+  }, []);
+
   // Open a thread
   const openThread = useCallback((threadId: number, threadInfo?: DmThread) => {
+    setStartError(null);
     setActiveThreadId(threadId);
     if (threadInfo) setActiveThread(threadInfo);
     else {
@@ -99,10 +108,10 @@ export function useBenchDm() {
       });
       if (!res.ok) {
         const { error } = parseApiErrorBody(await res.json().catch(() => null));
+        closeThread();
         setStartError(error ?? START_FAILED);
         return;
       }
-      setStartError(null);
       const thread = await res.json();
 
       // Build a DmThread object so the conversation view can render immediately
@@ -119,22 +128,16 @@ export function useBenchDm() {
       openThread(thread.dmThreadId, threadInfo);
       fetchThreads();
     } catch {
+      closeThread();
       setStartError(START_FAILED);
     }
-  }, [openThread, fetchThreads]);
+  }, [openThread, closeThread, fetchThreads]);
 
   // Send a DM via socket
   const sendDm = useCallback((recipientId: number, body: string) => {
     if (!socket?.connected) return;
     socket.emit("bench:dm:send", { recipientId, body });
   }, [socket]);
-
-  // Close conversation (back to thread list)
-  const closeThread = useCallback(() => {
-    setActiveThreadId(null);
-    setActiveThread(null);
-    setMessages([]);
-  }, []);
 
   // Listen for incoming DMs
   useEffect(() => {

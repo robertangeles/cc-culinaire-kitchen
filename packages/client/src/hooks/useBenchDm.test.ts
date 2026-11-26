@@ -48,4 +48,27 @@ describe("useBenchDm starting a conversation", () => {
     expect(hook.result.current.startError).toBeNull();
     expect(hook.result.current.activeThreadId).toBe(3);
   });
+
+  it("leaves the open conversation, so the refusal shows on the list", async () => {
+    opened = { status: 200, body: { dmThreadId: 3, otherUserName: "Amir", otherUserPhotoPath: null } };
+    const hook = await start(8);
+    expect(hook.result.current.activeThreadId).toBe(3);
+    opened = { status: 403, body: { error: REFUSED, code: "DM_NOT_ALLOWED" } };
+    await act(() => hook.result.current.startDm(7));
+    expect(hook.result.current.activeThreadId).toBeNull();
+    expect(hook.result.current.activeThread).toBeNull();
+    expect(hook.result.current.startError).toBe(REFUSED);
+  });
+
+  it("forgets a refusal once the person goes back to the list or opens a thread", async () => {
+    opened = { status: 403, body: { error: REFUSED, code: "DM_NOT_ALLOWED" } };
+    const hook = await start(7);
+    act(() => hook.result.current.openThread(5));
+    expect(hook.result.current.startError).toBeNull();
+
+    await act(() => hook.result.current.startDm(7));
+    expect(hook.result.current.startError).toBe(REFUSED);
+    act(() => hook.result.current.closeThread());
+    expect(hook.result.current.startError).toBeNull();
+  });
 });
