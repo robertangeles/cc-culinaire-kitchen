@@ -216,6 +216,11 @@ function BenchContent() {
           />
         ) : (
           <div className="flex-1 overflow-y-auto bg-dark">
+            {dm.startError && (
+              <p role="alert" className="mx-4 mt-3 rounded-xl border border-red-500/30 bg-red-500/5 px-4 py-3 text-sm text-red-400">
+                {dm.startError}
+              </p>
+            )}
             <BenchDmThreadList
               threads={dm.threads}
               loading={dm.loadingThreads}

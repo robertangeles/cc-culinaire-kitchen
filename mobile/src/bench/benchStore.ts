@@ -44,7 +44,7 @@ export interface BenchSnapshot {
   threads: DmThread[];
   /** Threads with a message that came while they were not open. */
   fresh: number[];
-  /** Who is in each kitchen's own room now. Everyone's list is the whole platform and is not kept. */
+  /** Who is in each kitchen's own room now. Everyone's (the people online who share a kitchen with this person) is not kept. */
   presence: Record<string, BenchPerson[]>;
   room: RoomState | null;
 }
@@ -58,10 +58,12 @@ const TYPING_SHOWN_MS = 3_000;
 const TYPING_SENT_MS = 2_000;
 const NO_ACCESS = "You don't have access to this channel any more.";
 const NOT_CONNECTED = "Not connected. Try again when you're back online.";
+export const DM_REFUSED = "You can message people in your kitchen, and people you already have a conversation with.";
 
 export function benchFailure(err: unknown): string {
   if (!(err instanceof ApiError)) return "Something went wrong. Try again.";
   if (err.code === "network") return "Can't reach the server. Check your signal and try again.";
+  if (err.hasCode("DM_NOT_ALLOWED")) return DM_REFUSED;
   if (err.code === "forbidden" || err.code === "not_found") return NO_ACCESS;
   return err.message;
 }
@@ -307,7 +309,9 @@ export function createBenchStore({ api, live, userId, now, newId }: { api: Bench
     if (!snapshot.room.typing.some((t) => t.userId === who)) setRoom({ typing: [...snapshot.room.typing, { userId: who, userName: typeof userName === "string" ? userName : "Someone" }] });
   });
   live.on("bench:error", (p) => {
-    if (obj(p).code === "FORBIDDEN") setRoom({ phase: "error", messages: [], hasOlder: false, typing: [], error: NO_ACCESS });
+    const { code } = obj(p);
+    if (code === "FORBIDDEN") setRoom({ phase: "error", messages: [], hasOlder: false, typing: [], error: NO_ACCESS });
+    else if (code === "DM_NOT_ALLOWED") setRoom({ notice: DM_REFUSED });
     else setRoom({ notice: "That didn't go through. Try again." });
   });
   const offConnect = live.onConnect(() => {

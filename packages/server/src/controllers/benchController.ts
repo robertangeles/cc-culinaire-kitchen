@@ -25,11 +25,16 @@ import {
   getChannelForMessage,
 } from "../services/benchService.js";
 import {
-  getOrCreateThread,
+  openThread,
   getThreadsForUser,
   getDmMessages,
   getThreadById,
+  DM_NOT_ALLOWED,
 } from "../services/benchDmService.js";
+
+const isAdministrator = (req: Request) => req.user!.roles.includes("Administrator");
+const NOT_A_MEMBER = { error: "Not a member of this organisation", code: "FORBIDDEN" };
+const ADMINISTRATORS_ONLY = { error: "Only administrators can pin in Everyone", code: "FORBIDDEN" };
 
 /** GET /api/bench/channels */
 export async function handleGetChannels(req: Request, res: Response, next: NextFunction) {
@@ -99,6 +104,15 @@ export async function handleGetPins(req: Request, res: Response, next: NextFunct
 
 const pinSchema = z.object({ messageId: z.string().uuid() });
 
+/** Pins in Everyone are for administrators; in an organisation's channel, for its members and nobody outside it. */
+async function pinRefusal(req: Request, channel: { channelType: string; organisationId: number | null }) {
+  if (channel.channelType === "organisation") {
+    const orgIds = await getUserOrganisationIds(req.user!.sub);
+    return channel.organisationId !== null && orgIds.includes(channel.organisationId) ? null : NOT_A_MEMBER;
+  }
+  return isAdministrator(req) ? null : ADMINISTRATORS_ONLY;
+}
+
 /** POST /api/bench/channels/:key/pins */
 export async function handlePinMessage(req: Request, res: Response, next: NextFunction) {
   try {
@@ -106,23 +120,20 @@ export async function handlePinMessage(req: Request, res: Response, next: NextFu
     const channelKey = req.params.key as string;
     const parsed = pinSchema.safeParse(req.body);
     if (!parsed.success) {
-      res.status(400).json({ error: "Invalid message ID" });
+      res.status(400).json({ error: "Invalid message ID", code: "VALIDATION" });
       return;
     }
 
     const channel = await getChannelByKey(channelKey);
     if (!channel) {
-      res.status(404).json({ error: "Channel not found" });
+      res.status(404).json({ error: "Channel not found", code: "NOT_FOUND" });
       return;
     }
 
-    // Verify org membership for org channels
-    if (channel.channelType === "organisation" && channel.organisationId) {
-      const orgIds = await getUserOrganisationIds(userId);
-      if (!orgIds.includes(channel.organisationId)) {
-        res.status(403).json({ error: "Not a member of this organisation" });
-        return;
-      }
+    const refused = await pinRefusal(req, channel);
+    if (refused) {
+      res.status(403).json(refused);
+      return;
     }
 
     // The message must belong to THIS channel. Without this a member could pin a
@@ -130,7 +141,7 @@ export async function handlePinMessage(req: Request, res: Response, next: NextFu
     // content back via getPinnedMessages.
     const msgChannel = await getChannelForMessage(parsed.data.messageId);
     if (!msgChannel || msgChannel.channelId !== channel.channelId) {
-      res.status(404).json({ error: "Message not found in this channel" });
+      res.status(404).json({ error: "Message not found in this channel", code: "NOT_FOUND" });
       return;
     }
 
@@ -144,22 +155,23 @@ export async function handlePinMessage(req: Request, res: Response, next: NextFu
 /** DELETE /api/bench/pins/:messageId */
 export async function handleUnpinMessage(req: Request, res: Response, next: NextFunction) {
   try {
-    const userId = req.user!.sub;
-    const messageId = req.params.messageId as string;
+    const parsed = pinSchema.safeParse({ messageId: req.params.messageId });
+    if (!parsed.success) {
+      res.status(400).json({ error: "Invalid message ID", code: "VALIDATION" });
+      return;
+    }
+    const { messageId } = parsed.data;
 
     const pin = await getPinWithChannel(messageId);
     if (!pin) {
-      res.status(404).json({ error: "Pin not found" });
+      res.status(404).json({ error: "Pin not found", code: "NOT_FOUND" });
       return;
     }
 
-    // Verify org membership for org channels
-    if (pin.channelType === "organisation" && pin.organisationId) {
-      const orgIds = await getUserOrganisationIds(userId);
-      if (!orgIds.includes(pin.organisationId)) {
-        res.status(403).json({ error: "Not a member of this organisation" });
-        return;
-      }
+    const refused = await pinRefusal(req, pin);
+    if (refused) {
+      res.status(403).json(refused);
+      return;
     }
 
     await unpinMessage(messageId);
@@ -319,20 +331,28 @@ export async function handleGetDmMessages(req: Request, res: Response, next: Nex
   }
 }
 
-/** POST /api/bench/dm/threads — create or get thread { recipientId } */
+const dmThreadSchema = z.object({ recipientId: z.number().int().positive().max(2_147_483_647) });
+
+/** POST /api/bench/dm/threads — create or get thread { recipientId }: people who share an organisation, or who already have a thread */
 export async function handleCreateDmThread(req: Request, res: Response, next: NextFunction) {
   try {
     const userId = req.user!.sub;
-    const recipientId = req.body.recipientId;
-    if (!recipientId || typeof recipientId !== "number") {
-      res.status(400).json({ error: "recipientId required" });
+    const parsed = dmThreadSchema.safeParse(req.body);
+    if (!parsed.success) {
+      res.status(400).json({ error: "recipientId required", code: "VALIDATION" });
       return;
     }
+    const { recipientId } = parsed.data;
     if (recipientId === userId) {
-      res.status(400).json({ error: "Cannot message yourself" });
+      res.status(400).json({ error: "Cannot message yourself", code: "VALIDATION" });
       return;
     }
-    const thread = await getOrCreateThread(userId, recipientId);
+    // Refused before anything about the person is read: the answer is the same whether they exist or not.
+    const thread = await openThread(userId, recipientId);
+    if (!thread) {
+      res.status(403).json(DM_NOT_ALLOWED);
+      return;
+    }
 
     // Look up recipient's profile for the frontend
     const { db } = await import("../db/index.js");

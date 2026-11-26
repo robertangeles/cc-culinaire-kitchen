@@ -1127,7 +1127,7 @@ describe.skipIf(!process.env.SCREENS_OUT)(`screens on ${FORM}`, { timeout: 600_0
     }
   });
 
-  it("bench: list, a kitchen's channel, a message open, mention, people, pins, search, edit, everyone, a direct message, not sent", async () => {
+  it("bench: list, a kitchen's channel, a message open, mention, people, pins, search, edit, everyone, a direct message, not sent, everyone without pins", async () => {
     const ctx = await m.client.request<{ organisationId: number }>("GET", "/api/users/location-context");
     const { organisation } = await m.client.request<{ organisation: { joinKey: string } }>("GET", "/api/organisations/mine");
     const me = Number((await m.client.request<{ userId?: number; user?: { userId: number } }>("GET", "/api/auth/me").then((r) => r.userId ?? r.user!.userId)));
@@ -1227,6 +1227,20 @@ describe.skipIf(!process.env.SCREENS_OUT)(`screens on ${FORM}`, { timeout: 600_0
       await tap("Bo Li, new message");
       await waitFor(/cover the pass/, 30_000);
       await shot("c11-direct-message");
+      // Someone who is not an administrator: Everyone's message offers reactions, and no Pin.
+      const administrator = sql(`select role_id from role where role_name = 'Administrator'`);
+      sql(`delete from user_role where user_id = ${me} and role_id = ${administrator}`);
+      try {
+        await signedIn();
+        await tab("Bench");
+        await tap(/^Everyone/);
+        await waitFor(/dough divider/, 30_000);
+        await tap(/dough divider/);
+        await waitFor("React Fire", 20_000);
+        await shot("c12-everyone-not-administrator");
+      } finally {
+        sql(`insert into user_role (user_id, role_id) values (${me}, ${administrator})`);
+      }
     } finally {
       socket?.disconnect();
       forceStop(); // the next form starts a server and a database of its own

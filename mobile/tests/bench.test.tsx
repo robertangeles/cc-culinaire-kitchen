@@ -277,8 +277,27 @@ describe("Everyone", () => {
     expect(screen.queryByText(/on the pass/)).toBeNull();
     press(/^Bo Li, .*Message 1$/);
     expect(screen.queryByRole("button", { name: "Message Bo Li" })).toBeNull();
-    expect(screen.getByRole("button", { name: "Pin" })).toBeTruthy();
     expect(screen.getByRole("button", { name: "React Fire" })).toBeTruthy();
+  });
+
+  it("shows what is pinned, but pinning and unpinning are for administrators", async () => {
+    api.pins.mockResolvedValue([{ messageId: "m1", messageBody: "Message 1", userName: "Bo Li" }]);
+    await room({ channel: "everyone" });
+    press(/^Bo Li, .*Message 1$/);
+    expect(screen.queryByRole("button", { name: "Unpin" })).toBeNull();
+    expect(screen.queryByRole("button", { name: "Pin" })).toBeNull();
+    press("Pinned");
+    await waitFor(() => expect(screen.getAllByText("Message 1").length).toBe(2));
+    expect(screen.queryByRole("button", { name: "Unpin Bo Li's message" })).toBeNull();
+  });
+
+  it("an Administrator pins, and is told plainly when the server refuses", async () => {
+    signedIn(["Administrator"]);
+    api.pin.mockRejectedValueOnce(new ApiError("forbidden", "Only administrators can pin in Everyone", 403, undefined, "FORBIDDEN"));
+    await room({ channel: "everyone" });
+    press(/^Bo Li, .*Message 1$/);
+    press("Pin");
+    await waitFor(() => expect(screen.getByText("Only administrators can pin in Everyone.")).toBeTruthy());
   });
 });
 

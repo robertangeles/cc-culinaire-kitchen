@@ -55,9 +55,10 @@ describe("who may do what (the server checks again)", () => {
     expect(canDelete(me({ roles: ["Administrator"] }), message({ userId: 8 }))).toBe(true);
   });
 
-  it("pins in any channel, whoever can reach it, and not in a direct message", () => {
-    expect(canPin({ kind: "channel", key: "org_5" })).toBe(true);
-    expect(canPin({ kind: "channel", key: "everyone" })).toBe(true);
-    expect(canPin({ kind: "dm", threadId: 3 })).toBe(false);
+  it("pins in Everyone as an Administrator only, in a kitchen's channel as any member, and never in a direct message", () => {
+    expect(canPin(me(), { kind: "channel", key: "org_5" })).toBe(true);
+    expect(canPin(me(), { kind: "channel", key: "everyone" })).toBe(false);
+    expect(canPin(me({ roles: ["Administrator"] }), { kind: "channel", key: "everyone" })).toBe(true);
+    expect(canPin(me({ roles: ["Administrator"] }), { kind: "dm", threadId: 3 })).toBe(false);
   });
 });

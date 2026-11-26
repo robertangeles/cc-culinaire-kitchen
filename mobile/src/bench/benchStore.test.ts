@@ -3,7 +3,7 @@ import type { BenchChannel, BenchMessage, DmThread } from "@culinaire/shared/sch
 import { ApiError } from "../api/client";
 import { PAGE, type BenchApi, type Room } from "./benchApi";
 import type { BenchLive } from "./benchLive";
-import { createBenchStore } from "./benchStore";
+import { createBenchStore, DM_REFUSED } from "./benchStore";
 
 const at = (n: number) => new Date(Date.UTC(2026, 10, 26, 1, 0, n)).toISOString();
 const msg = (n: number, over: Partial<BenchMessage> = {}): BenchMessage => ({ messageId: `m${n}`, channelId: 2, dmThreadId: null, userId: 8, userName: "Bo", userPhotoPath: null, messageBody: `text ${n}`, messageType: "text", recipeTitle: null, editedInd: false, createdDttm: at(n), reactions: [], ...over });
@@ -561,6 +561,18 @@ describe("the lists", () => {
     expect(t.store.getSnapshot().threads.map((x) => x.dmThreadId)).toContain(9);
     expect(await t.store.startThread(8)).toBe(3); // the one there is, without asking the server
     expect(t.api.openThread).toHaveBeenCalledTimes(1);
+  });
+
+  it("says whom a direct message can go to when the server refuses one", async () => {
+    const t = setup();
+    await t.store.refreshLists();
+    await t.store.open(KITCHEN);
+    t.arrive("bench:presence:update", { channelKey: "org_5", users: [{ userId: 20, userName: "Di", userPhotoPath: null }] });
+    t.api.openThread.mockRejectedValueOnce(new ApiError("forbidden", "x", 403, undefined, "DM_NOT_ALLOWED"));
+    expect(await t.store.startThread(20)).toBeNull();
+    expect(t.room().notice).toBe(DM_REFUSED);
+    t.arrive("bench:error", { error: "x", code: "DM_NOT_ALLOWED" });
+    expect(t.room()).toMatchObject({ phase: "ready", notice: DM_REFUSED });
   });
 
   it("keeps the lists on screen when a refresh fails, and says so when there is nothing", async () => {

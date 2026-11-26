@@ -30,11 +30,12 @@ import {
   softDeleteMessage,
   editMessage,
   getUserOrganisationIds,
+  getOrganisationIdsByUser,
   getMessageAudience,
   isInAudience,
   type MessageAudience,
 } from "./benchService.js";
-import { getOrCreateThread, createDmMessage, getThreadById } from "./benchDmService.js";
+import { openThread, createDmMessage, getThreadById, mayDirectMessage, DM_NOT_ALLOWED } from "./benchDmService.js";
 import { db } from "../db/index.js";
 import { user as userTable } from "../db/schema.js";
 import { eq } from "drizzle-orm";
@@ -96,18 +97,13 @@ async function announce(socket: Socket, userId: number) {
   }
   if (!userSocketCount.has(userId)) return; // gone before the read came back
   userProfiles.set(userId, profile);
-  broadcastPresence("everyone");
+  void sendEveryonePresence();
   for (const channelKey of kitchensOf(socket)) broadcastPresence(channelKey);
 }
 
 /** The kitchens' own channels this socket is in */
 function kitchensOf(socket: Socket): string[] {
   return [...socket.rooms].filter((room) => room.startsWith("bench:org_")).map((room) => room.slice("bench:".length));
-}
-
-/** Get all online users — simply returns everyone in userProfiles map */
-function getAllOnlineUsers(): UserProfile[] {
-  return Array.from(userProfiles.values());
 }
 
 /** The people with a socket in this room now */
@@ -120,11 +116,36 @@ function getRoomUsers(channelKey: string): UserProfile[] {
   return Array.from(users.values());
 }
 
-/** Broadcast presence to everyone in a room: who is in it, or everyone online for the Everyone room */
+/** Broadcast presence to everyone in an organisation or DM room: who is in it */
 function broadcastPresence(channelKey: string) {
-  const users = channelKey === "everyone" ? getAllOnlineUsers() : getRoomUsers(channelKey);
+  const users = getRoomUsers(channelKey);
   logger.debug({ channelKey, userCount: users.length, userIds: users.map(u => u.userId) }, "Bench: broadcasting presence");
   io.to(`bench:${channelKey}`).emit("bench:presence:update", { channelKey, users });
+}
+
+let everyoneRound = 0;
+
+/**
+ * Everyone's list is each viewer's own: the people online who share an organisation with them, and themselves.
+ * Memberships are read at each send, so a kitchen joined or left shows by the next one. Sent to the sockets in Everyone, or to one.
+ */
+async function sendEveryonePresence(only?: Socket) {
+  const round = only ? everyoneRound : ++everyoneRound;
+  try {
+    const sockets = only ? [only] : [...(io.sockets.adapter.rooms.get("bench:everyone") ?? [])].flatMap((id) => io.sockets.sockets.get(id) ?? []);
+    if (sockets.length === 0) return;
+    const online = Array.from(userProfiles.values());
+    const kitchens = await getOrganisationIdsByUser(online.map((u) => u.userId));
+    if (!only && round !== everyoneRound) return; // a later send to everyone, made from newer state, may already be out
+    for (const socket of sockets) {
+      const viewer = socket.data.user.sub as number;
+      const mine = kitchens.get(viewer) ?? [];
+      const users = online.filter((u) => u.userId === viewer || (kitchens.get(u.userId) ?? []).some((id) => mine.includes(id)));
+      socket.emit("bench:presence:update", { channelKey: "everyone", users });
+    }
+  } catch (err) {
+    logger.warn({ err }, "Bench: Everyone presence not sent");
+  }
 }
 
 /** A removed member's sockets stop receiving the organisation's channel. Membership is otherwise only checked when they join it. */
@@ -132,6 +153,7 @@ export function evictFromOrganisationRoom(userId: number, organisationId: number
   if (!io) return; // scripts and tests that never start the socket server
   io.in(`bench:user_${userId}`).socketsLeave(`bench:org_${organisationId}`);
   broadcastPresence(`org_${organisationId}`);
+  void sendEveryonePresence();
 }
 
 /** May this user receive this room? Everyone, an organisation they belong to, a DM thread they are in; nothing else. */
@@ -207,7 +229,8 @@ export function initBenchSocket(httpServer: HttpServer): () => void {
           return;
         }
         socket.join(`bench:${channelKey}`);
-        broadcastPresence(channelKey);
+        if (channelKey === "everyone") void sendEveryonePresence(socket);
+        else broadcastPresence(channelKey);
         logger.debug({ userId, channelKey }, "Bench: joined channel");
       } catch (err) {
         logger.error({ err, userId, channelKey }, "Bench: join failed");
@@ -218,7 +241,7 @@ export function initBenchSocket(httpServer: HttpServer): () => void {
     // ── Leave channel ─────────────────────────────────────
     onBenchEvent(socket, "bench:leave", ({ channelKey }) => {
       socket.leave(`bench:${channelKey}`);
-      broadcastPresence(channelKey);
+      if (channelKey !== "everyone") broadcastPresence(channelKey);
     });
 
     // ── Send message ──────────────────────────────────────
@@ -354,7 +377,11 @@ export function initBenchSocket(httpServer: HttpServer): () => void {
     onBenchEvent(socket, "bench:dm:send", async ({ recipientId, body, messageId }) => {
       try {
         if (!body.trim() || body.length > 5000) return;
-        const thread = await getOrCreateThread(userId, recipientId);
+        const thread = await openThread(userId, recipientId);
+        if (!thread) {
+          socket.emit("bench:error", DM_NOT_ALLOWED);
+          return;
+        }
         const { replay, ...message } = await createDmMessage(thread.dmThreadId, userId, body.trim(), messageId);
         if (replay) return answerReplay("bench:dm:new", message);
         // Send to both sender and recipient
@@ -366,13 +393,17 @@ export function initBenchSocket(httpServer: HttpServer): () => void {
       }
     });
 
-    onBenchEvent(socket, "bench:dm:typing", ({ recipientId }) => {
+    onBenchEvent(socket, "bench:dm:typing", async ({ recipientId }) => {
+      if (!(await mayDirectMessage(userId, recipientId))) {
+        socket.emit("bench:error", DM_NOT_ALLOWED);
+        return;
+      }
       io.to(`bench:user_${recipientId}`).emit("bench:dm:typing", { userId, userName: userName() });
     });
 
-    // ── Presence heartbeat (triggers a fresh broadcast) ───
+    // ── Presence heartbeat (answers the asker with a fresh Everyone list) ───
     onBenchEvent(socket, "bench:presence:heartbeat", () => {
-      broadcastPresence("everyone");
+      if (socket.rooms.has("bench:everyone")) void sendEveryonePresence(socket);
     });
 
     // ── Disconnect ────────────────────────────────────────
@@ -388,7 +419,7 @@ export function initBenchSocket(httpServer: HttpServer): () => void {
       // During transport upgrades (polling → websocket), the old socket
       // disconnects but a new one connects immediately — count stays > 0.
       if (reason !== SERVER_STOPPING) {
-        if (fullyGone) broadcastPresence("everyone");
+        if (fullyGone) void sendEveryonePresence();
         for (const channelKey of left) broadcastPresence(channelKey);
       }
       // Clear typing

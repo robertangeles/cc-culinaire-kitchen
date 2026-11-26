@@ -82,6 +82,8 @@ export const SERVER_ERROR_CODES = [
   "IDEMPOTENCY_KEY_REUSED",
   // Compliance documents: the private document store is not set up or not answering (503). Try again later.
   "STORAGE_UNAVAILABLE",
+  // The Bench: a direct message to someone who shares no kitchen and no thread with the sender (or does not exist).
+  "DM_NOT_ALLOWED",
 ] as const;
 export type ServerErrorCode = (typeof SERVER_ERROR_CODES)[number];
 

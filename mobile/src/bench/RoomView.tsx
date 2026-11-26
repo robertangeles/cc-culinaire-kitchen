@@ -2,6 +2,7 @@ import { useEffect, useMemo, useState } from "react";
 import { FlatList, Pressable, ScrollView, View } from "react-native";
 import type { BenchMessage, BenchPerson, BenchPin, BenchSearchHit } from "@culinaire/shared/schemas/bench";
 import type { AuthUser } from "../api/auth";
+import { ApiError } from "../api/client";
 import { fontFamily, radius, size, space } from "../theme";
 import { Avatar } from "../ui/Avatar";
 import { OfflineBanner } from "../ui/Banner";
@@ -39,7 +40,7 @@ export function RoomView({ room, user, onBack, onOpen }: { room: Room; user: Aut
   const title = channel?.channelName ?? thread?.otherUserName ?? "The Bench";
   // Who was there before the connection went says nothing about now.
   const here: BenchPerson[] = kitchen && room.kind === "channel" && status === "online" ? (snap.presence[room.key] ?? []) : [];
-  const mayPin = canPin(room);
+  const mayPin = canPin(user, room);
 
   // Where pins can be changed, which messages are pinned is known from the start, for Pin or Unpin.
   async function loadPins() {
@@ -60,7 +61,8 @@ export function RoomView({ room, user, onBack, onOpen }: { room: Room; user: Aut
     try {
       await (pinned ? api.unpin(messageId) : api.pin(room.key, messageId));
     } catch (err) {
-      setPinError(benchFailure(err));
+      // In a kitchen a refusal means its member is one no more; in Everyone, someone no longer an administrator.
+      setPinError(err instanceof ApiError && err.code === "forbidden" && room.key === "everyone" ? "Only administrators can pin in Everyone." : benchFailure(err));
       return;
     }
     await loadPins();

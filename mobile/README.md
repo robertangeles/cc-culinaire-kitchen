@@ -457,7 +457,8 @@ Nothing of the Bench is kept on the phone (messages are private: memory only) an
 - **A post** carries an id made on the phone (`messageId`), which the server stores it under. It is "Sending…" until the message with that id is seen. A list read after ten seconds without it makes it "Not sent"; with no connection it stays undecided.
   Try again looks on the server first. Every emit is volatile: the socket library otherwise keeps what it could not send and posts it at the next connect, after the person gave up on it.
   Try again sends the same id, so a post that reached the server after all is not posted twice: the server answers with the one it has.
-- **Privacy rules** (until the owner decides who may see who is online in Everyone and whom a direct message may reach): presence is shown in a kitchen's own channel only; a direct message can be started only with someone met in a kitchen's channel (who is in it, who wrote in it) or in a thread there already is. The server scopes each room; the phone filters nothing.
+- **Who sees and reaches whom** (the owner's rules, enforced by the server): who is online in Everyone is only the people who share a kitchen with the viewer (someone in no kitchen sees only themselves); a direct message goes only to someone who shares a kitchen with the sender, or with whom there is already a conversation (a thread with a message in it), which keeps working after they stop sharing one; pinning in Everyone is for administrators, in a kitchen's channel for its members.
+  The phone shows presence in a kitchen's own channel only, offers a direct message only to someone met in a kitchen's channel (who is in it, who wrote in it) or in a thread there already is, and shows Pin and Unpin only where the server allows them. A refusal says why in plain words (`DM_NOT_ALLOWED`; a pin refused in Everyone). The server scopes each room; the phone filters nothing.
 - **Pictures**: only the site's own uploads and Cloudinary are loaded (`whole` in `benchApi.ts`), as the web's content policy allows; a person with any other address shows their initial.
 
 Differences from the web, found while comparing:
@@ -466,11 +467,11 @@ Differences from the web, found while comparing:
 |---|---|---|
 | A guest sees the page (an empty list and a sign-in prompt) | Signed-in people only | The server has no guest access. |
 | The first kitchen only | Every kitchen the person belongs to | The server lists them all. |
-| Who is online is shown in Everyone too | A kitchen's own room only | Privacy rule above. The phone asks for the list again every 30 s while the room is open. |
-| Any name starts a direct message, in Everyone too | Only people of one's kitchens or an existing thread | Privacy rule above. |
+| Who is online is shown in Everyone too (the people who share a kitchen with the viewer) | A kitchen's own room only | The phone asks for the list again every 30 s while the room is open. |
+| Any name offers a direct message, in Everyone too; the server refuses one to someone outside one's kitchens and says why | Offered only for people of one's kitchens or an existing thread | Rules above. |
 | @ suggests everyone online | @ suggests who is in the kitchen's room and who wrote what is on screen; one's own @name is in copper | The name is plain text on both: nothing stores a mention, so there is no unread count and no push. |
 | Reconnects at most ten times; a post made offline is dropped silently | Reconnects until left; says Not sent | |
-| No pins and no search on the web (the server has both) | Pinned and Search in each channel. Pin and Unpin in any channel, for whoever can reach it | Who may pin is an open question for the owner. |
+| No pins and no search on the web (the server has both) | Pinned and Search in each channel. Pin and Unpin in a kitchen's channel for its members, in Everyone for administrators | Rules above. |
 | Search | The newest five, no jump to the message | Follow-up. |
 | Reactions can be added in direct messages but never show (the list does not return them) | No reactions in direct messages | |
 | Direct messages: no typing sign, a toast when one arrives on another tab | No typing sign; "New" on the thread, kept until it is opened | In memory only: the server keeps no unread state. |

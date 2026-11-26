@@ -10,8 +10,12 @@ const { profiles } = vi.hoisted(() => ({ profiles: { held: null as null | (() =>
 vi.mock("../db/index.js", () => ({
   db: { select: () => ({ from: () => ({ where: () => ({ limit: () => profiles.read() }) }) }) },
 }));
-vi.mock("./benchService.js", () => ({ getUserOrganisationIds: async () => [5] }));
-vi.mock("./benchDmService.js", () => ({}));
+// Everyone here is in kitchen 5.
+vi.mock("./benchService.js", () => ({
+  getUserOrganisationIds: async () => [5],
+  getOrganisationIdsByUser: async (ids: number[]) => new Map(ids.map((id) => [id, [5]])),
+}));
+vi.mock("./benchDmService.js", () => ({ mayDirectMessage: async () => true }));
 
 import { initBenchSocket } from "./benchSocketService.js";
 
