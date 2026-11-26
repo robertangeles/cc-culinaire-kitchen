@@ -183,6 +183,14 @@ describe("storeDocument — a photo is stored without what the camera wrote abou
     expect([...end.mock.calls[0][0]]).toEqual([0xff, 0xd8, ...JFIF, ...TABLE, ...PIXELS]);
   });
 
+  it("stores a JPEG only up to the end of its picture, not a second picture after it", async () => {
+    credsOk();
+    const end = stored();
+    const second = [0xff, 0xd8, ...seg(0xe1, ascii("Exif\0\0GPS-37.81,144.96")), ...PIXELS];
+    await storeDocument(Buffer.from([0xff, 0xd8, ...JFIF, ...TABLE, ...PIXELS, ...second]), 2, 5);
+    expect([...end.mock.calls[0][0]]).toEqual([0xff, 0xd8, ...JFIF, ...TABLE, ...PIXELS]);
+  });
+
   it("stores a PNG without its text chunks", async () => {
     credsOk();
     const end = stored();
