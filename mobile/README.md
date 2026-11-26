@@ -624,7 +624,7 @@ the first time, after the form has said what it is for; a refusal offers Setting
 (`packages/shared/src/utils/photoMetadata.ts`, shared with the web and the server; Android's picker copies it into the compressed photo), and one that cannot be cleaned is not sent. Anything after the picture's end (an HDR gain map, a motion-photo part) is dropped. Only the rotation (the EXIF Orientation tag) is written back, alone: Android's picker omits it and hands over upright pixels, but on an iPhone the photo library path keeps the rotation only in that tag (expo-image-picker `MediaHandler.swift`, PHPicker path), so an iPhone portrait photo would otherwise arrive sideways. Not checked on an iPhone or iPad (no Mac); if the picker already bakes the rotation into the pixels the tag is 1 or absent and nothing changes. The picker leaves copies in the app's cache: they are deleted as soon as the
 photo is read, and again at the next start (`src/photos/photoFiles.ts`); from then on it is in memory, while the form is open. It is sent as bytes (`src/api/photo.ts`): Expo's fetch refuses React Native's `{ uri }` file parts. The profile picture goes the same way. The stored photo is read into memory when the person asks for it, never through the image cache; a PDF opens in the browser.
 
-A refusal is read by its status. Server follow-ups for the upload and documents routes are tracked.
+A refusal is read by its status. The upload and documents routes now send the server's error codes (see `CHANGELOG.md`); the phone does not read them yet.
 
 Differences from the web (`MyDocumentsTab.tsx`, `MyDocumentsList.tsx`, `DocumentUploadForm.tsx`), found while comparing:
 
