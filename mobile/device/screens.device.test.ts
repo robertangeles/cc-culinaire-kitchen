@@ -1238,7 +1238,7 @@ describe.skipIf(!process.env.SCREENS_OUT)(`screens on ${FORM}`, { timeout: 600_0
       await tapNow("Block");
       await waitFor("Block Bo Li?", 20_000);
       await shot("c15-block-asks");
-      await back(); // the native dialog's own buttons are not tapped: the block is made through the API
+      await tapNow(/^cancel$/i); // the block itself is made through the API: Back does not close this dialog
       await m.client.request("POST", "/api/bench/blocks", { body: { userId: bo } });
       if (await has("Back to the Bench")) await tapNow("Back to the Bench");
       await tap("Blocked people");
