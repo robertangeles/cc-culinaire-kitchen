@@ -61,7 +61,7 @@ function stripJpeg(b: Uint8Array): Uint8Array | null {
     if (end < i + 4 || end > b.length) return null;
     if (marker === 0xda) {
       // the pixels start here; in them a literal FF is FF 00 and a restart is FF D0-D7, so the first FF D9 is the picture's end
-      for (let e = end; e + 2 <= b.length; e++) if (at(b, e, 0xff, 0xd9)) return join([...parts, b.subarray(i, e + 2)]);
+      for (let e = end; e + 2 <= b.length; e++) if (b[e] === 0xff && b[e + 1] === 0xd9) return join([...parts, b.subarray(i, e + 2)]);
       return null;
     }
     if (marker === 0xe1 && !seen) {
