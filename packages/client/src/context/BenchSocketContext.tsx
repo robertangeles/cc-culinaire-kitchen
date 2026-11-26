@@ -15,6 +15,9 @@ interface BenchSocketContextValue {
   connected: boolean;
 }
 
+/** socket.io does not reconnect after the server ends a connection itself, as it does when it cannot read this person's blocks. */
+const SERVER_DISCONNECT_RETRY_MS = 3_000;
+
 const BenchSocketCtx = createContext<BenchSocketContextValue>({
   socket: null,
   connected: false,
@@ -42,8 +45,14 @@ export function BenchSocketProvider({ children }: { children: ReactNode }) {
       setConnected(true);
     });
 
-    s.on("disconnect", () => {
+    let retry: ReturnType<typeof setTimeout> | null = null;
+    s.on("disconnect", (reason) => {
       setConnected(false);
+      if (reason !== "io server disconnect" || retry) return;
+      retry = setTimeout(() => {
+        retry = null;
+        s.connect();
+      }, SERVER_DISCONNECT_RETRY_MS);
     });
 
     s.on("connect_error", (err) => {
@@ -54,6 +63,7 @@ export function BenchSocketProvider({ children }: { children: ReactNode }) {
     setSocket(s);
 
     return () => {
+      if (retry) clearTimeout(retry);
       s.disconnect();
       setSocket(null);
       setConnected(false);
