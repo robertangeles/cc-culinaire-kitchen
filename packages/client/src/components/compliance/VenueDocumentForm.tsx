@@ -11,7 +11,7 @@
 
 import { useEffect, useRef, useState } from "react";
 import { Camera, CheckCircle2, Loader2 } from "lucide-react";
-import { inputClass } from "./documentFormShared.js";
+import { inputClass, withoutPhotoMetadata } from "./documentFormShared.js";
 
 const API = import.meta.env.VITE_API_URL ?? "";
 
@@ -33,6 +33,8 @@ export function VenueDocumentForm() {
   const [file, setFile] = useState<File | null>(null);
   const [storagePublicId, setStoragePublicId] = useState<string | null>(null);
   const [storageFormat, setStorageFormat] = useState<string | null>(null);
+  // Made once per stored file: a save whose answer was lost is sent again with it and finds the same document.
+  const [documentId, setDocumentId] = useState<string | null>(null);
   const [uploading, setUploading] = useState(false);
   const [uploadError, setUploadError] = useState<string | null>(null);
   const [expiryDate, setExpiryDate] = useState("");
@@ -82,7 +84,7 @@ export function VenueDocumentForm() {
     setUploading(true);
     try {
       const form = new FormData();
-      form.append("file", chosen);
+      form.append("file", await withoutPhotoMetadata(chosen));
       const res = await fetch(`${API}/api/compliance/documents/upload`, {
         method: "POST",
         credentials: "include",
@@ -95,6 +97,7 @@ export function VenueDocumentForm() {
       const data: { storagePublicId: string; storageFormat?: string } = await res.json();
       setStoragePublicId(data.storagePublicId);
       setStorageFormat(data.storageFormat ?? null);
+      setDocumentId(crypto.randomUUID());
     } catch (err) {
       setUploadError(err instanceof Error ? err.message : "Couldn't read that file. Try again.");
     } finally {
@@ -114,6 +117,7 @@ export function VenueDocumentForm() {
         credentials: "include",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
+          complianceDocumentId: documentId,
           documentType: effectiveType,
           storeLocationId,
           expiryDate: expiryDate || null,

@@ -22,7 +22,7 @@ import { formatAuDate } from "@culinaire/shared";
 import { DOCUMENT_TYPES } from "../../lib/complianceDocumentTypes.js";
 import { useDocumentTypeSelection } from "../../hooks/useDocumentTypeSelection.js";
 import { OtherDocumentTypeInput } from "./OtherDocumentTypeInput.js";
-import { AU_STATES, inputClass } from "./documentFormShared.js";
+import { AU_STATES, inputClass, withoutPhotoMetadata } from "./documentFormShared.js";
 
 const API = import.meta.env.VITE_API_URL ?? "";
 
@@ -61,6 +61,8 @@ export function DocumentUploadForm({ onUploaded }: { onUploaded?: () => void }) 
   const [file, setFile] = useState<File | null>(null);
   const [storagePublicId, setStoragePublicId] = useState<string | null>(null);
   const [storageFormat, setStorageFormat] = useState<string | null>(null);
+  // Made once per stored file: a send whose answer was lost is sent again with it and finds the same document.
+  const [documentId, setDocumentId] = useState<string | null>(null);
   const [uploading, setUploading] = useState(false);
   const [uploadError, setUploadError] = useState<string | null>(null);
   const [ocrFilled, setOcrFilled] = useState<Set<string>>(new Set());
@@ -104,7 +106,7 @@ export function DocumentUploadForm({ onUploaded }: { onUploaded?: () => void }) 
     setUploading(true);
     try {
       const form = new FormData();
-      form.append("file", chosen);
+      form.append("file", await withoutPhotoMetadata(chosen));
       const res = await fetch(`${API}/api/compliance/documents/upload`, {
         method: "POST",
         credentials: "include",
@@ -117,6 +119,7 @@ export function DocumentUploadForm({ onUploaded }: { onUploaded?: () => void }) 
       const data: { storagePublicId: string; storageFormat?: string; ocr?: OcrResult } = await res.json();
       setStoragePublicId(data.storagePublicId);
       setStorageFormat(data.storageFormat ?? null);
+      setDocumentId(crypto.randomUUID());
 
       const filled = new Set<string>();
       if (data.ocr?.documentNumber) {
@@ -153,6 +156,7 @@ export function DocumentUploadForm({ onUploaded }: { onUploaded?: () => void }) 
         credentials: "include",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
+          complianceDocumentId: documentId,
           documentType: effectiveType,
           engagementType,
           documentNumber: documentNumber.trim() || null,
