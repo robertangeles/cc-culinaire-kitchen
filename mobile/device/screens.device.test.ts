@@ -1229,7 +1229,7 @@ describe.skipIf(!process.env.SCREENS_OUT)(`screens on ${FORM}`, { timeout: 600_0
       await shot("c11-direct-message");
       // Report and block: the direct message's header offers both.
       await tapNow("Report");
-      await waitFor("What's wrong", 20_000);
+      await waitFor("Send report", 20_000);
       await tapLabel("Harassment or bullying");
       await shot("c13-report-form");
       await tapNow("Send report");
