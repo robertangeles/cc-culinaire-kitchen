@@ -5,6 +5,7 @@
  */
 
 import { useState, useEffect, useCallback } from "react";
+import { parseApiErrorBody } from "@culinaire/shared";
 import { useBenchSocket } from "../context/BenchSocketContext.js";
 
 export interface DmThread {
@@ -29,6 +30,7 @@ export interface DmMessage {
 }
 
 const API = import.meta.env.VITE_API_URL ?? "";
+const START_FAILED = "Couldn't open that conversation. Try again.";
 
 export function useBenchDm() {
   const { socket } = useBenchSocket();
@@ -38,6 +40,8 @@ export function useBenchDm() {
   const [messages, setMessages] = useState<DmMessage[]>([]);
   const [loadingThreads, setLoadingThreads] = useState(true);
   const [loadingMessages, setLoadingMessages] = useState(false);
+  /** Why the last conversation asked for could not be opened (the server allows people who share a kitchen, or who already have a thread). */
+  const [startError, setStartError] = useState<string | null>(null);
 
   // Fetch threads
   const fetchThreads = useCallback(async () => {
@@ -93,7 +97,12 @@ export function useBenchDm() {
         credentials: "include",
         body: JSON.stringify({ recipientId }),
       });
-      if (!res.ok) return;
+      if (!res.ok) {
+        const { error } = parseApiErrorBody(await res.json().catch(() => null));
+        setStartError(error ?? START_FAILED);
+        return;
+      }
+      setStartError(null);
       const thread = await res.json();
 
       // Build a DmThread object so the conversation view can render immediately
@@ -110,7 +119,7 @@ export function useBenchDm() {
       openThread(thread.dmThreadId, threadInfo);
       fetchThreads();
     } catch {
-      // silent
+      setStartError(START_FAILED);
     }
   }, [openThread, fetchThreads]);
 
@@ -192,6 +201,7 @@ export function useBenchDm() {
     openThread,
     closeThread,
     startDm,
+    startError,
     sendDm,
     fetchThreads,
   };

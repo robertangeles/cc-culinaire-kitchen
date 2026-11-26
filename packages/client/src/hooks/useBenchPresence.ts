@@ -1,9 +1,9 @@
 /**
  * @module hooks/useBenchPresence
  *
- * Tracks online users in The Bench.
- * Accepts ALL presence updates (not filtered by channel) since
- * the server broadcasts all connected users globally.
+ * Tracks who is online in the open channel of The Bench. The socket also hears other rooms' lists
+ * (Everyone's comes back after a reconnect while a kitchen is open), so only the open channel's is kept.
+ * Everyone's list holds the people who share a kitchen with the viewer, as the server sends it.
  * Sends heartbeat every 30s to keep presence alive.
  */
 
@@ -16,28 +16,27 @@ export interface PresenceUser {
   userPhotoPath: string | null;
 }
 
-export function useBenchPresence(_channelKey: string) {
+export function useBenchPresence(channelKey: string) {
   const { socket } = useBenchSocket();
   const [onlineUsers, setOnlineUsers] = useState<PresenceUser[]>([]);
   const heartbeatRef = useRef<ReturnType<typeof setInterval>>(undefined);
 
   useEffect(() => {
+    setOnlineUsers([]);
     if (!socket) return;
 
     function onPresenceUpdate(data: { channelKey: string; users: PresenceUser[] }) {
-      // Accept any presence update — server sends all online users
-      setOnlineUsers(data.users);
+      if (data.channelKey === channelKey) setOnlineUsers(data.users);
+    }
+    function onConnect() {
+      socket!.emit("bench:presence:heartbeat");
     }
 
     socket.on("bench:presence:update", onPresenceUpdate);
 
     // Request fresh presence immediately on mount/reconnect
-    if (socket.connected) {
-      socket.emit("bench:presence:heartbeat");
-    }
-    socket.on("connect", () => {
-      socket.emit("bench:presence:heartbeat");
-    });
+    if (socket.connected) onConnect();
+    socket.on("connect", onConnect);
 
     // Heartbeat every 30s
     heartbeatRef.current = setInterval(() => {
@@ -46,10 +45,10 @@ export function useBenchPresence(_channelKey: string) {
 
     return () => {
       socket.off("bench:presence:update", onPresenceUpdate);
-      socket.off("connect");
+      socket.off("connect", onConnect);
       if (heartbeatRef.current) clearInterval(heartbeatRef.current);
     };
-  }, [socket]);
+  }, [socket, channelKey]);
 
   return { onlineUsers };
 }

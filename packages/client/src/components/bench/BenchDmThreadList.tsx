@@ -25,7 +25,7 @@ export function BenchDmThreadList({ threads, loading, onSelect }: BenchDmThreadL
       <div className="flex flex-col items-center justify-center py-16 text-center px-4">
         <MessageCircle className="size-12 mb-4 text-gold/40" />
         <p className="text-base text-dark-600 font-medium mb-1">No conversations yet</p>
-        <p className="text-sm text-dark-500">Click on a chef&apos;s name in the chat to start a direct message</p>
+        <p className="text-sm text-dark-500">Click on the name of someone in your kitchen to start a direct message</p>
       </div>
     );
   }
