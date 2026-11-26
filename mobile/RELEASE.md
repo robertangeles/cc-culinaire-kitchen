@@ -110,6 +110,6 @@ The script prints the host before it writes anything and never prints the passwo
 - Sign in on a fresh account that has no organisation: first-run screen, join by key, join a location, reach the count.
 - Delete a test account from the Account screen (a tab, or under More); confirm the phone returns to sign-in with nothing left on it.
 - App lock, signed in as someone who approves orders: cold start shows the lock screen; Unlock works with Face ID or a fingerprint, and with the passcode after biometrics fail; cancel it and fail it five times (still locked, still signed in); lock the phone or switch apps for over a minute (locked) and for a few seconds (not locked); the app switcher shows a blank page; wait two minutes and approve an order (asked again; cancel sends nothing). On a spare device with no passcode: the app asks for one.
-- App lock, signed in as a cook: no lock anywhere.
+- App lock, signed in as someone with no approval, roster or compliance permission (not even `roster:read-own`): no lock anywhere. A cook with their own shifts and documents is locked.
 - Open Terms and Privacy from sign-in (signed out) and from the Account screen.
 - Set `mobile_min_app_version` above the installed version on a test server: the update screen appears with no link, then (after setting the store link) with the right store's button.
