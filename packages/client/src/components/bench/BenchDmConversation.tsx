@@ -1,15 +1,17 @@
 /**
  * DM conversation view — header with recipient info + message list + input.
- * Reuses BenchMessageItem for edit, delete, and reactions.
+ * Reuses BenchMessageItem for edit, delete, reactions, report and block.
  */
 
 import { useEffect, useRef } from "react";
-import { ArrowLeft, Loader2 } from "lucide-react";
+import { ArrowLeft, Loader2, MoreVertical } from "lucide-react";
 import { BenchMessageInput } from "./BenchMessageInput.js";
 import { BenchMessageItem } from "./BenchMessageItem.js";
 import type { DmMessage, DmThread } from "../../hooks/useBenchDm.js";
 import type { BenchMessage } from "../../hooks/useBenchMessages.js";
 import { useBenchSocket } from "../../context/BenchSocketContext.js";
+import type { BenchPerson, ReportTarget } from "../../hooks/useBenchSafety.js";
+import { BenchPersonMenu } from "./BenchPersonMenu.js";
 
 interface BenchDmConversationProps {
   thread: DmThread;
@@ -17,6 +19,8 @@ interface BenchDmConversationProps {
   loading: boolean;
   onSend: (recipientId: number, body: string) => void;
   onBack: () => void;
+  onReport?: (target: ReportTarget) => void;
+  onBlock?: (person: BenchPerson) => void;
 }
 
 /** Convert DmMessage to BenchMessage shape for BenchMessageItem */
@@ -37,7 +41,7 @@ function toBenchMessage(msg: DmMessage): BenchMessage {
   };
 }
 
-export function BenchDmConversation({ thread, messages, loading, onSend, onBack }: BenchDmConversationProps) {
+export function BenchDmConversation({ thread, messages, loading, onSend, onBack, onReport, onBlock }: BenchDmConversationProps) {
   const { socket } = useBenchSocket();
   const bottomRef = useRef<HTMLDivElement>(null);
 
@@ -79,7 +83,19 @@ export function BenchDmConversation({ thread, messages, loading, onSend, onBack 
             <span className="text-base font-semibold text-gold">{thread.otherUserName.charAt(0).toUpperCase()}</span>
           </div>
         )}
-        <span className="text-[15px] font-semibold text-[#FAFAFA]">{thread.otherUserName}</span>
+        <span className="flex-1 text-[15px] font-semibold text-[#FAFAFA]">{thread.otherUserName}</span>
+        {(onReport || onBlock) && (
+          <BenchPersonMenu
+            person={{ userId: thread.otherUserId, userName: thread.otherUserName, userPhotoPath: thread.otherUserPhotoPath }}
+            onReport={onReport}
+            onBlock={onBlock}
+            label={`${thread.otherUserName}: options`}
+            alignRight
+            triggerClassName="p-1.5 rounded-lg text-dark-600 hover:bg-dark-200 hover:text-[#FAFAFA] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-gold/50 transition-colors"
+          >
+            <MoreVertical className="size-5" />
+          </BenchPersonMenu>
+        )}
       </div>
 
       {/* Messages */}
@@ -103,6 +119,8 @@ export function BenchDmConversation({ thread, messages, loading, onSend, onBack 
                 onEdit={handleEdit}
                 onReaction={handleReaction}
                 onRemoveReaction={handleRemoveReaction}
+                onReport={onReport}
+                onBlock={onBlock}
               />
             ))}
             <div ref={bottomRef} />

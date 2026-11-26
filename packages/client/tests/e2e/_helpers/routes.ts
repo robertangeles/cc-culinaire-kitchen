@@ -18,6 +18,7 @@ export const ROUTES: ReadonlyArray<{ path: string; kind: RouteKind }> = [
   { path: "/kitchen-copilot", kind: "gated" },
   { path: "/inventory", kind: "gated" },
   { path: "/purchasing", kind: "gated" },
+  { path: "/bench/moderation", kind: "gated" },
   { path: "/chat/new", kind: "guest-open" },
   { path: "/chat/00000000-0000-0000-0000-000000000000", kind: "guest-open" },
   { path: "/recipes", kind: "guest-open" },

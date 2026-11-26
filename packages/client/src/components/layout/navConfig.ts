@@ -26,6 +26,7 @@ import {
   LayoutGrid,
   MessagesSquare,
   CalendarDays,
+  ShieldAlert,
   type LucideIcon,
 } from "lucide-react";
 
@@ -145,6 +146,13 @@ export const NAV_SECTIONS: NavSection[] = [
     items: [
       { id: "community-recipes", label: "Community Recipes", icon: LayoutGrid, to: "/kitchen-shelf", gate: "guest-ok" },
       { id: "the-bench", label: "The Bench", icon: MessagesSquare, to: "/bench", gate: "guest-ok" },
+      {
+        id: "bench-moderation",
+        label: "Bench Moderation",
+        icon: ShieldAlert,
+        to: "/bench/moderation",
+        gate: { anyPermission: ["bench:moderate"] },
+      },
     ],
   },
 ];

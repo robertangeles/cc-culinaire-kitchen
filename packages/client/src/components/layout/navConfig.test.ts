@@ -80,6 +80,14 @@ describe("filterNav", () => {
     expect(ids).not.toContain("menu-costing");
     expect(ids).not.toContain("waste");
     expect(ids).not.toContain("ordering");
+    expect(ids).not.toContain("bench-moderation");
+  });
+
+  it("Bench Moderation shows only to holders of bench:moderate", () => {
+    const moderator: NavContext = { ...lineCook, permissions: ["bench:moderate"] };
+    expect(visibleIds(moderator)).toContain("bench-moderation");
+    expect(visibleIds(owner)).not.toContain("bench-moderation");
+    expect(visibleIds(guest)).not.toContain("bench-moderation");
   });
 
   it("owner sees the full Run the Kitchen group", () => {

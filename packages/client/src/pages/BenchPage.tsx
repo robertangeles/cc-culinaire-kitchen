@@ -6,10 +6,12 @@
  *
  * - Registered users: full chat (send, react, etc.)
  * - Guest users: read-only view of the Everyone channel with a prompt to register
+ * - Anyone signed in can report a message or a person, and block a person
+ *   (their messages leave the screen at once; "Blocked people" lists them)
  */
 
 import { useState, useEffect, useCallback, useRef } from "react";
-import { Users, Building2, LogIn, MessageCircle } from "lucide-react";
+import { Users, Building2, LogIn, MessageCircle, UserX, X } from "lucide-react";
 import { Link } from "react-router";
 import { useAuth } from "../context/AuthContext.js";
 import { BenchSocketProvider, useBenchSocket } from "../context/BenchSocketContext.js";
@@ -24,6 +26,9 @@ import { useBenchDm } from "../hooks/useBenchDm.js";
 import { BenchDmThreadList } from "../components/bench/BenchDmThreadList.js";
 import { BenchDmConversation } from "../components/bench/BenchDmConversation.js";
 import { BenchNotificationToast, type BenchNotification } from "../components/bench/BenchNotificationToast.js";
+import { useBenchBlocks, type BenchPerson, type ReportTarget } from "../hooks/useBenchSafety.js";
+import { BenchReportDialog } from "../components/bench/BenchReportDialog.js";
+import { BenchBlockedPanel } from "../components/bench/BenchBlockedPanel.js";
 
 const API = import.meta.env.VITE_API_URL ?? "";
 
@@ -57,13 +62,38 @@ function BenchContent() {
     loadBanners();
   }, []);
 
-  const { messages, loading, hasMore, loadMore, sendMessage, deleteMessage, editMessage } = useBenchMessages(channelKey);
+  const isReadOnly = !user || isGuest;
+  const { messages, loading, hasMore, loadMore, sendMessage, deleteMessage, editMessage, reload: reloadMessages } = useBenchMessages(channelKey);
   const { onlineUsers } = useBenchPresence(channelKey);
   const { typingUsers, emitTyping } = useBenchTyping(channelKey);
   const dm = useBenchDm();
   const [notifications, setNotifications] = useState<BenchNotification[]>([]);
   const tabRef = useRef(tab);
   tabRef.current = tab;
+  const blocks = useBenchBlocks(!isReadOnly);
+  const [reportTarget, setReportTarget] = useState<ReportTarget | null>(null);
+  const [showBlocked, setShowBlocked] = useState(false);
+  const [notice, setNotice] = useState<string | null>(null);
+
+  // A blocked person's messages, DM thread and avatar leave the screen at once
+  const { blockedIds } = blocks;
+  const shownMessages = messages.filter((m) => !blockedIds.has(m.userId));
+  const shownThreads = dm.threads.filter((t) => !blockedIds.has(t.otherUserId));
+  const shownOnline = onlineUsers.filter((u) => !blockedIds.has(u.userId));
+
+  async function handleBlock(person: BenchPerson) {
+    if (!window.confirm(`Block ${person.userName}? You won't see their messages, and neither of you can message the other. They aren't told.`)) return;
+    const failed = await blocks.block(person);
+    if (failed) return setNotice(failed.error);
+    if (dm.activeThread?.otherUserId === person.userId) dm.closeThread();
+  }
+
+  async function handleUnblock(person: BenchPerson) {
+    const failed = await blocks.unblock(person.userId);
+    if (failed) return setNotice(failed.error);
+    reloadMessages();
+    dm.fetchThreads();
+  }
 
   // DM notification toast — show when DM arrives and not on Messages tab
   useEffect(() => {
@@ -138,8 +168,6 @@ function BenchContent() {
     checkOrg();
   }, [user, isGuest]);
 
-  const isReadOnly = !user || isGuest;
-
   return (
     <div className="flex-1 flex flex-col overflow-hidden bg-dark">
       {/* DM notification toasts */}
@@ -153,11 +181,24 @@ function BenchContent() {
             <p className="text-xs text-dark-600">Where the kitchen talks</p>
           </div>
           {!isReadOnly && (
-            <div className="flex items-center gap-1">
-              <span className={`size-2 rounded-full ${connected ? "bg-emerald-400" : "bg-dark-500"}`} />
-              <span className="text-xs text-dark-500">
-                {connected ? "Connected" : "Connecting..."}
-              </span>
+            <div className="flex items-center gap-3">
+              <button
+                type="button"
+                onClick={() => setShowBlocked((v) => !v)}
+                aria-expanded={showBlocked}
+                className={`flex items-center gap-1.5 px-2.5 py-1 rounded-lg text-xs transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-gold/50 ${
+                  showBlocked ? "bg-gold/10 text-gold" : "text-dark-600 hover:bg-dark-100 hover:text-[#E5E5E5]"
+                }`}
+              >
+                <UserX className="size-3.5" />
+                Blocked people
+              </button>
+              <div className="flex items-center gap-1">
+                <span className={`size-2 rounded-full ${connected ? "bg-emerald-400" : "bg-dark-500"}`} />
+                <span className="text-xs text-dark-500">
+                  {connected ? "Connected" : "Connecting..."}
+                </span>
+              </div>
             </div>
           )}
         </div>
@@ -202,17 +243,36 @@ function BenchContent() {
             </button>
           )}
         </div>
+
+        {showBlocked && !isReadOnly && <BenchBlockedPanel blocked={blocks.blocked} onUnblock={handleUnblock} />}
       </div>
+
+      {notice && (
+        <div role="alert" className="flex items-center gap-2 px-4 py-2 border-b border-red-500/20 bg-red-500/10 text-sm text-red-300">
+          <span className="flex-1">{notice}</span>
+          <button type="button" onClick={() => setNotice(null)} aria-label="Dismiss" className="p-0.5 rounded hover:text-white">
+            <X className="size-4" />
+          </button>
+        </div>
+      )}
+
+      {reportTarget && <BenchReportDialog target={reportTarget} onClose={() => setReportTarget(null)} />}
 
       {/* Messages tab — DM view */}
       {tab === "messages" ? (
-        dm.activeThreadId && dm.activeThread ? (
+        <>
+        {dm.error && (
+          <p role="alert" className="px-4 py-2 border-b border-dark-200 bg-dark-50 text-sm text-red-300">{dm.error}</p>
+        )}
+        {dm.activeThreadId && dm.activeThread ? (
           <BenchDmConversation
             thread={dm.activeThread}
             messages={dm.messages}
             loading={dm.loadingMessages}
             onSend={dm.sendDm}
             onBack={dm.closeThread}
+            onReport={setReportTarget}
+            onBlock={handleBlock}
           />
         ) : (
           <div className="flex-1 overflow-y-auto bg-dark">
@@ -222,25 +282,29 @@ function BenchContent() {
               </p>
             )}
             <BenchDmThreadList
-              threads={dm.threads}
+              threads={shownThreads}
               loading={dm.loadingThreads}
               onSelect={dm.openThread}
             />
           </div>
-        )
+        )}
+        </>
       ) : (
       <>
       {/* Presence bar */}
       {!isReadOnly && (
         <BenchPresenceBar
-          users={onlineUsers}
+          users={shownOnline}
+          selfId={user?.userId}
           onStartDm={(uid) => { dm.startDm(uid); setTab("messages"); }}
+          onReport={setReportTarget}
+          onBlock={handleBlock}
         />
       )}
 
       {/* Message list */}
       <BenchMessageList
-        messages={messages}
+        messages={shownMessages}
         loading={loading}
         hasMore={hasMore}
         onLoadMore={loadMore}
@@ -257,6 +321,8 @@ function BenchContent() {
           dm.startDm(userId);
           setTab("messages");
         }}
+        onReport={isReadOnly ? undefined : setReportTarget}
+        onBlock={isReadOnly ? undefined : handleBlock}
       />
 
       {/* Typing indicator */}
@@ -280,7 +346,7 @@ function BenchContent() {
           onTyping={emitTyping}
           disabled={!connected}
           placeholder={tab === "my-kitchen" ? "Message your kitchen team..." : "Message everyone... Use @ to mention someone"}
-          onlineUsers={onlineUsers}
+          onlineUsers={shownOnline}
         />
       )}
       </>
