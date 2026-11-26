@@ -332,6 +332,7 @@ describe("reporting and blocking", () => {
     press(/^Bo Li, .*Message 1$/);
     press("Report");
     expect(screen.getByText("Report Bo Li's message")).toBeTruthy();
+    expect(screen.getByText("A moderator reads the reported message, who sent it and when, and nothing else from the conversation. Bo Li isn't told who sent the report.")).toBeTruthy();
     expect((screen.getByRole("button", { name: "Send report" }) as HTMLButtonElement).getAttribute("aria-disabled")).toBe("true");
     fireEvent.click(screen.getByRole("radio", { name: "Harassment or bullying" }));
     fireEvent.change(screen.getByLabelText("Anything else the moderators should know (optional)"), { target: { value: " third time " } });

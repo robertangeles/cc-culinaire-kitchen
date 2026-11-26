@@ -368,6 +368,24 @@ describe.skipIf(!RUN)("bench report, block and moderation — real routes, socke
       expect((await api(token(olga, ["Administrator"]), "GET", "/reports")).status).toBe(200);
     });
 
+    it("shows a moderator the reported message of a channel or a direct message, and none of the words around it", async () => {
+      await createMessage(channelA, amir, "channel before");
+      const reportedInChannel = await createMessage(channelA, amir, "channel reported");
+      await createMessage(channelA, cara, "channel after");
+      const thread = await getOrCreateThread(anna, amir);
+      await createDmMessage(thread.dmThreadId, anna, "private before");
+      const reportedInDm = await createDmMessage(thread.dmThreadId, amir, "private reported");
+      await createDmMessage(thread.dmThreadId, anna, "private after");
+      const inChannel = (await api(as(anna), "POST", "/reports", { messageId: reportedInChannel.messageId, reason: "spam" })).body.id;
+      const inDm = (await api(as(anna), "POST", "/reports", { messageId: reportedInDm.messageId, reason: "spam" })).body.id;
+
+      const queue = (await api(moderator(), "GET", "/reports")).body;
+      const text = JSON.stringify([inChannel, inDm].map((id) => queue.find((r: any) => r.id === id)));
+      expect(queue.find((r: any) => r.id === inChannel)).toMatchObject({ messageBody: "channel reported", reportedUserName: "amir" });
+      expect(queue.find((r: any) => r.id === inDm)).toMatchObject({ messageBody: "private reported", reportedUserName: "amir" });
+      for (const neighbour of ["channel before", "channel after", "private before", "private after"]) expect(text).not.toContain(neighbour);
+    });
+
     it("hides a reported message from everyone, keeps it on record, and closes every open report about it", async () => {
       const msg = await createMessage(channelA, amir, "hide me");
       const r1 = (await api(as(anna), "POST", "/reports", { messageId: msg.messageId, reason: "hate" })).body.id;

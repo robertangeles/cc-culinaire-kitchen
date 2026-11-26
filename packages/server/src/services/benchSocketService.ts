@@ -127,16 +127,14 @@ function blockerRooms(userId: number): string[] {
   return [...blocks].filter(([, blocked]) => blocked.has(userId)).map(([blocker]) => `bench:user_${blocker}`);
 }
 
-/** Sends to each socket in the rooms (once) what its person may see: `payloadFor` gets whom they blocked. */
+/** Sends the rooms `payloadFor` of no one, except to a person who blocked someone: each of their devices gets `payloadFor` of whom they blocked. */
 function emitEach(rooms: string[], event: string, payloadFor: (hidden: ReadonlySet<number>) => unknown) {
-  const sent = new Set<string>();
-  const none = new Set<number>();
-  for (const room of rooms) {
-    for (const socketId of io.sockets.adapter.rooms.get(room) ?? []) {
+  const blockers = [...blocks].filter(([, blocked]) => blocked.size > 0);
+  io.to(rooms).except(blockers.map(([blocker]) => `bench:user_${blocker}`)).emit(event, payloadFor(new Set()));
+  for (const [blocker, blocked] of blockers) {
+    for (const socketId of io.sockets.adapter.rooms.get(`bench:user_${blocker}`) ?? []) {
       const socket = io.sockets.sockets.get(socketId);
-      if (!socket || sent.has(socketId)) continue;
-      sent.add(socketId);
-      socket.emit(event, payloadFor(blocks.get(socket.data.user.sub) ?? none));
+      if (socket && rooms.some((room) => socket.rooms.has(room))) socket.emit(event, payloadFor(blocked));
     }
   }
 }
@@ -295,13 +293,17 @@ export function initBenchSocket(httpServer: HttpServer): () => void {
 
     // Joins the "everyone" room and personal DM room once whom they blocked is known.
     // Nothing may be awaited before the handlers below: what a client sends as it connects would find none.
-    const ready = enter(socket, userId).catch((err) => logger.error({ err, userId }, "Bench: reading blocks failed"));
+    const ready = enter(socket, userId).catch((err) => {
+      logger.error({ err, userId }, "Bench: reading blocks failed");
+      socket.disconnect(true); // a socket whose blocks are unknown would receive unfiltered
+    });
     void announce(socket, userId, ready);
 
     // ── Join channel ──────────────────────────────────────
     onBenchEvent(socket, "bench:join", async ({ channelKey }) => {
       try {
         await ready; // a room joined before whom they blocked is known would deliver unfiltered
+        if (socket.disconnected) return;
         if (!(await canJoin(channelKey, userId))) {
           socket.emit("bench:error", { error: "You cannot join this channel", code: "FORBIDDEN" });
           return;

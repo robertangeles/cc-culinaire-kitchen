@@ -43,7 +43,11 @@ export function ReportForm({ target, send, onSent, onCancel }: { target: ReportT
         {target.messageId !== undefined ? <Text variant="muted" numberOfLines={3}>{`“${target.words}”`}</Text> : null}
         <ChoiceChips label="What's wrong" options={LABELS} value={label} onChange={setLabel} />
         <TextField label="Anything else the moderators should know (optional)" value={note} onChangeText={setNote} maxLength={500} multiline />
-        <Text variant="meta">A moderator reads every report. {target.userName} isn't told who sent it.</Text>
+        <Text variant="meta">
+          {target.messageId !== undefined
+            ? `A moderator reads the reported message, who sent it and when, and nothing else from the conversation. ${target.userName} isn't told who sent the report.`
+            : `A moderator reads your report. ${target.userName} isn't told who sent it.`}
+        </Text>
         {error ? <Text variant="error" accessibilityLiveRegion="polite">{error}</Text> : null}
         <Button label={busy ? "Sending…" : "Send report"} disabled={!reason || busy} onPress={() => void submit()} />
         <Button kind="quiet" label="Cancel" onPress={onCancel} />

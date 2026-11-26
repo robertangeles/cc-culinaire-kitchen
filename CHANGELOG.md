@@ -37,6 +37,7 @@ Server, web and phone. **Migration 0009 (`0009_bench_safety`): the owner applies
 - **Web:** Report and Block on another person's message, and on a person card: a name on a message, an avatar in the presence bar, or a direct message's header. A "Blocked people" panel with Unblock, and a Bench Moderation page at `/bench/moderation` (nav and route gated on `bench:moderate`).
 - **Phone:** Report and Block on a message, in a kitchen's "on the pass" list and in a direct message's header. Blocked people, and Reports to review for moderators (hide or dismiss), are reached from the Bench list. The Bench tab stays off in production builds (`EXPO_PUBLIC_BENCH`); `mobile/README.md` lists what a store build still needs.
 - **Deleting an account** removes the blocks the person made (blocks of them stay, protecting whoever blocked) and clears the words of reports about them; the reports and moderator actions stay as records pointing at the scrubbed account.
+- **Who reads a report:** platform moderators (`bench:moderate`) and administrators read the reported message, its sender and time, and nothing else from the conversation; the report form says so. The owner adds this to the Privacy Policy and Terms of Service, on both the web and mobile surfaces (Settings > Pages); neither page is in the repository.
 - **Installed apps** keep working: no existing route or event changed shape. An older phone that messages someone who blocked it gets the refusal as an ordinary failed send.
 
 ### Fixed (Bench connection handling and post-once)

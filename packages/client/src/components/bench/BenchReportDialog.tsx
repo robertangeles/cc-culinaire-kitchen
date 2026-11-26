@@ -114,6 +114,12 @@ export function BenchReportDialog({ target, onClose }: BenchReportDialogProps) {
               <span className="block text-right text-[11px] text-dark-500">{note.length}/{NOTE_MAX}</span>
             </label>
 
+            <p className="mt-3 text-xs text-dark-600">
+              {target.messageId
+                ? `A moderator reads the reported message, who sent it and when, and nothing else from the conversation. ${target.person.userName} isn't told who sent the report.`
+                : `A moderator reads your report. ${target.person.userName} isn't told who sent it.`}
+            </p>
+
             {error && <p role="alert" className="mt-2 text-sm text-red-400">{error}</p>}
 
             <div className="mt-4 flex justify-end gap-2">

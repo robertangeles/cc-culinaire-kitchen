@@ -35,9 +35,15 @@ describe("BenchReportDialog", () => {
     expect(sent()).toEqual({ messageId, reason: "harassment", note: "keeps posting this" });
   });
 
+  it("tells the reporter a moderator reads that message and nothing else of the conversation", () => {
+    render(<BenchReportDialog target={{ person, messageId }} onClose={() => undefined} />);
+    expect(screen.getByText("A moderator reads the reported message, who sent it and when, and nothing else from the conversation. Sam isn't told who sent the report.")).toBeInTheDocument();
+  });
+
   it("reports a person by id and leaves out an empty note", async () => {
     render(<BenchReportDialog target={{ person }} onClose={() => undefined} />);
     expect(screen.getByRole("dialog", { name: "Report Sam" })).toBeInTheDocument();
+    expect(screen.getByText("A moderator reads your report. Sam isn't told who sent it.")).toBeInTheDocument();
     fireEvent.click(screen.getByLabelText("Spam or advertising"));
     fireEvent.click(screen.getByRole("button", { name: "Send" }));
 
