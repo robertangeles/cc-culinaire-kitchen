@@ -1,5 +1,5 @@
 /**
- * My shifts and the open swaps, in memory only: no roster data is written to the phone until the app lock exists (owner, Q6).
+ * My shifts and the open swaps, in memory only: no roster data is stored, cached or queued on the phone (offline storage is a later change; the app lock now covers these holders).
  * Every write is online: an answer is to the shift as it stands now, and a swap is first come, first served. The server holds the truth:
  * after a write it is read again, and a write whose answer was lost (or that the server says was already made) counts as done only when
  * the fresh copy shows it.

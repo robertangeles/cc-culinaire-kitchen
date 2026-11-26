@@ -1,5 +1,5 @@
 /**
- * My availability, in memory only and changed online (owner, Q6: no roster data on the phone until the app lock exists). A repeat is safe:
+ * My availability, in memory only and changed online (owner, Q6: no roster data is stored on the phone; offline storage is a later change, and the app lock now covers these holders). A repeat is safe:
  * the server keeps one row per exact window (migration 0005) and answers a repeated add with the row it has.
  */
 

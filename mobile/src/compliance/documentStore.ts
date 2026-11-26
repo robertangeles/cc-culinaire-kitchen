@@ -1,5 +1,5 @@
 /**
- * My documents, in memory only: nothing about a person's certificates is written to the phone until the app lock exists (owner, Q6), and
+ * My documents, in memory only: nothing about a person's certificates is stored or cached on the phone (offline storage is a later change; the app lock now covers these holders), and
  * nothing is queued. Every write waits for the server, and one that may have landed is looked for before it is made again.
  */
 
