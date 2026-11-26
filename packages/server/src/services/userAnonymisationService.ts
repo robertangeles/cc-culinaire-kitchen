@@ -131,7 +131,6 @@ export const KEPT_USER_COLUMNS: Record<string, string> = {
 
 /** Foreign keys to `user` whose rows this service removes or detaches. */
 export const HANDLED_USER_REFERENCES: readonly string[] = [
-  "bench_blocks.blocked_user_id",
   "bench_blocks.user_id",
   "brain_memory.user_id",
   "ckm_feedback.user_id",
@@ -153,6 +152,8 @@ export const HANDLED_USER_REFERENCES: readonly string[] = [
  */
 export const KEPT_USER_REFERENCES: readonly string[] = [
   "audit_log.actor_user_id",
+  // Kept: it protects the person who blocked, also from a session of the leaver's still open.
+  "bench_blocks.blocked_user_id",
   // Moderation records; the reported words of a report about the person are cleared, as their posts are.
   "bench_report_actions.user_id",
   "bench_reports.reported_user_id",
@@ -320,7 +321,7 @@ export async function anonymiseUser(userId: number, actorUserId: number | null =
     await tx.delete(factBrainRecall).where(eq(factBrainRecall.userId, userId));
     await tx.delete(staffAvailability).where(eq(staffAvailability.userId, userId));
     await tx.delete(benchMention).where(eq(benchMention.mentionedUserId, userId));
-    await tx.delete(benchBlock).where(or(eq(benchBlock.userId, userId), eq(benchBlock.blockedUserId, userId)));
+    await tx.delete(benchBlock).where(eq(benchBlock.userId, userId)); // blocks of them stay: they protect whoever blocked
     await tx.update(ckmFeedback).set({ userId: null }).where(eq(ckmFeedback.userId, userId));
 
     // Saved recipes (versions cascade) and every review of them, plus the user's own reviews.

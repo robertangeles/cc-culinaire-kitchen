@@ -342,7 +342,7 @@ describe.skipIf(!RUN)("bench report, block and moderation — real routes, socke
     });
   });
 
-  it("deleting an account takes its blocks both ways and clears its reported words; the reports stay", async () => {
+  it("deleting an account takes its own blocks, keeps blocks of it, and clears its reported words; the reports stay", async () => {
     const [{ userId: leaver }] = await db.insert(user).values({ userName: "leaver", userEmail: `${tag}-leaver@it.test` }).returning({ userId: user.userId });
     await db.insert(userOrganisation).values({ userId: leaver, organisationId: orgA, role: "member" });
     const msg = await createMessage(channelA, leaver, "words to forget");
@@ -350,7 +350,7 @@ describe.skipIf(!RUN)("bench report, block and moderation — real routes, socke
     await block(leaver, cara);
     const id = (await api(as(anna), "POST", "/reports", { messageId: msg.messageId, reason: "spam" })).body.id;
     await anonymiseUser(leaver);
-    expect(await db.select().from(benchBlock).where(inArray(benchBlock.userId, [anna, leaver]))).toEqual([]);
+    expect((await db.select().from(benchBlock).where(inArray(benchBlock.userId, [anna, leaver]))).map((b) => [b.userId, b.blockedUserId])).toEqual([[anna, leaver]]);
     const [row] = await db.select().from(benchReport).where(eq(benchReport.id, id));
     expect(row).toMatchObject({ reportedUserId: leaver, messageBody: "", status: "open" });
     await db.delete(benchReport).where(eq(benchReport.id, id));
