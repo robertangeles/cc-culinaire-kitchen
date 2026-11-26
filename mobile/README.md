@@ -546,8 +546,8 @@ Differences from the web (`PurchaseOrderList.tsx`, `PurchaseOrderForm.tsx`, `App
 
 ## App lock (`src/lock`)
 
-On for anyone who holds `purchasing:approve`, a roster permission beyond their own shifts (`roster:read-all`, `roster:manage`, `roster:publish`, `roster:manage-award-rules`) or a compliance permission beyond
-their own documents (`compliance:read-all`, `compliance:verify`, `compliance:manage-rules`), and for Administrators; read from the permissions the server already sends (`LOCK_PERMISSIONS`). It cannot be switched off.
+On for anyone who holds `purchasing:approve`, any roster permission, their own shifts included (`roster:read-own`, `roster:read-all`, `roster:manage`, `roster:publish`, `roster:manage-award-rules`), or any compliance
+permission, their own documents included (`compliance:read-own`, `compliance:read-all`, `compliance:verify`, `compliance:manage-rules`), and for Administrators (owner, Q6); read from the permissions the server already sends (`LOCK_PERMISSIONS`). It cannot be switched off.
 Nobody else sees a lock or a setting. `LockProvider` is around every screen (`app/_layout.tsx`), so the location choice and first run are behind it too, with no signal as well.
 
 - **Locked** at a cold start, at a sign-in, and when the app was in the background for more than 60 seconds (`GRACE_MS`). Elapsed time is read from the phone's clock and from the app's own running time, whichever is longer; a clock that went backwards locks.
@@ -576,9 +576,8 @@ shown only at a venue the person works at or has a shift at; the rest are counte
 **Drafts are never shown** (the owner has not decided on draft visibility): the server is asked for `excludeDrafts`, and a draft it still sends (one with a public-holiday question on it)
 is left out. The list then says a question is waiting and to answer it on the web. A swap of a draft or cancelled shift is not shown either (`shiftStatus`).
 
-**Nothing is kept on the phone.** Shifts, swaps and the server's availability are held in memory only, and gone at sign-out: no roster data is cached until the app lock covers the people who see it (owner, Q6: today's lock is for
-approval, manager and verifier permissions, not `read-own`).
-With no signal a screen says it needs a connection; what was read before stays on screen while the app is open. Offline roster and documents wait for that lock.
+**Nothing is kept on the phone.** Shifts, swaps and the server's availability are held in memory only, and gone at sign-out: the app lock covers everyone who sees it (`roster:read-own` included), and keeping roster data offline is a
+separate change. With no signal a screen says it needs a connection; what was read before stays on screen while the app is open.
 
 - **My shifts**: this week, next week, then anything further on, so a shift three weeks out that needs an answer is not hidden. A shift's page has Confirm and Decline, the public-holiday question
   (apart from the shift's own answer) and Offer to swap. Every answer is **online**: it is given to the shift as it stands. After each write the shifts are read again, and one whose reply was lost, or
@@ -617,7 +616,7 @@ one about a colleague's says so.
 
 **There are no temperature logs, checklists or sign-off tasks on the web or the server**, so there are none here: a staff member's compliance work is their documents.
 
-**Online only, nothing kept.** No compliance data may be stored on the phone until the app lock covers `read-own` holders too (owner, Q6), so nothing is queued or cached. An upload
+**Online only, nothing kept.** Nothing is queued or cached: the app lock covers `compliance:read-own` holders, and keeping documents offline is a separate change. An upload
 that cannot be sent says so in one sentence, keeps the form, and sends the same photo again on a tap. Sending is safe to repeat: every upload has its own file id, so after a lost reply the phone looks for that
 file among the person's documents before it sends anything again (`documentStore.ts`).
 

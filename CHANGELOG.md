@@ -74,6 +74,7 @@ Phone app only; no server or web change, no migration, no new permission. `expo-
 - **Nothing is stored or queued:** roster and compliance data stays in memory and every write needs a connection; one whose answer was lost is looked for before it is made again.
 - **A certificate's photo** is sent without its place, time and device, and no copy of it stays on the phone.
 - **Fixed: the profile picture upload was broken on the phone** (since it was merged): Expo's fetch refuses the kind of file part it sent, which looked like no signal. It now goes the way certificates do, also without its place and time.
+- **The app lock now also covers** anyone who holds `roster:read-own` or `compliance:read-own`, so a person's own shifts, swaps and certificate photos need the same unlock as approval, manager and verifier permissions.
 - Notifications about the person's own shifts and documents open them. Every difference from the web is listed in `mobile/README.md`.
 
 ### Added (open swaps say the shift's status and the venue's zone and name)

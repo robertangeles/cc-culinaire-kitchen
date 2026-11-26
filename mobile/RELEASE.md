@@ -15,7 +15,7 @@ Run commands from the repository root. `eas` is the Expo build service; use it t
 | Server address | per EAS environment, never in a file | a test build can never silently point at production |
 | Permissions | Face ID (the app lock), photos and camera (the profile picture, a photo of a certificate), notifications (only when turned on) | each with its own wording in `app.json`, asked for when it is first used; later ones arrive with their feature |
 | Encryption | `ITSAppUsesNonExemptEncryption: false` (HTTPS only) | no export-compliance question on every iOS build |
-| App lock | on for people who approve orders or manage rosters or compliance documents, always; needs a device passcode, fingerprint or face | owner's lost-phone policy (Q6) |
+| App lock | on for people who approve orders or see or manage rosters or compliance documents (their own included), always; needs a device passcode, fingerprint or face | owner's lost-phone policy (Q6) |
 | Billing | none in the app: no pricing, purchase or upgrade link (a test enforces it) | owner decision; see the Apple rule 3.1.3(b) note below |
 
 **The version rule.** Change `version` whenever a build needs new native code (a new native module, an Expo SDK bump) or whenever you ship to the stores. Then no over-the-air update can reach an older binary. Never raise `mobile_min_app_version` (Settings, Site Settings) above a version that is already live in both stores: you would lock people out of an app they cannot yet update.

@@ -4,7 +4,7 @@ import { createAppLock, GRACE_MS, LOCK_PERMISSIONS, lockRequired, RECENT_MS, typ
 
 const person = (permissions: string[], roles: string[] = [], userId = 1): AuthUser => ({ userId, userName: "Chef", userEmail: "c@x.test", mfaEnabled: false, roles, permissions });
 const approver = person(["purchasing:approve"]);
-const cook = person(["waste:log", "roster:read-own", "compliance:read-own", "purchasing:credit"]);
+const cook = person(["waste:log", "purchasing:credit"]);
 
 function make(user: AuthUser | null = approver) {
   const clock = { now: 1_000_000, up: 0 };
@@ -19,8 +19,15 @@ describe("who the lock is for", () => {
 
   it("Administrators, who hold every permission", () => expect(lockRequired(person([], ["Administrator"]))).toBe(true));
 
-  it("not someone who only sees their own shifts and documents, and not a credit note alone", () => {
+  it("someone who sees only their own shifts, their own documents, or both (owner, Q6)", () => {
+    expect(lockRequired(person(["waste:log", "roster:read-own"]))).toBe(true);
+    expect(lockRequired(person(["compliance:read-own"]))).toBe(true);
+    expect(lockRequired(person(["roster:read-own", "compliance:read-own"]))).toBe(true);
+  });
+
+  it("not someone with none of those keys, nor a credit note alone", () => {
     expect(lockRequired(cook)).toBe(false);
+    expect(lockRequired(person(["purchasing:credit"]))).toBe(false);
     expect(lockRequired(person([]))).toBe(false);
   });
 });
