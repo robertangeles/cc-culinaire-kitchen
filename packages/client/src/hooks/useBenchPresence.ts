@@ -18,15 +18,15 @@ export interface PresenceUser {
 
 export function useBenchPresence(channelKey: string) {
   const { socket } = useBenchSocket();
-  const [onlineUsers, setOnlineUsers] = useState<PresenceUser[]>([]);
+  // Kept with its channel: another channel's list is never shown.
+  const [seen, setSeen] = useState<{ channelKey: string; users: PresenceUser[] } | null>(null);
   const heartbeatRef = useRef<ReturnType<typeof setInterval>>(undefined);
 
   useEffect(() => {
-    setOnlineUsers([]);
     if (!socket) return;
 
     function onPresenceUpdate(data: { channelKey: string; users: PresenceUser[] }) {
-      if (data.channelKey === channelKey) setOnlineUsers(data.users);
+      if (data.channelKey === channelKey) setSeen(data);
     }
     function onConnect() {
       socket!.emit("bench:presence:heartbeat");
@@ -50,5 +50,5 @@ export function useBenchPresence(channelKey: string) {
     };
   }, [socket, channelKey]);
 
-  return { onlineUsers };
+  return { onlineUsers: seen?.channelKey === channelKey ? seen.users : [] };
 }
