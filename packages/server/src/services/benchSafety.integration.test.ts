@@ -269,7 +269,8 @@ describe.skipIf(!RUN)("bench report, block and moderation — real routes, socke
       expect(a.of("bench:dm:new")).toEqual([]);
       expect(b.of("bench:dm:new")).toEqual([]);
       expect(a.of("bench:dm:typing")).toEqual([]);
-      expect(b.of("bench:error")).toEqual([{ error: expect.any(String), code: "DM_NOT_ALLOWED" }]);
+      // One refusal for each of b's two attempts (the message and the typing notice), one for a's message; all the same code.
+      expect(b.of("bench:error")).toEqual(Array(2).fill({ error: expect.any(String), code: "DM_NOT_ALLOWED" }));
       expect(a.of("bench:error")).toEqual([{ error: expect.any(String), code: "DM_NOT_ALLOWED" }]);
       const stored = await db.select({ id: benchMessage.messageId }).from(benchMessage).where(eq(benchMessage.dmThreadId, thread.dmThreadId));
       expect(stored).toHaveLength(1);
