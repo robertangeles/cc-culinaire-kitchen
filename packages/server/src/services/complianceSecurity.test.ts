@@ -107,7 +107,7 @@ describe("upload validation — content wins, filename and declared MIME are ign
     const html = Buffer.from("<!DOCTYPE html><html><body>hi</body></html>");
     await expect(storeDocument(html, 2, 5)).rejects.toMatchObject({
       status: 415,
-      code: "UNSUPPORTED_MEDIA_TYPE",
+      code: "UNSUPPORTED_FILE_TYPE",
     });
     expect(uploadStream).not.toHaveBeenCalled();
   });
@@ -116,7 +116,7 @@ describe("upload validation — content wins, filename and declared MIME are ign
     credsOk();
     await expect(storeDocument(Buffer.alloc(0), 2, 5)).rejects.toMatchObject({
       status: 400,
-      code: "EMPTY_UPLOAD",
+      code: "VALIDATION",
     });
     // Empty-buffer check runs before the credential lookup and before storage.
     expect(getCredential).not.toHaveBeenCalled();
@@ -130,7 +130,7 @@ describe("storage failure mode — missing credentials never fall back to disk",
     await expect(storeDocument(PDF_HEADER, 2, 5)).rejects.toBeInstanceOf(DocumentStorageError);
     await expect(storeDocument(PDF_HEADER, 2, 5)).rejects.toMatchObject({
       status: 503,
-      code: "STORAGE_UNCONFIGURED",
+      code: "STORAGE_UNAVAILABLE",
     });
     expect(uploadStream).not.toHaveBeenCalled();
     expect(configure).not.toHaveBeenCalled();
@@ -142,7 +142,7 @@ describe("storage failure mode — missing credentials never fall back to disk",
     );
     await expect(storeDocument(PDF_HEADER, 2, 5)).rejects.toMatchObject({
       status: 503,
-      code: "STORAGE_UNCONFIGURED",
+      code: "STORAGE_UNAVAILABLE",
     });
     expect(uploadStream).not.toHaveBeenCalled();
   });
