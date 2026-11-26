@@ -118,6 +118,7 @@ async function upsertExpiryRuleAttempt(
       throw new ComplianceError(
         "This rule was already updated today — edit the existing row directly instead of creating a new version",
         409,
+        "CONFLICT",
       );
     }
 

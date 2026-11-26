@@ -120,14 +120,14 @@ describe("handleUploadDocument — POST /api/compliance/documents/upload", () =>
 
   it("missing Cloudinary credentials surface as the storage error's own 503, not a generic 500 — and nothing falls back to disk", async () => {
     vi.mocked(storeDocument).mockRejectedValue(
-      new DocumentStorageError("Can't accept uploads right now.", 503, "STORAGE_UNCONFIGURED"),
+      new DocumentStorageError("Can't accept uploads right now.", 503, "STORAGE_UNAVAILABLE"),
     );
     const req = mockReq({ user: CALLER, file: { buffer: Buffer.from("x") } });
     const res = mockRes();
     const next = vi.fn();
     await handleUploadDocument(req, res, next);
     expect(res.status).toHaveBeenCalledWith(503);
-    expect(res.json).toHaveBeenCalledWith({ error: "Can't accept uploads right now." });
+    expect(res.json).toHaveBeenCalledWith({ error: "Can't accept uploads right now.", code: "STORAGE_UNAVAILABLE" });
     // Handled explicitly by the DocumentStorageError branch, not dropped
     // into Express's generic error handler as a 500.
     expect(next).not.toHaveBeenCalled();

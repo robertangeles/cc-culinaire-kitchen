@@ -134,6 +134,64 @@ describe.skipIf(!RUN)("compliance vault (real DB)", () => {
       expect(list.some((d) => d.complianceDocumentId === created.complianceDocumentId)).toBe(true);
     });
 
+    it("createDocument with a client-made id answers a repeat with the same document, writing nothing", async () => {
+      const complianceDocumentId = crypto.randomUUID();
+      const input = {
+        complianceDocumentId,
+        userId: staffA,
+        uploadedBy: staffA,
+        documentType: `${tag}-repeat`,
+        documentNumber: "R-1",
+        storagePublicId: sp(org1, staffA, "repeat"),
+      };
+      const first = await createDocument(org1, input);
+      expect(first).toMatchObject({ complianceDocumentId, replay: false });
+      // Edited in between: a late repeat still finds it.
+      await updateDocument(org1, complianceDocumentId, staffA, { documentNumber: "R-2" });
+
+      const again = await createDocument(org1, input);
+      expect(again).toMatchObject({ complianceDocumentId, documentNumber: "R-2", replay: true });
+      const rows = await db
+        .select({ id: complianceDocument.complianceDocumentId })
+        .from(complianceDocument)
+        .where(eq(complianceDocument.documentType, `${tag}-repeat`));
+      expect(rows).toHaveLength(1);
+      const audits = await db
+        .select({ id: auditLog.auditLogId })
+        .from(auditLog)
+        .where(and(eq(auditLog.entityId, complianceDocumentId), eq(auditLog.action, "create")));
+      expect(audits).toHaveLength(1);
+    });
+
+    it("createDocument refuses a client-made id already used for another file or by someone else 409 CONFLICT", async () => {
+      const complianceDocumentId = crypto.randomUUID();
+      await createDocument(org1, {
+        complianceDocumentId,
+        userId: staffA,
+        uploadedBy: staffA,
+        documentType: `${tag}-taken`,
+        storagePublicId: sp(org1, staffA, "taken"),
+      });
+      await expect(
+        createDocument(org1, {
+          complianceDocumentId,
+          userId: staffA,
+          uploadedBy: staffA,
+          documentType: `${tag}-taken`,
+          storagePublicId: sp(org1, staffA, "other"),
+        }),
+      ).rejects.toMatchObject({ statusCode: 409, code: "CONFLICT" });
+      await expect(
+        createDocument(org1, {
+          complianceDocumentId,
+          userId: staffB,
+          uploadedBy: staffB,
+          documentType: `${tag}-taken`,
+          storagePublicId: sp(org1, staffB, "taken"),
+        }),
+      ).rejects.toMatchObject({ statusCode: 409, code: "CONFLICT" });
+    });
+
     it("verifyDocument sets status Verified and stamps verifier + timestamp", async () => {
       const doc = await createDocument(org1, {
         userId: staffA,

@@ -93,6 +93,8 @@ function daysSince(period: string): number {
 // ── Documents ─────────────────────────────────────────────────────────
 
 export interface CreateDocumentInput {
+  /** Client-made id, so a create whose answer was lost can be sent again. Optional: older apps send none. */
+  complianceDocumentId?: string;
   /** Staff subject. Forced to the caller by the controller — never client-supplied. Exactly one of userId/subjectStoreLocationId. */
   userId: number | null;
   /** Venue subject (liquor licence, food registration). Exactly one of userId/subjectStoreLocationId. */
@@ -180,7 +182,19 @@ export async function getDocument(orgId: number, documentId: string) {
   return getDocumentRow(orgId, documentId);
 }
 
-/** Creates a new compliance document record for the given org. */
+/**
+ * The document a client-made id already made. The stored file is what identifies the same create: edits cannot
+ * change it, so a late repeat after an edit still finds it. Another file, or someone else's document, is a 409 CONFLICT.
+ */
+async function findReplay(orgId: number, id: string, uploadedBy: number, storagePublicId: string) {
+  const [doc] = await db.select().from(complianceDocument).where(eq(complianceDocument.complianceDocumentId, id));
+  if (!doc || doc.organisationId !== orgId || doc.uploadedBy !== uploadedBy || doc.storagePublicId !== storagePublicId) {
+    throw new ComplianceError("That id is already used by another document", 409, "CONFLICT");
+  }
+  return { ...doc, replay: true };
+}
+
+/** Creates a new compliance document record. `replay: true` means the client-made id had already made it: nothing was written. */
 export async function createDocument(orgId: number, input: CreateDocumentInput) {
   const documentType = input.documentType.trim();
   if (!documentType) throw new ComplianceError("Document type is required", 400);
@@ -235,6 +249,7 @@ export async function createDocument(orgId: number, input: CreateDocumentInput) 
     const [created] = await db
       .insert(complianceDocument)
       .values({
+        ...(input.complianceDocumentId ? { complianceDocumentId: input.complianceDocumentId } : {}),
         organisationId: orgId,
         storeLocationId,
         userId: input.userId ?? null,
@@ -251,7 +266,10 @@ export async function createDocument(orgId: number, input: CreateDocumentInput) 
         notes: input.notes ?? null,
         uploadedBy: input.uploadedBy,
       })
+      .onConflictDoNothing({ target: complianceDocument.complianceDocumentId })
       .returning();
+    // The id is taken: the same create sent again (its answer was lost), or a clash.
+    if (!created) return findReplay(orgId, input.complianceDocumentId!, input.uploadedBy, storagePublicId);
 
     await auditService.log({
       entityType: "compliance_document",
@@ -263,7 +281,7 @@ export async function createDocument(orgId: number, input: CreateDocumentInput) 
       metadata: { documentType, userId: input.userId },
     });
 
-    return created;
+    return { ...created, replay: false };
   } catch (err) {
     // idx_compliance_document_unique = unique(userId, documentType, documentNumber).
     // 23505 = unique_violation — give the sentence instead of a raw 500.
@@ -271,6 +289,7 @@ export async function createDocument(orgId: number, input: CreateDocumentInput) 
       throw new ComplianceError(
         `You've already uploaded a ${documentType} with this document number`,
         409,
+        "CONFLICT",
       );
     }
     throw err;
@@ -370,6 +389,7 @@ export async function updateDocument(
       throw new ComplianceError(
         `You've already uploaded a ${doc.documentType} with this document number`,
         409,
+        "CONFLICT",
       );
     }
     throw err;
