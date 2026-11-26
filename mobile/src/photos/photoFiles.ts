@@ -1,6 +1,6 @@
 import { Directory, File, Paths } from "expo-file-system";
 import type { Photo } from "../api/photo";
-import { stripMetadata } from "./photoMetadata";
+import { stripMetadata } from "@culinaire/shared";
 
 /**
  * Deletes every photo the picker left in the app's cache: the camera's original and the compressed copy of it, which it never removes itself.

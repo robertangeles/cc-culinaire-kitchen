@@ -1,5 +1,5 @@
 import { describe, it, expect } from "vitest";
-import { stripMetadata } from "./photoMetadata";
+import { stripMetadata } from "./photoMetadata.js";
 
 const ascii = (s: string) => [...s].map((c) => c.charCodeAt(0));
 const seg = (marker: number, body: number[]) => [0xff, marker, (body.length + 2) >> 8, (body.length + 2) & 255, ...body];
