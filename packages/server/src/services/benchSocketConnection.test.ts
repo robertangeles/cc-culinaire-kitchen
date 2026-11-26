@@ -16,6 +16,7 @@ vi.mock("./benchService.js", () => ({
   getOrganisationIdsByUser: async (ids: number[]) => new Map(ids.map((id) => [id, [5]])),
 }));
 vi.mock("./benchDmService.js", () => ({ mayDirectMessage: async () => true }));
+vi.mock("./benchBlockService.js", () => ({ blockedBy: async () => [] }));
 
 import { initBenchSocket } from "./benchSocketService.js";
 

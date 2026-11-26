@@ -19,9 +19,10 @@ import {
   organisation,
   recipe,
 } from "../db/schema.js";
-import { eq, and, desc, sql, lt, inArray } from "drizzle-orm";
+import { eq, and, desc, sql, lt, inArray, notInArray } from "drizzle-orm";
 import { AppError } from "../utils/appError.js";
 import { insertOnce } from "../utils/retrySafe.js";
+import { blockedBy } from "./benchBlockService.js";
 
 const logger = pino({ name: "benchService" });
 
@@ -230,16 +231,29 @@ export async function createMessage(
   };
 }
 
+type Reactions = BenchMessageWithUser["reactions"];
+
+/** Reactions as someone who blocked these people sees them: without theirs. */
+export function withoutPeople(reactions: Reactions, hidden: ReadonlySet<number>): Reactions {
+  if (hidden.size === 0) return reactions;
+  return reactions
+    .map((r) => r.userIds.filter((id) => !hidden.has(id)))
+    .flatMap((userIds, i) => (userIds.length > 0 ? [{ emoji: reactions[i].emoji, count: userIds.length, userIds }] : []));
+}
+
+/** `viewerId`: the messages of people they blocked are left out, as are those people's reactions. */
 export async function getMessages(
   channelId: number,
-  options: { before?: string; limit?: number } = {},
+  options: { before?: string; limit?: number; viewerId?: number } = {},
 ): Promise<BenchMessageWithUser[]> {
   const limit = Math.min(options.limit ?? 50, 100);
+  const hidden = options.viewerId === undefined ? [] : await blockedBy(options.viewerId);
 
   const conditions = [
     eq(benchMessage.channelId, channelId),
     eq(benchMessage.deletedInd, false),
   ];
+  if (hidden.length > 0) conditions.push(notInArray(benchMessage.userId, hidden));
   if (options.before) {
     // Fetch messages older than the given timestamp
     conditions.push(lt(benchMessage.createdDttm, new Date(options.before)));
@@ -302,7 +316,7 @@ export async function getMessages(
     editedInd: m.editedInd,
     deletedInd: m.deletedInd,
     createdDttm: m.createdDttm,
-    reactions: reactionsMap.get(m.messageId) ?? [],
+    reactions: withoutPeople(reactionsMap.get(m.messageId) ?? [], new Set(hidden)),
   }));
 }
 
@@ -499,7 +513,11 @@ export async function isInAudience(audience: MessageAudience, userId: number): P
   return audience.channelType === "global";
 }
 
-export async function getPinnedMessages(channelId: number) {
+/** `viewerId`: pins of messages by people they blocked are left out. */
+export async function getPinnedMessages(channelId: number, viewerId?: number) {
+  const hidden = viewerId === undefined ? [] : await blockedBy(viewerId);
+  const conditions = [eq(benchPin.channelId, channelId), eq(benchMessage.deletedInd, false)];
+  if (hidden.length > 0) conditions.push(notInArray(benchMessage.userId, hidden));
   const pins = await db
     .select({
       pinId: benchPin.pinId,
@@ -513,7 +531,7 @@ export async function getPinnedMessages(channelId: number) {
     .from(benchPin)
     .leftJoin(benchMessage, eq(benchPin.messageId, benchMessage.messageId))
     .leftJoin(user, eq(benchMessage.userId, user.userId))
-    .where(and(eq(benchPin.channelId, channelId), eq(benchMessage.deletedInd, false)))
+    .where(and(...conditions))
     .orderBy(desc(benchPin.createdDttm));
   return pins;
 }
@@ -522,13 +540,15 @@ export async function getPinnedMessages(channelId: number) {
 // Search
 // ---------------------------------------------------------------------------
 
+/** `viewerId`: messages by people they blocked are left out. */
 export async function searchMessages(
   channelId: number,
   query: string,
-  options: { limit?: number; offset?: number } = {},
+  options: { limit?: number; offset?: number; viewerId?: number } = {},
 ) {
   const limit = Math.min(options.limit ?? 20, 50);
   const term = `%${query}%`;
+  const hidden = options.viewerId === undefined ? [] : await blockedBy(options.viewerId);
 
   const results = await db
     .select({
@@ -544,6 +564,7 @@ export async function searchMessages(
       eq(benchMessage.channelId, channelId),
       eq(benchMessage.deletedInd, false),
       sql`${benchMessage.messageBody} ILIKE ${term}`,
+      hidden.length > 0 ? notInArray(benchMessage.userId, hidden) : undefined,
     ))
     .orderBy(desc(benchMessage.createdDttm))
     .limit(limit)

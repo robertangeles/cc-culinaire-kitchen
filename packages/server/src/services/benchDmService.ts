@@ -7,8 +7,9 @@
 import pino from "pino";
 import { db } from "../db/index.js";
 import { benchDmThread, benchMessage, user } from "../db/schema.js";
-import { eq, and, or, desc, lt, exists } from "drizzle-orm";
+import { eq, and, or, desc, lt, exists, notInArray } from "drizzle-orm";
 import { insertPost, sharesOrganisation } from "./benchService.js";
+import { blockedBy, isBlockedEitherWay } from "./benchBlockService.js";
 
 const logger = pino({ name: "benchDmService" });
 
@@ -56,13 +57,18 @@ async function findConversation(userIdA: number, userIdB: number) {
   return found ?? null;
 }
 
-/** Who may write to whom: people who share an organisation, and two people who already have a conversation (even if they no longer share one). */
+/**
+ * Who may write to whom: people who share an organisation, and two people who already have a conversation (even if they no longer share one);
+ * never two people where either has blocked the other.
+ */
 export async function mayDirectMessage(senderId: number, recipientId: number): Promise<boolean> {
+  if (await isBlockedEitherWay(senderId, recipientId)) return false;
   return (await findConversation(senderId, recipientId)) !== null || sharesOrganisation(senderId, recipientId);
 }
 
-/** The thread between two people, made if they may have one; null otherwise, the same for someone who does not exist. */
+/** The thread between two people, made if they may have one; null otherwise (blocked, no shared kitchen, or no such person: one answer for all). */
 export async function openThread(senderId: number, recipientId: number) {
+  if (await isBlockedEitherWay(senderId, recipientId)) return null;
   const existing = await findConversation(senderId, recipientId);
   if (existing) return existing;
   return (await sharesOrganisation(senderId, recipientId)) ? getOrCreateThread(senderId, recipientId) : null;
@@ -109,7 +115,9 @@ export interface DmThreadWithPreview {
   lastMessageAt: Date;
 }
 
+/** A thread with someone this person blocked is left out. */
 export async function getThreadsForUser(userId: number): Promise<DmThreadWithPreview[]> {
+  const hidden = await blockedBy(userId);
   const threads = await db
     .select()
     .from(benchDmThread)
@@ -119,6 +127,7 @@ export async function getThreadsForUser(userId: number): Promise<DmThreadWithPre
   const results: DmThreadWithPreview[] = [];
   for (const t of threads) {
     const otherUserId = t.userAId === userId ? t.userBId : t.userAId;
+    if (hidden.includes(otherUserId)) continue;
 
     const [otherUser] = await db
       .select({ userName: user.userName, userPhotoPath: user.userPhotoPath })
@@ -166,16 +175,19 @@ export interface DmMessage {
   createdDttm: Date;
 }
 
+/** `viewerId`: the messages of someone they blocked are left out. */
 export async function getDmMessages(
   threadId: number,
-  options: { before?: string; limit?: number } = {},
+  options: { before?: string; limit?: number; viewerId?: number } = {},
 ): Promise<DmMessage[]> {
   const limit = Math.min(options.limit ?? 50, 100);
+  const hidden = options.viewerId === undefined ? [] : await blockedBy(options.viewerId);
 
   const conditions = [
     eq(benchMessage.dmThreadId, threadId),
     eq(benchMessage.deletedInd, false),
   ];
+  if (hidden.length > 0) conditions.push(notInArray(benchMessage.userId, hidden));
   if (options.before) {
     conditions.push(lt(benchMessage.createdDttm, new Date(options.before)));
   }

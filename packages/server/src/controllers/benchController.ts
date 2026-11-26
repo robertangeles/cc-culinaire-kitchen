@@ -70,7 +70,7 @@ export async function handleGetMessages(req: Request, res: Response, next: NextF
 
     const before = req.query.before as string | undefined;
     const limit = parseInt(req.query.limit as string) || 50;
-    const messages = await getMessages(channel.channelId, { before, limit });
+    const messages = await getMessages(channel.channelId, { before, limit, viewerId: userId });
     res.json({ messages, channelId: channel.channelId });
   } catch (err) {
     next(err);
@@ -95,7 +95,7 @@ export async function handleGetPins(req: Request, res: Response, next: NextFunct
         return;
       }
     }
-    const pins = await getPinnedMessages(channel.channelId);
+    const pins = await getPinnedMessages(channel.channelId, userId);
     res.json(pins);
   } catch (err) {
     next(err);
@@ -209,7 +209,7 @@ export async function handleSearchMessages(req: Request, res: Response, next: Ne
 
     const limit = parseInt(req.query.limit as string) || 20;
     const offset = parseInt(req.query.offset as string) || 0;
-    const results = await searchMessages(channel.channelId, q, { limit, offset });
+    const results = await searchMessages(channel.channelId, q, { limit, offset, viewerId: userId });
     res.json(results);
   } catch (err) {
     next(err);
@@ -324,7 +324,7 @@ export async function handleGetDmMessages(req: Request, res: Response, next: Nex
 
     const before = req.query.before as string | undefined;
     const limit = parseInt(req.query.limit as string) || 50;
-    const messages = await getDmMessages(threadId, { before, limit });
+    const messages = await getDmMessages(threadId, { before, limit, viewerId: userId });
     res.json({ messages });
   } catch (err) {
     next(err);
