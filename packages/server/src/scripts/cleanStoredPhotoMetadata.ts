@@ -14,6 +14,10 @@
  * It stops at the first storage error. Run it again: it first finishes anything the stopped run left half done, then
  * skips photos that are already clean, so it is safe to repeat. Run one copy at a time.
  *
+ * Known window: once --apply has moved a document to its cleaned copy, a client that retries a create for that document
+ * with the old file id may get 409 CONFLICT. Run --apply when few phone uploads are in flight; a client that gets the
+ * conflict can re-fetch its documents.
+ *
  * Output is counts and document ids only. Storage settings are read as the server reads them (credential store,
  * then environment). Rows with no recorded format are counted, not read: their format is not known.
  * Not covered: PDFs; copies a storage backup may keep of a destroyed original.
