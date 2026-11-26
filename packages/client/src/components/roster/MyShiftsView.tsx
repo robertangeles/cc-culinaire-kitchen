@@ -88,6 +88,39 @@ export function MyShiftsView() {
   );
   const claimableSwaps = swaps.filter((s) => s.fromUserId !== user?.userId);
 
+  // Shown whether or not the person has shifts of their own: someone with none is who most needs one.
+  const openSwaps = (claimableSwaps.length > 0 || swapError) && (
+    <div className="space-y-2">
+      <h3 className="text-sm font-medium text-white">Open swaps</h3>
+      {swapError && <p className="text-sm text-red-400">{swapError}</p>}
+      {!swapsLoading && claimableSwaps.length > 0 && (
+        <div className="rounded-xl border border-dark-200 overflow-hidden">
+          {claimableSwaps.map((s) => (
+            <div
+              key={s.swapRequestId}
+              className="flex items-center justify-between border-b border-dark-200/30 px-4 py-3 last:border-b-0"
+            >
+              <div className="text-sm">
+                <span className="text-white font-medium">{formatShiftRange(s.startDatetime, s.endDatetime, s.ianaTimezone)}</span>
+                <div className="mt-0.5 text-xs text-dark-600">
+                  {s.roleName} — offered by {s.fromUserName}
+                </div>
+              </div>
+              <button
+                type="button"
+                onClick={() => handleClaimSwap(s.swapRequestId)}
+                disabled={swapActionId === s.swapRequestId}
+                className="flex items-center gap-1 rounded-lg bg-gold px-3 py-1.5 text-xs font-semibold text-dark transition-all hover:bg-gold-hover disabled:opacity-50"
+              >
+                <ArrowLeftRight className="size-3.5" /> Claim
+              </button>
+            </div>
+          ))}
+        </div>
+      )}
+    </div>
+  );
+
   if (isLoading) {
     return (
       <div className="flex items-center justify-center py-16">
@@ -102,12 +135,15 @@ export function MyShiftsView() {
 
   if (shifts.length === 0) {
     return (
-      <EmptyState
-        icon={CalendarDays}
-        title="No shifts yet"
-        body="Shifts you're assigned to will show up here once a manager builds the roster."
-        variant="invitation"
-      />
+      <div className="space-y-4 animate-fade-in-up">
+        <EmptyState
+          icon={CalendarDays}
+          title="No shifts yet"
+          body="Shifts you're assigned to will show up here once a manager builds the roster."
+          variant="invitation"
+        />
+        {openSwaps}
+      </div>
     );
   }
 
@@ -120,7 +156,7 @@ export function MyShiftsView() {
             <div className="flex items-center justify-between">
               <div className="text-sm">
                 <div className="text-xs font-medium text-gold">{s.roleName}</div>
-                <span className="text-white font-medium">{formatShiftRange(s.startDatetime, s.endDatetime)}</span>
+                <span className="text-white font-medium">{formatShiftRange(s.startDatetime, s.endDatetime, s.ianaTimezone)}</span>
                 <div className="mt-0.5 text-xs text-dark-600">
                   {s.assignmentStatus === "Pending" && <span className="text-dark-500">Awaiting your response</span>}
                   {s.assignmentStatus === "Confirmed" && <span className="text-emerald-400">Confirmed</span>}
@@ -207,37 +243,7 @@ export function MyShiftsView() {
         ))}
       </div>
 
-      {(claimableSwaps.length > 0 || swapError) && (
-        <div className="space-y-2">
-          <h3 className="text-sm font-medium text-white">Open swaps</h3>
-          {swapError && <p className="text-sm text-red-400">{swapError}</p>}
-          {!swapsLoading && claimableSwaps.length > 0 && (
-            <div className="rounded-xl border border-dark-200 overflow-hidden">
-              {claimableSwaps.map((s) => (
-                <div
-                  key={s.swapRequestId}
-                  className="flex items-center justify-between border-b border-dark-200/30 px-4 py-3 last:border-b-0"
-                >
-                  <div className="text-sm">
-                    <span className="text-white font-medium">{formatShiftRange(s.startDatetime, s.endDatetime)}</span>
-                    <div className="mt-0.5 text-xs text-dark-600">
-                      {s.roleName} — offered by {s.fromUserName}
-                    </div>
-                  </div>
-                  <button
-                    type="button"
-                    onClick={() => handleClaimSwap(s.swapRequestId)}
-                    disabled={swapActionId === s.swapRequestId}
-                    className="flex items-center gap-1 rounded-lg bg-gold px-3 py-1.5 text-xs font-semibold text-dark transition-all hover:bg-gold-hover disabled:opacity-50"
-                  >
-                    <ArrowLeftRight className="size-3.5" /> Claim
-                  </button>
-                </div>
-              ))}
-            </div>
-          )}
-        </div>
-      )}
+      {openSwaps}
     </div>
   );
 }

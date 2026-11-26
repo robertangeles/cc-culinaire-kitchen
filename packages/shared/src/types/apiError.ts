@@ -80,6 +80,8 @@ export const SERVER_ERROR_CODES = [
   "SWAP_CANCELLED",
   // A sale's idempotency key was already used for a different sale (Wave 7): a client bug, never retry the same request.
   "IDEMPOTENCY_KEY_REUSED",
+  // Compliance documents: the private document store is not set up or not answering (503). Try again later.
+  "STORAGE_UNAVAILABLE",
 ] as const;
 export type ServerErrorCode = (typeof SERVER_ERROR_CODES)[number];
 

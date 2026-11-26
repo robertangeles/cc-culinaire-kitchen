@@ -41,6 +41,8 @@ export interface MyShift {
   assignmentId: string;
   assignmentStatus: "Pending" | "Confirmed" | "Declined" | "Removed";
   publicHolidayConsent: PublicHolidayConsent;
+  /** The venue's zone: shift times are shown in it, whatever the browser's. */
+  ianaTimezone: string;
 }
 
 export interface Availability {

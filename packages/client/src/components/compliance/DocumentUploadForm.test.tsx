@@ -116,3 +116,70 @@ describe("DocumentUploadForm", () => {
     expect(screen.getByRole("button", { name: "Send for review" })).toBeDisabled();
   });
 });
+
+describe("DocumentUploadForm — what is sent", () => {
+  const ascii = (s: string) => [...s].map((c) => c.charCodeAt(0));
+  const seg = (marker: number, body: number[]) => [0xff, marker, (body.length + 2) >> 8, (body.length + 2) & 255, ...body];
+  const PICTURE = [...seg(0xe0, ascii("JFIF\0")), ...seg(0xdb, [9, 9]), ...seg(0xda, [1, 2, 3]), 0x10, 0xff, 0xd9];
+  const located = new Uint8Array([0xff, 0xd8, ...seg(0xe1, ascii("Exif\0\0GPS-37.81,144.96")), ...PICTURE]);
+
+  let sent: File[];
+  let creates: any[];
+  let failNextCreate: boolean;
+
+  beforeEach(() => {
+    sent = [];
+    creates = [];
+    failNextCreate = false;
+    vi.stubGlobal(
+      "fetch",
+      vi.fn(async (url: string, init?: RequestInit) => {
+        if (url.includes("/documents/upload")) {
+          sent.push((init!.body as FormData).get("file") as File);
+          return { ok: true, json: async () => ({ storagePublicId: "culinaire/compliance/abc123", ocr: {} }) } as Response;
+        }
+        creates.push(JSON.parse(init!.body as string));
+        if (failNextCreate) {
+          failNextCreate = false;
+          throw new TypeError("Failed to fetch");
+        }
+        return { ok: true, json: async () => ({}) } as Response;
+      }),
+    );
+  });
+  afterEach(() => vi.unstubAllGlobals());
+
+  async function choose(f: File) {
+    fireEvent.change(screen.getByLabelText("Document type"), { target: { value: "RSA" } });
+    fireEvent.change(document.getElementById("document-file") as HTMLInputElement, { target: { files: [f] } });
+    await waitFor(() => expect(sent).toHaveLength(1));
+  }
+
+  it("sends a photo without the place it was taken, picture unchanged", async () => {
+    render(<DocumentUploadForm />);
+    await choose(new File([located], "rsa.jpg", { type: "image/jpeg" }));
+    expect([...new Uint8Array(await sent[0].arrayBuffer())]).toEqual([0xff, 0xd8, ...PICTURE]);
+    expect(sent[0].name).toBe("rsa.jpg");
+    expect(sent[0].type).toBe("image/jpeg");
+  });
+
+  it("sends a PDF as chosen", async () => {
+    const pdf = new File(["%PDF-1.7 certificate"], "rsa.pdf", { type: "application/pdf" });
+    render(<DocumentUploadForm />);
+    await choose(pdf);
+    expect(await sent[0].text()).toBe("%PDF-1.7 certificate");
+  });
+
+  it("sends the same id again when a send's answer was lost, so it is not made twice", async () => {
+    render(<DocumentUploadForm />);
+    await choose(new File([located], "rsa.jpg", { type: "image/jpeg" }));
+    failNextCreate = true;
+    fireEvent.click(screen.getByRole("button", { name: "Send for review" }));
+    await waitFor(() => expect(creates).toHaveLength(1));
+    await waitFor(() => expect(screen.getByRole("button", { name: "Send for review" })).toBeEnabled());
+    fireEvent.click(screen.getByRole("button", { name: "Send for review" }));
+    await waitFor(() => expect(screen.getByText("Sent for review")).toBeInTheDocument());
+    expect(creates[0].complianceDocumentId).toMatch(/^[0-9a-f-]{36}$/);
+    expect(creates[1].complianceDocumentId).toBe(creates[0].complianceDocumentId);
+  });
+});

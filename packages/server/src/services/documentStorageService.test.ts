@@ -121,7 +121,7 @@ describe("storeDocument", () => {
     await expect(storeDocument(PDF, 2, 5)).rejects.toBeInstanceOf(DocumentStorageError);
     await expect(storeDocument(PDF, 2, 5)).rejects.toMatchObject({
       status: 503,
-      code: "STORAGE_UNCONFIGURED",
+      code: "STORAGE_UNAVAILABLE",
     });
     expect(uploadStream).not.toHaveBeenCalled();
   });
@@ -130,7 +130,7 @@ describe("storeDocument", () => {
     credsOk();
     await expect(storeDocument(SVG, 2, 5)).rejects.toMatchObject({
       status: 415,
-      code: "UNSUPPORTED_MEDIA_TYPE",
+      code: "UNSUPPORTED_FILE_TYPE",
     });
     expect(uploadStream).not.toHaveBeenCalled();
   });
@@ -139,7 +139,7 @@ describe("storeDocument", () => {
     credsOk();
     await expect(storeDocument(Buffer.alloc(0), 2, 5)).rejects.toMatchObject({
       status: 400,
-      code: "EMPTY_UPLOAD",
+      code: "VALIDATION",
     });
     expect(uploadStream).not.toHaveBeenCalled();
   });
@@ -151,8 +151,66 @@ describe("storeDocument", () => {
     }));
     await expect(storeDocument(PDF, 2, 5)).rejects.toMatchObject({
       status: 502,
-      code: "STORAGE_UPLOAD_FAILED",
+      code: "UPLOAD_FAILED",
     });
+  });
+});
+
+describe("storeDocument — a photo is stored without what the camera wrote about it", () => {
+  const ascii = (s: string) => [...s].map((c) => c.charCodeAt(0));
+  const seg = (marker: number, body: number[]) => [0xff, marker, (body.length + 2) >> 8, (body.length + 2) & 255, ...body];
+  const PIXELS = [...seg(0xda, [1, 2, 3]), 0x10, 0xff, 0x00, 0x20, 0xff, 0xd9];
+  const JFIF = seg(0xe0, ascii("JFIF\0"));
+  const TABLE = seg(0xdb, [9, 9]);
+  /** The bytes the storage stream was given. */
+  const stored = () => {
+    const end = vi.fn();
+    uploadStream.mockImplementation((_o: unknown, cb: (e: unknown, r: unknown) => void) => ({
+      end: (b: Buffer) => {
+        end(b);
+        cb(null, { public_id: "culinaire/compliance/org-2/abc" });
+      },
+    }));
+    return end;
+  };
+
+  it("stores a JPEG without its place and device, picture unchanged", async () => {
+    credsOk();
+    const end = stored();
+    const exif = seg(0xe1, ascii("Exif\0\0GPS-37.81,144.96"));
+    const res = await storeDocument(Buffer.from([0xff, 0xd8, ...JFIF, ...exif, ...TABLE, ...PIXELS]), 2, 5);
+    expect(res.mime).toBe("image/jpeg");
+    expect([...end.mock.calls[0][0]]).toEqual([0xff, 0xd8, ...JFIF, ...TABLE, ...PIXELS]);
+  });
+
+  it("stores a JPEG only up to the end of its picture, not a second picture after it", async () => {
+    credsOk();
+    const end = stored();
+    const second = [0xff, 0xd8, ...seg(0xe1, ascii("Exif\0\0GPS-37.81,144.96")), ...PIXELS];
+    await storeDocument(Buffer.from([0xff, 0xd8, ...JFIF, ...TABLE, ...PIXELS, ...second]), 2, 5);
+    expect([...end.mock.calls[0][0]]).toEqual([0xff, 0xd8, ...JFIF, ...TABLE, ...PIXELS]);
+  });
+
+  it("stores a PNG without its text chunks", async () => {
+    credsOk();
+    const end = stored();
+    const chunk = (type: string, data: number[]) => [0, 0, 0, data.length, ...ascii(type), ...data, 0, 0, 0, 0];
+    const head = [0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a, ...chunk("IHDR", [1])];
+    await storeDocument(Buffer.from([...head, ...chunk("tEXt", ascii("GPS")), ...chunk("IEND", [])]), 2, 5);
+    expect([...end.mock.calls[0][0]]).toEqual([...head, ...chunk("IEND", [])]);
+  });
+
+  it("stores a PDF byte for byte", async () => {
+    credsOk();
+    const end = stored();
+    await storeDocument(PDF, 2, 5);
+    expect([...end.mock.calls[0][0]]).toEqual([...PDF]);
+  });
+
+  it("refuses a photo it cannot clean 415 UNSUPPORTED_FILE_TYPE, before touching storage", async () => {
+    credsOk();
+    await expect(storeDocument(JPEG, 2, 5)).rejects.toMatchObject({ status: 415, code: "UNSUPPORTED_FILE_TYPE" });
+    expect(uploadStream).not.toHaveBeenCalled();
   });
 });
 

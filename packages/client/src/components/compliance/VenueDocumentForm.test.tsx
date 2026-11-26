@@ -97,6 +97,32 @@ describe("VenueDocumentForm", () => {
     expect(body.userId).toBeUndefined();
   });
 
+  it("sends a photo without its metadata, and the save with a client-made id", async () => {
+    const fetchMock = mockFetch();
+    vi.stubGlobal("fetch", fetchMock);
+    render(<VenueDocumentForm />);
+    fireEvent.click(screen.getByText("+ Add venue document"));
+
+    fireEvent.change(await screen.findByLabelText("Document type"), { target: { value: "Liquor Licence" } });
+    await waitFor(() => expect(screen.getByLabelText("Venue")).not.toBeDisabled());
+    fireEvent.change(screen.getByLabelText("Venue"), { target: { value: "loc-1" } });
+    const seg = (marker: number, body: number[]) => [0xff, marker, 0, body.length + 2, ...body];
+    const picture = [...seg(0xdb, [9]), ...seg(0xda, [1]), 0x10, 0xff, 0xd9];
+    const photo = new Uint8Array([0xff, 0xd8, ...seg(0xe1, [...new TextEncoder().encode("Exif\0\0GPS")]), ...picture]);
+    fireEvent.change(screen.getByLabelText(/Choose a file/i, { selector: "input" }), {
+      target: { files: [new File([photo], "licence.jpg", { type: "image/jpeg" })] },
+    });
+    await waitFor(() => expect(screen.getByRole("button", { name: "Save" })).not.toBeDisabled());
+    fireEvent.click(screen.getByRole("button", { name: "Save" }));
+    await waitFor(() => expect(screen.getByText("Venue document saved.")).toBeInTheDocument());
+
+    const uploadCall = fetchMock.mock.calls.find(([url]) => String(url).includes("/documents/upload"));
+    const sent = ((uploadCall![1] as RequestInit).body as FormData).get("file") as File;
+    expect([...new Uint8Array(await sent.arrayBuffer())]).toEqual([0xff, 0xd8, ...picture]);
+    const venueCall = fetchMock.mock.calls.find(([url]) => String(url).includes("/documents/venue"));
+    expect(JSON.parse((venueCall![1] as RequestInit).body as string).complianceDocumentId).toMatch(/^[0-9a-f-]{36}$/);
+  });
+
   it("shows an error and an empty (not stuck-loading) venue picker when the venue list fails to load", async () => {
     vi.stubGlobal("fetch", mockFetch({ locationContext: "fail" }));
     render(<VenueDocumentForm />);

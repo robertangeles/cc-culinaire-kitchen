@@ -161,7 +161,7 @@ export const complianceDocumentViewRateLimit = rateLimit({
     if (req.user?.sub) return `compliance-view-user-${req.user.sub}`;
     return req.ip ?? "unknown";
   },
-  message: { error: "Too many document requests — please wait a moment before trying again." },
+  message: { error: "Too many document requests — please wait a moment before trying again.", code: "RATE_LIMITED" },
 });
 
 /**
@@ -187,7 +187,7 @@ export const complianceDocumentEditRateLimit = rateLimit({
     if (req.user?.sub) return `compliance-edit-user-${req.user.sub}`;
     return req.ip ?? "unknown";
   },
-  message: { error: "Too many document changes — please wait a moment before trying again." },
+  message: { error: "Too many document changes — please wait a moment before trying again.", code: "RATE_LIMITED" },
 });
 
 /**
@@ -211,7 +211,7 @@ export const complianceReportRateLimit = rateLimit({
     if (req.user?.sub) return `compliance-report-user-${req.user.sub}`;
     return req.ip ?? "unknown";
   },
-  message: { error: "Too many report requests — please wait a few minutes before trying again." },
+  message: { error: "Too many report requests — please wait a few minutes before trying again.", code: "RATE_LIMITED" },
 });
 
 /**

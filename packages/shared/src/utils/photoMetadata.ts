@@ -4,6 +4,7 @@
  * pixels are already the right way up. On an iPhone the camera and cropped paths rotate the pixels, but the photo library path keeps the rotation only in the Orientation tag
  * (expo-image-picker `MediaHandler.swift`, PHPicker path, no `fixOrientation`), so that one tag is written back alone, in a new EXIF segment. This could not be checked on an iPhone or iPad (no Mac);
  * if the picker already bakes the rotation into the pixels the tag is 1 or absent and nothing changes. The pixels are not touched.
+ * Anything after the picture's end (a second embedded picture, an HDR gain map, a motion-photo part) is dropped: it may carry its own EXIF.
  */
 
 const at = (b: Uint8Array, i: number, ...bytes: number[]) => bytes.every((v, k) => b[i + k] === v);
@@ -56,9 +57,13 @@ function stripJpeg(b: Uint8Array): Uint8Array | null {
       i += 1; // fill byte
       continue;
     }
-    if (marker === 0xda) return join([...parts, b.subarray(i)]); // the pixels start here
     const end = i + 2 + (b[i + 2] << 8) + b[i + 3];
     if (end < i + 4 || end > b.length) return null;
+    if (marker === 0xda) {
+      // the pixels start here; in them a literal FF is FF 00 and a restart is FF D0-D7, so the first FF D9 is the picture's end
+      for (let e = end; e + 2 <= b.length; e++) if (b[e] === 0xff && b[e + 1] === 0xd9) return join([...parts, b.subarray(i, e + 2)]);
+      return null;
+    }
     if (marker === 0xe1 && !seen) {
       const turned = orientation(b, i + 4, end);
       if (turned) {

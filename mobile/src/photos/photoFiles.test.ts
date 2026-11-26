@@ -9,13 +9,13 @@ vi.mock("expo-file-system", () => ({
 
 import { clearPickedPhotos, takePhoto } from "./photoFiles";
 
-const JPEG = new Uint8Array([0xff, 0xd8, 0xff, 0xe1, 0, 3, 1, 0xff, 0xda, 0, 2, 7]);
+const JPEG = new Uint8Array([0xff, 0xd8, 0xff, 0xe1, 0, 3, 1, 0xff, 0xda, 0, 2, 7, 0xff, 0xd9]);
 beforeEach(() => Object.assign(disk, { bytes: JPEG, exists: true, deleted: 0, failDelete: false }));
 
 describe("a picked photo", () => {
   it("comes back cleaned, with nothing of it left in the picker's cache", async () => {
     const photo = await takePhoto("file:///x.webp");
-    expect([photo?.mimeType, ...photo!.bytes]).toEqual(["image/jpeg", 0xff, 0xd8, 0xff, 0xda, 0, 2, 7]);
+    expect([photo?.mimeType, ...photo!.bytes]).toEqual(["image/jpeg", 0xff, 0xd8, 0xff, 0xda, 0, 2, 7, 0xff, 0xd9]);
     expect(disk.deleted).toBe(1);
   });
 

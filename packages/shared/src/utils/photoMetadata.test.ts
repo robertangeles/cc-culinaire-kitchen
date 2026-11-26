@@ -1,5 +1,5 @@
 import { describe, it, expect } from "vitest";
-import { stripMetadata } from "./photoMetadata";
+import { stripMetadata } from "./photoMetadata.js";
 
 const ascii = (s: string) => [...s].map((c) => c.charCodeAt(0));
 const seg = (marker: number, body: number[]) => [0xff, marker, (body.length + 2) >> 8, (body.length + 2) & 255, ...body];
@@ -24,6 +24,23 @@ describe("a JPEG without its metadata", () => {
 
   it("leaves a photo with none as it is", () => {
     expect([...stripMetadata(jpeg(JFIF, TABLE))!]).toEqual([...jpeg(JFIF, TABLE)]);
+  });
+
+  it("ends at the picture's end, so a second embedded picture with its own place does not go through", () => {
+    const second = [0xff, 0xd8, ...EXIF, ...PIXELS];
+    const out = stripMetadata(new Uint8Array([...jpeg(JFIF, TABLE), ...second, ...ascii("tail")]));
+    expect([...out!]).toEqual([...jpeg(JFIF, TABLE)]);
+    expect(text(out)).not.toMatch(/GPS|tail/);
+  });
+
+  it("keeps every scan of a progressive picture up to its end", () => {
+    const scan = [...seg(0xda, [1, 2, 3]), 0x10, 0xff, 0x00, 0x20];
+    const progressive = [0xff, 0xd8, ...JFIF, ...scan, ...TABLE, ...scan, 0xff, 0xd9];
+    expect([...stripMetadata(new Uint8Array([...progressive, ...EXIF]))!]).toEqual(progressive);
+  });
+
+  it("refuses one whose picture never ends", () => {
+    expect(stripMetadata(new Uint8Array([0xff, 0xd8, ...JFIF, ...seg(0xda, [1, 2, 3]), 0x10, 0xff, 0x00, 0x20]))).toBeNull();
   });
 
   it("refuses one that is cut short or not a JPEG inside, instead of sending it as it came", () => {

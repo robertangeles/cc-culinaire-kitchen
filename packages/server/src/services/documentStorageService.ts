@@ -47,6 +47,7 @@ import pino from "pino";
 import { and, eq } from "drizzle-orm";
 import { db } from "../db/index.js";
 import { documentAccessLog } from "../db/schema.js";
+import { stripMetadata, type ServerErrorCode } from "@culinaire/shared";
 
 const logger = pino({ name: "documentStorageService" });
 
@@ -65,7 +66,7 @@ export class DocumentStorageError extends Error {
   constructor(
     message: string,
     readonly status: number,
-    readonly code: string,
+    readonly code: ServerErrorCode,
   ) {
     super(message);
     this.name = "DocumentStorageError";
@@ -126,7 +127,7 @@ async function requireCloudinary(): Promise<void> {
     throw new DocumentStorageError(
       "Can't accept uploads right now.",
       503,
-      "STORAGE_UNCONFIGURED",
+      "STORAGE_UNAVAILABLE",
     );
   }
 
@@ -176,7 +177,7 @@ export async function storeDocument(
   userId: number,
 ): Promise<{ publicId: string; mime: AllowedMime }> {
   if (buffer.length === 0) {
-    throw new DocumentStorageError("That file looks empty.", 400, "EMPTY_UPLOAD");
+    throw new DocumentStorageError("That file looks empty.", 400, "VALIDATION");
   }
 
   const mime = sniffMime(buffer);
@@ -184,7 +185,18 @@ export async function storeDocument(
     throw new DocumentStorageError(
       "Only PDF, JPG or PNG files are accepted.",
       415,
-      "UNSUPPORTED_MEDIA_TYPE",
+      "UNSUPPORTED_FILE_TYPE",
+    );
+  }
+
+  // A photo's place, time and device stay out of storage, whatever the client did; the rotation is kept.
+  // A photo that cannot be cleaned is refused rather than stored as sent.
+  const cleaned = mime === "application/pdf" ? buffer : stripMetadata(buffer);
+  if (!cleaned) {
+    throw new DocumentStorageError(
+      "That photo couldn't be read. Take it again or choose another file.",
+      415,
+      "UNSUPPORTED_FILE_TYPE",
     );
   }
 
@@ -207,7 +219,7 @@ export async function storeDocument(
             new DocumentStorageError(
               "Upload didn't finish. Try again.",
               502,
-              "STORAGE_UPLOAD_FAILED",
+              "UPLOAD_FAILED",
             ),
           );
           return;
@@ -216,7 +228,7 @@ export async function storeDocument(
         resolve({ publicId: result.public_id, mime });
       },
     );
-    stream.end(buffer);
+    stream.end(Buffer.from(cleaned));
   });
 }
 

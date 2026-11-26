@@ -71,7 +71,11 @@ function shouldRunOcr(mime: AllowedMime): boolean {
   return mime !== "application/pdf";
 }
 
+/** Optional client-made id: a create whose answer was lost is sent again with it and finds the same document. */
+const clientId = z.string().uuid().optional();
+
 const CreateDocumentSchema = z.object({
+  complianceDocumentId: clientId,
   documentType: z.string().min(1).max(40),
   engagementType: z.enum(["employee", "contractor", "agency"]).optional(),
   documentNumber: z.string().max(100).nullable().optional(),
@@ -92,6 +96,7 @@ const CreateDocumentSchema = z.object({
 
 /** CV-E: a venue document has no staff subject — its subject IS the venue. */
 const CreateVenueDocumentSchema = z.object({
+  complianceDocumentId: clientId,
   documentType: z.string().min(1).max(40),
   storeLocationId: z.string().uuid(),
   documentNumber: z.string().max(100).nullable().optional(),
@@ -144,9 +149,37 @@ const ReportQuerySchema = z.object({
   storeLocationId: z.string().uuid().optional(),
 });
 
+/**
+ * What a person is sent about their own document: what they entered, its status and why it was rejected.
+ * The manager's notes, who verified it and the retention dates stay on the manager's side.
+ */
+const STAFF_FIELDS = [
+  "complianceDocumentId",
+  "documentType",
+  "engagementType",
+  "documentNumber",
+  "issueDate",
+  "expiryDate",
+  "issuingAuthority",
+  "issuingJurisdiction",
+  "storagePublicId",
+  "storageFormat",
+  "verificationStatus",
+  "uploadedAt",
+  "verifiedAt",
+  "rejectionReason",
+] as const;
+
+function staffView(doc: Record<(typeof STAFF_FIELDS)[number], unknown>) {
+  return Object.fromEntries(STAFF_FIELDS.map((k) => [k, doc[k]]));
+}
+
 function handleServiceError(err: unknown, res: Response, next: NextFunction): void {
   if (err instanceof ComplianceError) {
-    res.status(err.statusCode).json({ error: err.message });
+    res.status(err.statusCode).json({ error: err.message, code: err.code });
+  } else if (err instanceof DocumentStorageError) {
+    // Storage not set up or not answering: its own status (503/502), never a generic 500.
+    res.status(err.status).json({ error: err.message, code: err.code });
   } else {
     next(err);
   }
@@ -161,7 +194,7 @@ function handleServiceError(err: unknown, res: Response, next: NextFunction): vo
 async function resolveContext(req: Request, res: Response): Promise<{ orgId: number } | null> {
   const ctx = await getUserLocationContext(req.user!.sub);
   if (ctx.organisationId === null) {
-    res.status(400).json({ error: "You are not a member of any organisation" });
+    res.status(400).json({ error: "You are not a member of any organisation", code: "FORBIDDEN" });
     return null;
   }
   return { orgId: ctx.organisationId };
@@ -177,7 +210,7 @@ export async function handleListMyDocuments(
   try {
     const ctx = await resolveContext(req, res);
     if (!ctx) return;
-    res.json(await listDocumentsForUser(ctx.orgId, req.user!.sub));
+    res.json((await listDocumentsForUser(ctx.orgId, req.user!.sub)).map(staffView));
   } catch (err) {
     handleServiceError(err, res, next);
   }
@@ -194,7 +227,7 @@ export async function handleCreateDocument(
 
     const parsed = CreateDocumentSchema.safeParse(req.body);
     if (!parsed.success) {
-      res.status(400).json({ error: parsed.error.errors[0]?.message ?? "Invalid input" });
+      res.status(400).json({ error: parsed.error.errors[0]?.message ?? "Invalid input", code: "VALIDATION" });
       return;
     }
 
@@ -206,10 +239,10 @@ export async function handleCreateDocument(
       uploadedBy: req.user!.sub,
     });
     logger.info(
-      { complianceDocumentId: doc.complianceDocumentId, userId: req.user!.sub },
+      { complianceDocumentId: doc.complianceDocumentId, userId: req.user!.sub, replay: doc.replay },
       "Compliance document uploaded",
     );
-    res.status(201).json(doc);
+    res.status(doc.replay ? 200 : 201).json(staffView(doc));
   } catch (err) {
     handleServiceError(err, res, next);
   }
@@ -232,22 +265,22 @@ export async function handleCreateVenueDocument(
 
     const parsed = CreateVenueDocumentSchema.safeParse(req.body);
     if (!parsed.success) {
-      res.status(400).json({ error: parsed.error.errors[0]?.message ?? "Invalid input" });
+      res.status(400).json({ error: parsed.error.errors[0]?.message ?? "Invalid input", code: "VALIDATION" });
       return;
     }
 
     const { storeLocationId, ...rest } = parsed.data;
-    const doc = await createDocument(ctx.orgId, {
+    const { replay, ...doc } = await createDocument(ctx.orgId, {
       ...rest,
       userId: null,
       subjectStoreLocationId: storeLocationId,
       uploadedBy: req.user!.sub,
     });
     logger.info(
-      { complianceDocumentId: doc.complianceDocumentId, storeLocationId, userId: req.user!.sub },
+      { complianceDocumentId: doc.complianceDocumentId, storeLocationId, userId: req.user!.sub, replay },
       "Venue compliance document uploaded",
     );
-    res.status(201).json(doc);
+    res.status(replay ? 200 : 201).json(doc);
   } catch (err) {
     handleServiceError(err, res, next);
   }
@@ -269,7 +302,7 @@ export async function handleUploadDocument(
     if (!ctx) return;
 
     if (!req.file) {
-      res.status(400).json({ error: "A file is required" });
+      res.status(400).json({ error: "A file is required", code: "VALIDATION" });
       return;
     }
 
@@ -281,11 +314,7 @@ export async function handleUploadDocument(
 
     res.json({ storagePublicId: publicId, storageFormat: mimeToStorageFormat(mime), ocr });
   } catch (err) {
-    if (err instanceof DocumentStorageError) {
-      res.status(err.status).json({ error: err.message });
-      return;
-    }
-    next(err);
+    handleServiceError(err, res, next);
   }
 }
 
@@ -301,7 +330,7 @@ export async function handleUpdateDocument(
 
     const parsed = UpdateDocumentSchema.safeParse(req.body);
     if (!parsed.success) {
-      res.status(400).json({ error: parsed.error.errors[0]?.message ?? "Invalid input" });
+      res.status(400).json({ error: parsed.error.errors[0]?.message ?? "Invalid input", code: "VALIDATION" });
       return;
     }
 
@@ -310,7 +339,7 @@ export async function handleUpdateDocument(
       { complianceDocumentId: doc.complianceDocumentId, userId: req.user!.sub },
       "Compliance document edited",
     );
-    res.json(doc);
+    res.json(staffView(doc));
   } catch (err) {
     handleServiceError(err, res, next);
   }
@@ -332,14 +361,9 @@ export async function handleDeleteDocument(
     );
     res.status(204).end();
   } catch (err) {
-    // deleteDocument calls deleteStoredDocument, which can throw the same
-    // DocumentStorageError handleUploadDocument maps below (e.g. Cloudinary
-    // credentials missing) — without this branch it fell through to a
-    // generic 500 instead of that error's real status/message.
-    if (err instanceof DocumentStorageError) {
-      res.status(err.status).json({ error: err.message });
-      return;
-    }
+    // deleteDocument calls deleteStoredDocument, which can throw a
+    // DocumentStorageError (e.g. Cloudinary credentials missing);
+    // handleServiceError answers it with its own status and code.
     handleServiceError(err, res, next);
   }
 }
@@ -416,7 +440,7 @@ export async function handleGetDocumentViewUrl(
     });
 
     if (!granted) {
-      res.status(403).json({ error: "You don't have access to this document" });
+      res.status(403).json({ error: "You don't have access to this document", code: "FORBIDDEN" });
       return;
     }
     res.json({ url });
@@ -521,7 +545,7 @@ export async function handleRejectDocument(
 
     const parsed = RejectDocumentSchema.safeParse(req.body);
     if (!parsed.success) {
-      res.status(400).json({ error: parsed.error.errors[0]?.message ?? "Invalid input" });
+      res.status(400).json({ error: parsed.error.errors[0]?.message ?? "Invalid input", code: "VALIDATION" });
       return;
     }
     const doc = await rejectDocument(
@@ -562,7 +586,7 @@ export async function handleUpsertRule(
   try {
     const parsed = ExpiryRuleSchema.safeParse(req.body);
     if (!parsed.success) {
-      res.status(400).json({ error: parsed.error.errors[0]?.message ?? "Invalid input" });
+      res.status(400).json({ error: parsed.error.errors[0]?.message ?? "Invalid input", code: "VALIDATION" });
       return;
     }
     const rule = await upsertExpiryRule(parsed.data, req.user!.sub);
@@ -601,7 +625,7 @@ export async function handleSetRequiredDocuments(
 
     const parsed = RequiredDocumentsSchema.safeParse(req.body);
     if (!parsed.success) {
-      res.status(400).json({ error: parsed.error.errors[0]?.message ?? "Invalid input" });
+      res.status(400).json({ error: parsed.error.errors[0]?.message ?? "Invalid input", code: "VALIDATION" });
       return;
     }
     const types = await setRequiredDocuments(ctx.orgId, parsed.data.documentTypes);
@@ -633,7 +657,7 @@ export async function handleDownloadComplianceReportPdf(
 
     const parsed = ReportQuerySchema.safeParse(req.query);
     if (!parsed.success) {
-      res.status(400).json({ error: "storeLocationId must be a valid id" });
+      res.status(400).json({ error: "storeLocationId must be a valid id", code: "VALIDATION" });
       return;
     }
 
@@ -648,7 +672,7 @@ export async function handleDownloadComplianceReportPdf(
     res.send(buffer);
   } catch (err) {
     if (err instanceof Error && err.message.includes("timed out")) {
-      res.status(500).json({ error: "PDF generation timed out — please try again" });
+      res.status(500).json({ error: "PDF generation timed out — please try again", code: "PDF_TIMEOUT" });
       return;
     }
     handleServiceError(err, res, next);

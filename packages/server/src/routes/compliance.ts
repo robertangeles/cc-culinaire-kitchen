@@ -14,8 +14,9 @@
  *   compliance:manage-rules — manage expiry rules + org document requirements
  */
 
-import { Router } from "express";
+import { Router, type RequestHandler } from "express";
 import multer from "multer";
+import { MAX_DOCUMENT_BYTES } from "@culinaire/shared/schemas/compliance";
 import { authenticate, requirePermission, requireAdministrator } from "../middleware/auth.js";
 import { requireFlag } from "../middleware/requireFlag.js";
 import {
@@ -65,8 +66,23 @@ router.use(authenticate);
  */
 const documentUpload = multer({
   storage: multer.memoryStorage(),
-  limits: { fileSize: 10 * 1024 * 1024 },
+  limits: { fileSize: MAX_DOCUMENT_BYTES },
 });
+
+/** multer's refusals as 400s with a code (an oversize file was a 500), like POST /api/users/profile/avatar. */
+const receiveDocument: RequestHandler = (req, res, next) => {
+  documentUpload.single("file")(req, res, (err: unknown) => {
+    if (err instanceof multer.MulterError) {
+      if (err.code === "LIMIT_FILE_SIZE") {
+        res.status(400).json({ error: `File too large. Maximum size is ${MAX_DOCUMENT_BYTES / (1024 * 1024)} MB.`, code: "FILE_TOO_LARGE" });
+        return;
+      }
+      res.status(400).json({ error: err.message, code: "VALIDATION" });
+      return;
+    }
+    next(err);
+  });
+};
 
 // ─── Documents ────────────────────────────────────────────────────
 // Collection routes before parameterized ones — /documents/mine must not be
@@ -85,7 +101,7 @@ router.post(
 router.post(
   "/documents/upload",
   requirePermission("compliance:read-own"),
-  documentUpload.single("file"),
+  receiveDocument,
   handleUploadDocument,
 );
 router.put(
