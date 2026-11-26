@@ -21,5 +21,5 @@ export const inputClass =
  */
 export async function withoutPhotoMetadata(file: File): Promise<File> {
   const clean = stripMetadata(new Uint8Array(await file.arrayBuffer()));
-  return clean ? new File([clean], file.name, { type: file.type }) : file;
+  return clean ? new File([new Uint8Array(clean)], file.name, { type: file.type }) : file;
 }
