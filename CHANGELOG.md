@@ -16,6 +16,16 @@ Server, web and shared. No migration, no permission change. Older apps keep work
 - **Creating a document is safe to repeat:** `POST /documents` and `POST /documents/venue` take an optional client-made `complianceDocumentId` (a uuid). The same create sent again answers 200 with the document it made, even after an edit; the id used for another file or by someone else is `409 CONFLICT`. The web's forms send one.
 - **Web, My Shifts:** shift and open-swap times are on the venue's clock, not the browser's, and open swaps show to a person with no shifts of their own.
 
+### Changed (Bench: presence, direct messages and pins follow kitchen membership)
+
+Server, web and phone. No migration and no permission change.
+
+- **Who is online in Everyone** lists only the people who share a kitchen (organisation) with the viewer, and the viewer; someone in no kitchen sees only themselves. A kitchen's own channel and a direct message's room list their own people, as before. `bench:presence:heartbeat` now answers only the socket that asks.
+- **Direct messages** go only to someone who shares a kitchen with the sender, or with whom there is already a conversation (a thread holding a message); such a conversation keeps working both ways after they stop sharing a kitchen. Otherwise `POST /api/bench/dm/threads` answers 403 `DM_NOT_ALLOWED`, and `bench:dm:send` and `bench:dm:typing` answer `bench:error` with that code; the answer is the same whether or not the person exists.
+- **Pins**: pinning and unpinning in Everyone is for administrators; in a kitchen's channel for its members only. The pin, unpin and thread routes now carry error codes (`VALIDATION`, `NOT_FOUND`, `FORBIDDEN`).
+- **Web**: the presence bar shows the open channel's list only (after a reconnect My Kitchen could show Everyone's), and starting a direct message the server refuses says why on the Messages tab. The web has no pin controls.
+- **Phone**: Pin and Unpin show only where the server allows them; a refused pin or direct message says why in plain words.
+
 ### Fixed (Bench connection handling and post-once)
 
 Server, web and phone. No migration, no permission change, no change to the Bench's HTTP routes; who may message, pin or see presence is unchanged.
