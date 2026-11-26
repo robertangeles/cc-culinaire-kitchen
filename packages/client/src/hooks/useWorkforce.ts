@@ -116,6 +116,8 @@ export interface OpenSwap {
   rosterRoleId: string;
   roleName: string;
   storeLocationId: string;
+  /** The venue's zone: the swap's times are shown in it. */
+  ianaTimezone: string;
 }
 
 async function parseSwapError(res: Response, fallback: string): Promise<Error & { blocked?: AssignmentBlocked }> {
