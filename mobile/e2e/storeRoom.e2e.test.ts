@@ -1,5 +1,4 @@
-import { describe, it, expect, beforeAll, afterAll } from "vitest";
-import { generate } from "otplib";
+import { describe, it, expect, beforeAll, afterAll, inject } from "vitest";
 import { createApiClient, type Tokens } from "../src/api/client";
 import { createAuthApi } from "../src/api/auth";
 import { createSession, type Snapshot } from "../src/auth/session";
@@ -26,11 +25,10 @@ const baseUrl = process.env.E2E_API_URL ?? "http://localhost:3009";
 
 const tag = `sr${Date.now().toString(36)}-`;
 const API = "/api/inventory";
-const wait = (ms: number) => new Promise((r) => setTimeout(r, ms));
 
 describe.skipIf(!process.env.CI && (!email || !password || !totpSecret))("transfers and catalogue requests against the real server", () => {
   let airplane = false;
-  let tokens: Tokens | null = null;
+  let tokens = inject("phoneTokens");
   const tokenStore = { load: async () => tokens, save: async (t: Tokens) => void (tokens = t), clear: async () => void (tokens = null) };
   const offlineAwareFetch: typeof fetch = (input, init) => (airplane ? Promise.reject(new TypeError("Network request failed")) : fetch(input, init));
   const client = createApiClient({ baseUrl, tokenStore, appVersion: "0.1.0-e2e", fetchFn: offlineAwareFetch, timeoutMs: 20_000 });
@@ -59,13 +57,7 @@ describe.skipIf(!process.env.CI && (!email || !password || !totpSecret))("transf
   const post = (path: string, body: unknown) => fetch(`${baseUrl}${path}`, { method: "POST", headers: { "Content-Type": "application/json", Authorization: `Bearer ${tokens!.accessToken}` }, body: JSON.stringify(body) });
 
   beforeAll(async () => {
-    await session.signIn(email!, password!);
-    expect(session.getSnapshot().state.phase).toBe("mfa");
-    await session.submitCode(await generate({ secret: totpSecret! }));
-    if (session.getSnapshot().state.phase === "mfa") {
-      await wait(31_000); // that code's window was already used (the other phone tests sign in too)
-      await session.submitCode(await generate({ secret: totpSecret! }));
-    }
+    await session.restore();
     const state = session.getSnapshot().state;
     expect(state.phase).toBe("ready");
     if (state.phase === "ready") userId = state.user.userId;

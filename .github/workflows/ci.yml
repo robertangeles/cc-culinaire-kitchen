@@ -370,6 +370,8 @@ jobs:
           E2E_USER_EMAIL: ${{ env.E2E_PHONE_USER_EMAIL }}
           E2E_USER_PASSWORD: ${{ env.E2E_PHONE_USER_PASSWORD }}
           E2E_USER_TOTP_SECRET: ${{ env.E2E_PHONE_USER_TOTP_SECRET }}
+          # An authenticator code is accepted once: this run takes the earlier of the two codes in time, the next step's run the later.
+          E2E_CODE_STEPS_AGO: "1"
 
       # The same flow again with the zod schemas of the last store release (tag mobile-v*), so a server change
       # cannot break the app people already have. Passes while no release tag exists. See the script header.

@@ -1,4 +1,4 @@
-import { describe, it, expect, beforeAll, afterAll, vi } from "vitest";
+import { describe, it, expect, beforeAll, afterAll, inject, vi } from "vitest";
 import { io } from "socket.io-client";
 import { createApiClient, type Tokens } from "../src/api/client";
 import { createAuthApi } from "../src/api/auth";
@@ -7,7 +7,6 @@ import { createBenchApi } from "../src/bench/benchApi";
 import { createBenchLive } from "../src/bench/benchLive";
 import { createBenchStore } from "../src/bench/benchStore";
 import { newUuid } from "../src/outbox/uuid";
-import { manager } from "../device/fixtures";
 
 /**
  * The Bench against a real server and real sockets, with the phone's own code and no UI: two colleagues (Ann and Bo, who join the E2E user's
@@ -56,9 +55,8 @@ describe.skipIf(!process.env.CI && !process.env.E2E_USER_EMAIL)("the Bench again
   let key = "";
 
   beforeAll(async () => {
-    const m = manager();
-    await m.signIn();
-    const { organisation } = await m.client.request<{ organisation: { organisationId: number; joinKey: string } }>("GET", "/api/organisations/mine");
+    const manager = createApiClient({ baseUrl, tokenStore: { load: async () => inject("phoneTokens"), save: async () => {}, clear: async () => {} }, appVersion: "0.1.0-e2e" });
+    const { organisation } = await manager.request<{ organisation: { organisationId: number; joinKey: string } }>("GET", "/api/organisations/mine");
     key = `org_${organisation.organisationId}`;
     for (const name of ["Ann", "Bo", "Olga"]) people.push(await person(name));
     [ann, bo, olga] = people;

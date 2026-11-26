@@ -1,10 +1,9 @@
-import { describe, it, expect, beforeAll, afterAll } from "vitest";
+import { describe, it, expect, beforeAll, afterAll, inject } from "vitest";
 import { createApiClient, type Tokens } from "../src/api/client";
 import { createAuthApi } from "../src/api/auth";
 import { createAccountApi } from "../src/api/account";
 import { createLegalApi } from "../src/legal/legalApi";
 import { createSession, type Snapshot } from "../src/auth/session";
-import { manager } from "../device/fixtures";
 
 /**
  * The store-plumbing flows against a real server, with the phone's own code and no UI: a person who just registered joins an
@@ -43,14 +42,13 @@ describe.skipIf(!process.env.CI && (!email || !password || !totpSecret))("store 
 
   beforeAll(async () => {
     // The manager (the E2E user) reads the two keys a manager would hand out.
-    const m = manager();
-    await m.signIn();
-    const org = await m.client.request<{ organisation: { organisationId: number; joinKey: string } }>("GET", "/api/organisations/mine");
+    const manager = createApiClient({ baseUrl, tokenStore: { load: async () => inject("phoneTokens"), save: async () => {}, clear: async () => {} }, appVersion: "0.1.0-e2e" });
+    const org = await manager.request<{ organisation: { organisationId: number; joinKey: string } }>("GET", "/api/organisations/mine");
     joinKey = org.organisation.joinKey;
     organisationId = org.organisation.organisationId;
-    const locations = await m.client.request<{ locations: Array<{ storeLocationId: string }> }>("GET", "/api/store-locations/mine");
+    const locations = await manager.request<{ locations: Array<{ storeLocationId: string }> }>("GET", "/api/store-locations/mine");
     storeLocationId = locations.locations[0].storeLocationId;
-    storeKey = (await m.client.request<{ storeLocation: { storeKey: string } }>("GET", `/api/store-locations/${storeLocationId}`)).storeLocation.storeKey;
+    storeKey = (await manager.request<{ storeLocation: { storeKey: string } }>("GET", `/api/store-locations/${storeLocationId}`)).storeLocation.storeKey;
     await authApi.register("Phone First Run", newEmail, NEW_PASSWORD);
   });
 

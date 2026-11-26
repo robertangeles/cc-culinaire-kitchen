@@ -78,7 +78,8 @@ describe.skipIf(!process.env.CI && !process.env.E2E_USER_EMAIL)("profile, securi
     const { secret, qrCodeDataUrl } = await accountApi.mfaSetup({ password });
     expect(qrCodeDataUrl).toMatch(/^data:image\/png/);
     await expect(accountApi.mfaEnable("000000")).rejects.toMatchObject({ code: "bad_request", serverCode: "INVALID_MFA_CODE" });
-    await accountApi.mfaEnable(await generate({ secret }));
+    // A code is accepted once, so two are needed: the previous step's, then the current one's.
+    await accountApi.mfaEnable(await generate({ secret, epoch: Math.floor(Date.now() / 1000) - 30 }));
     expect(await accountApi.facts()).toMatchObject({ mfaEnabled: true });
     await expect(accountApi.mfaDisable({ password })).rejects.toMatchObject({ serverCode: "MFA_REQUIRED" });
     await accountApi.mfaDisable({ password, mfaCode: await generate({ secret }) });
