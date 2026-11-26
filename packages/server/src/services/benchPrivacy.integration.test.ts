@@ -139,6 +139,7 @@ describe.skipIf(!RUN)("bench privacy — real sockets, real DB", () => {
     channelA = (await getOrCreateOrgChannel(orgA, `${tag}-A`)).channelId;
     await getOrCreateOrgChannel(orgB, `${tag}-B`);
     threadId = (await getOrCreateThread(anna, bea)).dmThreadId;
+    await createDmMessage(threadId, anna, "hello from before"); // a conversation, not only a thread
 
     const app = express();
     app.use(express.json());
@@ -362,6 +363,20 @@ describe.skipIf(!RUN)("bench privacy — real sockets, real DB", () => {
       expect(a.of("bench:dm:new")).toEqual([]);
       expect(a.of("bench:dm:typing")).toEqual([]);
       expect(await threadBetween(olga, anna)).toBe(false);
+    });
+
+    it("does not count a thread that holds no message, as one opened under the old rule", async () => {
+      await db.insert(benchDmThread).values({ userAId: Math.min(olga, bea), userBId: Math.max(olga, bea) });
+      const b = await connect(bea);
+      const o = await connect(olga);
+      o.got.length = 0;
+      expect(await call("POST", "/dm/threads", olga, { recipientId: bea })).toEqual({ status: 403, body: refusal });
+      o.socket.emit("bench:dm:send", { recipientId: bea, body: "remember me?" });
+      o.socket.emit("bench:dm:typing", { recipientId: bea });
+      await settle();
+      expect(o.of("bench:error")).toEqual([refusal, refusal]);
+      expect(b.of("bench:dm:new")).toEqual([]);
+      expect(b.of("bench:dm:typing")).toEqual([]);
     });
 
     it("lets people of one kitchen write and type to each other without a thread first", async () => {

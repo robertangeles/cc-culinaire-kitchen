@@ -7,7 +7,7 @@
 import pino from "pino";
 import { db } from "../db/index.js";
 import { benchDmThread, benchMessage, user } from "../db/schema.js";
-import { eq, and, or, desc, lt } from "drizzle-orm";
+import { eq, and, or, desc, lt, exists } from "drizzle-orm";
 import { insertPost, sharesOrganisation } from "./benchService.js";
 
 const logger = pino({ name: "benchDmService" });
@@ -32,14 +32,38 @@ async function findThread(userIdA: number, userIdB: number) {
   return existing ?? null;
 }
 
-/** Who may write to whom: people who share an organisation, and two people who already have a thread (even if they no longer share one). */
+/**
+ * The thread between two people if they have written in it: one with no message (one could be opened with anybody
+ * before these rules) is not a conversation, as the thread list does not show it either.
+ */
+async function findConversation(userIdA: number, userIdB: number) {
+  const [found] = await db
+    .select()
+    .from(benchDmThread)
+    .where(
+      and(
+        eq(benchDmThread.userAId, Math.min(userIdA, userIdB)),
+        eq(benchDmThread.userBId, Math.max(userIdA, userIdB)),
+        exists(
+          db
+            .select({ one: benchMessage.messageId })
+            .from(benchMessage)
+            .where(and(eq(benchMessage.dmThreadId, benchDmThread.dmThreadId), eq(benchMessage.deletedInd, false))),
+        ),
+      ),
+    )
+    .limit(1);
+  return found ?? null;
+}
+
+/** Who may write to whom: people who share an organisation, and two people who already have a conversation (even if they no longer share one). */
 export async function mayDirectMessage(senderId: number, recipientId: number): Promise<boolean> {
-  return (await findThread(senderId, recipientId)) !== null || sharesOrganisation(senderId, recipientId);
+  return (await findConversation(senderId, recipientId)) !== null || sharesOrganisation(senderId, recipientId);
 }
 
 /** The thread between two people, made if they may have one; null otherwise, the same for someone who does not exist. */
 export async function openThread(senderId: number, recipientId: number) {
-  const existing = await findThread(senderId, recipientId);
+  const existing = await findConversation(senderId, recipientId);
   if (existing) return existing;
   return (await sharesOrganisation(senderId, recipientId)) ? getOrCreateThread(senderId, recipientId) : null;
 }
