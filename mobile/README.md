@@ -446,7 +446,7 @@ Differences from the web, found while comparing:
 The Bench tab is the web's The Bench page (`BenchPage.tsx`), for everyone signed in: Everyone, each kitchen's own channel, and direct messages. Lists, history, pins and search are REST
 (`benchApi.ts`); posts, edits, deletes, reactions, typing and presence go over the server's Socket.IO channel with the sign-in's access token (`benchLive.ts`, `nativeLive.ts`; `socket.io-client`, the version the web uses, JavaScript only).
 
-**The tab is hidden in production builds by `EXPO_PUBLIC_BENCH`**: it shows only when that is `on` (`eas.json`: `on` for the development and preview profiles, `off` for production; a build without the variable hides it, as does every list the tab bar and More are built from). Turn it on for production only when people can report a message and block a person (App Store 1.2, user-generated content; Google Play asks the same). The server has neither yet.
+**The tab is hidden in production builds by `EXPO_PUBLIC_BENCH`**: it shows only when that is `on` (`eas.json`: `on` for the development and preview profiles, `off` for production; a build without the variable hides it, as does every list the tab bar and More are built from). People can now report a message or a person and block a person, and moderators have a queue (below); the tab stays off in production until the owner decides, and a store build still needs what is listed under "Still needed for a store build".
 
 Nothing of the Bench is kept on the phone (messages are private: memory only) and nothing is ever queued: a post either goes out now or says "Not sent" with Try again and Discard.
 
@@ -459,6 +459,11 @@ Nothing of the Bench is kept on the phone (messages are private: memory only) an
   Try again sends the same id, so a post that reached the server after all is not posted twice: the server answers with the one it has.
 - **Who sees and reaches whom** (the owner's rules, enforced by the server): who is online in Everyone is only the people who share a kitchen with the viewer (someone in no kitchen sees only themselves); a direct message goes only to someone who shares a kitchen with the sender, or with whom there is already a conversation (a thread with a message in it), which keeps working after they stop sharing one; pinning in Everyone is for administrators, in a kitchen's channel for its members.
   The phone shows presence in a kitchen's own channel only, offers a direct message only to someone met in a kitchen's channel (who is in it, who wrote in it) or in a thread there already is, and shows Pin and Unpin only where the server allows them. A refusal says why in plain words (`DM_NOT_ALLOWED`; a pin refused in Everyone). The server scopes each room; the phone filters nothing.
+- **Report and block.** A message of someone else's (tap it), a person in a kitchen's "on the pass" list, and the other person of a direct message (its header) each offer Report and Block.
+  Report takes a reason from a fixed list (`BENCH_REPORT_REASONS` in `@culinaire/shared`) and an optional note (500 characters); the server keeps the message's words as they were, takes 20 reports a day from one person (`RATE_LIMITED`) and never shows the reported person who reported them.
+  Block asks first; the server then keeps that person's messages, reactions, typing and presence from this person, in history and live, and refuses a direct message between the two either way with `DM_NOT_ALLOWED` (the same refusal whoever blocked). The phone takes the person's messages, thread and presence off the screen at once; the blocked person is not told.
+  Blocked people (`bench-blocked`, from the Bench list) lists them with Unblock, which reads the lists and the open room again.
+- **Reports to review** (`bench-reports`, from the Bench list, for holders of `bench:moderate`; an Administrator holds every permission): the open reports with the reported words, where and by whom; Hide message (kept on record, gone for everyone, every open report about it closed) after asking, or Dismiss. Resolving with a note and the closed reports are on the web.
 - **Pictures**: only the site's own uploads and Cloudinary are loaded (`whole` in `benchApi.ts`), as the web's content policy allows; a person with any other address shows their initial.
 
 Differences from the web, found while comparing:
@@ -479,6 +484,14 @@ Differences from the web, found while comparing:
 | A shared recipe opens its public page | Named, does not open | Follow-up; no screen on either can share one. |
 | The banner texts come from the site settings | The channel's own banner, or the web's default words | The site settings are not read by the phone. |
 | Attachments | None | Same. |
+| Moderators: open and closed reports; hide, dismiss, or resolve with a note | Open reports only; hide or dismiss | A small queue for a moderator away from a desk. |
+
+**Still needed for a store build** (the tab stays off in production until the owner decides):
+
+- A published contact address for the app (the store listing and the app), as App Store 1.2 asks.
+- A filter on what can be posted: App Store 1.2 also asks for "a method for filtering objectionable material from being posted". Today there is reporting, a moderator's Hide and blocking, and no filter on words.
+- Review notes for the reviewers: two test accounts in one kitchen, one of them holding `bench:moderate`, and where Report, Block, Blocked people and Reports to review are.
+- Migration 0009 applied to production before the server that reads it (see the CHANGELOG), and the one-time store build with `EXPO_PUBLIC_BENCH=on`.
 
 With the Bench on, it is open to everyone, so a person with one module of their own has more than five tabs: their first four stay where they were, and the Bench and Account are under More. With it off, every tab bar is as it was before the Bench.
 

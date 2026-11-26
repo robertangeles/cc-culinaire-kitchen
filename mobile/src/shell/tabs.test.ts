@@ -158,7 +158,7 @@ describe("the tab bar and More", () => {
   });
 });
 
-describe("the Bench's build flag (a store build waits for report and block)", () => {
+describe("the Bench's build flag (a store build waits for the owner's decision)", () => {
   const admin = person({ roles: ["Administrator"] });
   const routes = (user: AuthUser) => visibleTabs(user).map((t) => t.route);
 
