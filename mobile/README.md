@@ -593,13 +593,12 @@ Differences from the web (`MyShiftsView.tsx`, `MyAvailabilityManager.tsx`), foun
 
 | Web | Phone | Why |
 |---|---|---|
-| Times in the browser's own zone (`formatShiftRange` with no zone) | The venue's clock, with a line saying so | A cook reading the roster away from home saw the wrong hours. **The web still needs it.** |
+| Times on the venue's clock, no line saying so | The venue's clock, with a line saying so | A cook reading the roster away from home saw the wrong hours. |
 | Every shift ever, oldest first, drafts included | This week, next week and later; published only | Asked for in the wave. |
 | A public-holiday question on a draft shift can be answered | Pointed to the web | Drafts are not shown on the phone yet: an owner call. |
 | Confirm, Decline and Offer act at once | Decline, Offer and Take ask first | One stray tap on a phone; a decline cannot be undone. |
 | Offer and Confirm also on shifts that are over | Not once the shift has started (offer) or ended (answer) | |
-| Open swaps list past ones, and times at any venue in the browser's zone | Published, not started yet, on the venue's clock | |
-| Open swaps show only when the person has a shift of their own | Always reachable | The web returns early on an empty list. **Web bug, flagged.** |
+| Open swaps list past ones, on the venue's clock | Published, not started yet, on the venue's clock | |
 | A 409 or a lost reply shows the server's sentence | Read again first; done if it was done | |
 | A blocked claim shows "Cannot assign. Sam's RSA…" | "You can't take this shift until you add your RSA." | |
 | No venue name on a shift | The venue | |
@@ -635,10 +634,9 @@ Differences from the web (`MyDocumentsTab.tsx`, `MyDocumentsList.tsx`, `Document
 | One list, newest first | Needs you, With your manager, On record | |
 | Status words of the server (Rejected, Requires Renewal); a verified document past its day still says Verified | Not accepted, Renew it, Expired | |
 | Photo or PDF | Photo only; a PDF is added on the web | No file picker on the phone (a new native module). |
-| Photo metadata handling on the web upload: tracked as a follow-up | Removed before it is sent | |
 | A file over 10 MB is refused by the server | Refused before it is sent | |
 | A failed upload: choose the file again | Send the photo again | |
-| A lost reply on Send for review: a second tap makes a second record when there is no certificate number | Looked for first | |
+| A lost reply on Send for review: sent again with the same client-made id, so no second record | Looked for first | |
 | The preview loads when the row is opened | Show the photo (each view is logged on the server) | |
 | Dates in the browser's date box | Typed on the number pad, day first, with the date in words under it | |
 | A gold dot marks what was read off the photo | "Read from the photo. Check it." | |
