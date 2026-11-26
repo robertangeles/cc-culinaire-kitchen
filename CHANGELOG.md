@@ -26,6 +26,18 @@ Server, web and phone. No migration and no permission change.
 - **Web**: the presence bar shows the open channel's list only (after a reconnect My Kitchen could show Everyone's), and starting a direct message the server refuses says why on the Messages tab. The web has no pin controls.
 - **Phone**: Pin and Unpin show only where the server allows them; a refused pin or direct message says why in plain words.
 
+### Added (Bench: report, block and moderation)
+
+Server, web and phone. **Migration 0009 (`0009_bench_safety`): the owner applies it by hand, with `src/scripts/migrate.ts`, before this server version deploys.** It adds `bench_blocks`, `bench_reports` and `bench_report_actions` and the `bench:moderate` permission (granted to no role; an Administrator holds every permission). It only adds; the previous server version never reads it. If the server runs without it, the Bench works as before with nobody treated as blocked, and blocking, reporting and the moderators' queue answer 500.
+
+- **Block:** `POST /api/bench/blocks { userId }`, `DELETE /api/bench/blocks/:userId`, `GET /api/bench/blocks`. A person can block only someone they can come across on the Bench (a shared kitchen, a direct-message thread, or a message of theirs in a channel they can read); anyone else answers `404 NOT_FOUND`, as for nobody.
+  The person who blocks no longer receives the other's messages, edits, reactions, typing or presence, in history (messages, search, pins, direct messages, the thread list) or live. A direct message or a new thread between the two is refused either way with `DM_NOT_ALLOWED` (new in `SERVER_ERROR_CODES`): `403` on `POST /api/bench/dm/threads`, `bench:error` on the live channel. The person blocked is not told.
+- **Report:** `POST /api/bench/reports { messageId | userId, reason, note? }` answers `201 { id }`. Reasons are a fixed list (`BENCH_REPORT_REASONS` in `@culinaire/shared`); the note is optional, up to 500 characters. The server keeps the message's words as they were, whom it is about and who reported. A message can be reported only by someone who can read it, and not one's own. Each person can send 20 reports a day (`429 RATE_LIMITED`).
+- **Moderation (`bench:moderate`):** `GET /api/bench/reports?status=open|closed` (newest 100), `POST /api/bench/reports/:id/hide`, `/dismiss { note? }`, `/resolve { note }`. Hide keeps the message on record and takes it away for everyone, as a deletion does (`bench:message:deleted`, which installed apps already handle), and closes every open report about it. Acting on a closed report answers `409 INVALID_STATE`. Every action is recorded with who and when.
+- **Web:** Report and Block on another person's message, and on a person card: a name on a message, an avatar in the presence bar, or a direct message's header. A "Blocked people" panel with Unblock, and a Bench Moderation page at `/bench/moderation` (nav and route gated on `bench:moderate`).
+- **Phone:** Report and Block on a message, in a kitchen's "on the pass" list and in a direct message's header. Blocked people, and Reports to review for moderators (hide or dismiss), are reached from the Bench list. The Bench tab stays off in production builds (`EXPO_PUBLIC_BENCH`); `mobile/README.md` lists what a store build still needs.
+- **Installed apps** keep working: no existing route or event changed shape. An older phone that messages someone who blocked it gets the refusal as an ordinary failed send.
+
 ### Fixed (Bench connection handling and post-once)
 
 Server, web and phone. No migration, no permission change, no change to the Bench's HTTP routes; who may message, pin or see presence is unchanged.
