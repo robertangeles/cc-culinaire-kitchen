@@ -33,6 +33,7 @@ import { initBenchSocket } from "./benchSocketService.js";
 import { createMessage, getOrCreateOrgChannel, pinMessage } from "./benchService.js";
 import { createDmMessage, getOrCreateThread } from "./benchDmService.js";
 import { REPORTS_PER_DAY } from "./benchReportService.js";
+import { anonymiseUser } from "./userAnonymisationService.js";
 
 /**
  * Blocking, reporting and moderation on The Bench, over real routes, real sockets and a real database.
@@ -339,6 +340,22 @@ describe.skipIf(!RUN)("bench report, block and moderation — real routes, socke
       expect(await api(as(cara), "POST", "/reports", { userId: amir, reason: "spam" })).toEqual({ status: 429, body: { error: expect.any(String), code: "RATE_LIMITED" } });
       await db.delete(benchReport).where(eq(benchReport.userId, cara));
     });
+  });
+
+  it("deleting an account takes its blocks both ways and clears its reported words; the reports stay", async () => {
+    const [{ userId: leaver }] = await db.insert(user).values({ userName: "leaver", userEmail: `${tag}-leaver@it.test` }).returning({ userId: user.userId });
+    await db.insert(userOrganisation).values({ userId: leaver, organisationId: orgA, role: "member" });
+    const msg = await createMessage(channelA, leaver, "words to forget");
+    await block(anna, leaver);
+    await block(leaver, cara);
+    const id = (await api(as(anna), "POST", "/reports", { messageId: msg.messageId, reason: "spam" })).body.id;
+    await anonymiseUser(leaver);
+    expect(await db.select().from(benchBlock).where(inArray(benchBlock.userId, [anna, leaver]))).toEqual([]);
+    const [row] = await db.select().from(benchReport).where(eq(benchReport.id, id));
+    expect(row).toMatchObject({ reportedUserId: leaver, messageBody: "", status: "open" });
+    await db.delete(benchReport).where(eq(benchReport.id, id));
+    await db.delete(benchMessage).where(eq(benchMessage.userId, leaver));
+    await db.delete(user).where(eq(user.userId, leaver));
   });
 
   describe("moderation", () => {
