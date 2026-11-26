@@ -58,6 +58,7 @@ const TYPING_SHOWN_MS = 3_000;
 const TYPING_SENT_MS = 2_000;
 const NO_ACCESS = "You don't have access to this channel any more.";
 const NOT_CONNECTED = "Not connected. Try again when you're back online.";
+/** One sentence for every reason the server refuses a direct message: it never says which. */
 export const DM_REFUSED = "You can message people in your kitchen, and people you already have a conversation with.";
 
 export function benchFailure(err: unknown): string {
@@ -94,6 +95,8 @@ export function createBenchStore({ api, live, userId, now, newId }: { api: Bench
   const pendingOf = new Map<string, Pending[]>();
   /** People met in a kitchen's own channel. */
   const colleagues = new Set<number>();
+  /** Blocked here since the Bench was opened; the server keeps everyone blocked earlier out of what it sends. */
+  const blocked = new Set<number>();
   const typingTimers = new Map<number, ReturnType<typeof setTimeout>>();
   let typingSent = 0;
 
@@ -311,8 +314,10 @@ export function createBenchStore({ api, live, userId, now, newId }: { api: Bench
   live.on("bench:error", (p) => {
     const { code } = obj(p);
     if (code === "FORBIDDEN") setRoom({ phase: "error", messages: [], hasOlder: false, typing: [], error: NO_ACCESS });
-    else if (code === "DM_NOT_ALLOWED") setRoom({ notice: DM_REFUSED });
-    else setRoom({ notice: "That didn't go through. Try again." });
+    else if (code === "DM_NOT_ALLOWED" && visit?.room.kind === "dm") {
+      setRoom({ notice: DM_REFUSED });
+      setPendings(visit.room, pendings(visit.room).map((x) => ({ ...x, status: "failed" })));
+    } else setRoom({ notice: "That didn't go through. Try again." });
   });
   const offConnect = live.onConnect(() => {
     void refreshLists();
@@ -429,7 +434,35 @@ export function createBenchStore({ api, live, userId, now, newId }: { api: Bench
     remove: (messageId: string) => act("bench:message:delete", { messageId }),
 
     /** Direct messages go to people of one's own kitchens (met in a kitchen's channel) and to threads there already are. */
-    canMessage: (id: number) => id !== userId && (colleagues.has(id) || snapshot.threads.some((t) => t.otherUserId === id)),
+    canMessage: (id: number) => id !== userId && !blocked.has(id) && (colleagues.has(id) || snapshot.threads.some((t) => t.otherUserId === id)),
+
+    /** Blocks a person and takes them off the screen at once. Null when done, else why not. */
+    async block(id: number): Promise<string | null> {
+      try {
+        await api.block(id);
+      } catch (err) {
+        return benchFailure(err);
+      }
+      blocked.add(id);
+      colleagues.delete(id);
+      const gone = snapshot.threads.filter((t) => t.otherUserId === id).map((t) => t.dmThreadId);
+      const presence = Object.fromEntries(Object.entries(snapshot.presence).map(([key, people]) => [key, people.filter((x) => x.userId !== id)]));
+      set({ threads: snapshot.threads.filter((t) => t.otherUserId !== id), fresh: snapshot.fresh.filter((t) => !gone.includes(t)), presence });
+      change((all) => all.filter((m) => m.userId !== id));
+      return null;
+    },
+
+    /** Unblocks, then reads the lists and the open room again: what the server kept back comes back. */
+    async unblock(id: number): Promise<string | null> {
+      try {
+        await api.unblock(id);
+      } catch (err) {
+        return benchFailure(err);
+      }
+      blocked.delete(id);
+      await Promise.all([refreshLists(), resync()]);
+      return null;
+    },
 
     /** The thread with this person, started if there is none; null when it could not be. */
     async startThread(id: number): Promise<number | null> {

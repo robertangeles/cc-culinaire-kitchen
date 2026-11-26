@@ -7,6 +7,7 @@ import { ApiError } from "../src/api/client";
 import type { BenchApi, Room } from "../src/bench/benchApi";
 import type { LiveSocket } from "../src/bench/benchLive";
 import { BenchProvider } from "../src/bench/BenchProvider";
+import { DM_REFUSED } from "../src/bench/benchStore";
 import { routerMock, searchParams, sessionState } from "../testing/mocks";
 
 vi.mock("../src/runtime/appContext", async () => {
@@ -17,11 +18,15 @@ vi.mock("../src/bench/nativeLive", () => ({ nativeSocket: () => null }));
 
 import Bench from "../app/(app)/(bench)/index";
 import BenchRoom from "../app/(app)/(bench)/bench-room";
+import BenchBlocked from "../app/(app)/(bench)/bench-blocked";
+import BenchReports from "../app/(app)/(bench)/bench-reports";
 
 const main = { storeLocationId: "L1", organisationId: 5, locationName: "Main Kitchen", classification: "branch" };
 const msg = (n: number, over: Partial<BenchMessage> = {}): BenchMessage => ({ messageId: `m${n}`, channelId: 2, dmThreadId: null, userId: 8, userName: "Bo Li", userPhotoPath: null, messageBody: `Message ${n}`, messageType: "text", recipeTitle: null, editedInd: false, createdDttm: new Date(Date.UTC(2026, 10, 20, 1, n)).toISOString(), reactions: [], ...over });
 
 let api: { [K in keyof BenchApi]: ReturnType<typeof vi.fn> };
+const report = { id: "r1", status: "open", reason: "harassment", note: "third time", createdAt: new Date().toISOString(), reporterName: "Cy", reportedUserId: 8, reportedUserName: "Bo Li", messageId: "m1", messageBody: "Message 1", messageGone: false, channelName: "Main Kitchen", actions: [] };
+const blockNow = () => vi.spyOn(Alert, "alert").mockImplementation((_t, _m, buttons) => void buttons?.find((b) => b.text === "Block")?.onPress?.());
 let rows: BenchMessage[];
 let handlers: Map<string, ((p: unknown) => void)[]>;
 let sent: [string, unknown][];
@@ -33,7 +38,7 @@ const connect = async () => {
   await arrive("connect");
   await settle();
 };
-const signedIn = (roles: string[] = []) => (sessionState.current = { state: { phase: "ready", user: { userId: 7, userName: "Ana", userEmail: "a@x.test", mfaEnabled: false, roles, permissions: [] }, location: main, locations: [main] }, busy: false });
+const signedIn = (roles: string[] = [], permissions: string[] = []) => (sessionState.current = { state: { phase: "ready", user: { userId: 7, userName: "Ana", userEmail: "a@x.test", mfaEnabled: false, roles, permissions }, location: main, locations: [main] }, busy: false });
 const show = async (node: React.ReactNode) => {
   const view = render(<BenchProvider userId={7} api={api as unknown as BenchApi} socket={socket}>{node}</BenchProvider>);
   await settle();
@@ -74,6 +79,12 @@ beforeEach(() => {
     pin: vi.fn(async () => {}),
     unpin: vi.fn(async () => {}),
     search: vi.fn(async () => []),
+    blocked: vi.fn(async () => [{ userId: 8, userName: "Bo Li", userPhotoPath: null }]),
+    block: vi.fn(async () => {}),
+    unblock: vi.fn(async () => {}),
+    report: vi.fn(async () => {}),
+    reports: vi.fn(async () => [report]),
+    act: vi.fn(async () => {}),
   };
   routerMock.push.mockClear();
   routerMock.replace.mockClear();
@@ -314,3 +325,133 @@ describe("direct messages", () => {
     expect(screen.queryByRole("button", { name: "Search" })).toBeNull();
   });
 });
+
+describe("reporting and blocking", () => {
+  it("reports a message with a reason from the list and a note, and says it was sent", async () => {
+    await room();
+    press(/^Bo Li, .*Message 1$/);
+    press("Report");
+    expect(screen.getByText("Report Bo Li's message")).toBeTruthy();
+    expect((screen.getByRole("button", { name: "Send report" }) as HTMLButtonElement).getAttribute("aria-disabled")).toBe("true");
+    fireEvent.click(screen.getByRole("radio", { name: "Harassment or bullying" }));
+    fireEvent.change(screen.getByLabelText("Anything else the moderators should know (optional)"), { target: { value: " third time " } });
+    press("Send report");
+    await waitFor(() => expect(screen.getByText("Thanks for telling us. A moderator will look at it.")).toBeTruthy());
+    expect(api.report).toHaveBeenCalledWith({ messageId: "m1", reason: "harassment", note: "third time" });
+  });
+
+  it("says why a report did not go through, and keeps the form", async () => {
+    api.report.mockRejectedValueOnce(new ApiError("rate_limited", "You have sent a lot of reports today. Try again tomorrow.", 429, undefined, "RATE_LIMITED"));
+    await room();
+    press(/^Bo Li, .*Message 1$/);
+    press("Report");
+    fireEvent.click(screen.getByRole("radio", { name: "Spam or advertising" }));
+    press("Send report");
+    await waitFor(() => expect(screen.getByText("You have sent a lot of reports today. Try again tomorrow.")).toBeTruthy());
+    expect(screen.getByRole("button", { name: "Send report" })).toBeTruthy();
+  });
+
+  it("offers neither on one's own messages", async () => {
+    await room();
+    press(/^Ana, .*Message 2$/);
+    expect(screen.queryByRole("button", { name: "Report" })).toBeNull();
+    expect(screen.queryByRole("button", { name: "Block" })).toBeNull();
+  });
+
+  it("blocks after asking, and the person's messages go at once", async () => {
+    await room();
+    press(/^Bo Li, .*Message 1$/);
+    const alert = blockNow();
+    press("Block");
+    expect(alert.mock.calls[0][0]).toBe("Block Bo Li?");
+    await waitFor(() => expect(screen.queryByText("Message 1")).toBeNull());
+    expect(api.block).toHaveBeenCalledWith(8);
+    expect(screen.getByText("You blocked Bo Li. Unblock them under Blocked people.")).toBeTruthy();
+  });
+
+  it("offers both on the people in a kitchen's room, not on oneself", async () => {
+    await room();
+    await arrive("bench:presence:update", { channelKey: "org_5", users: [{ userId: 8, userName: "Bo Li", userPhotoPath: null }, { userId: 7, userName: "Ana", userPhotoPath: null }] });
+    press("2 on the pass");
+    expect(screen.getByRole("button", { name: "Block Bo Li" })).toBeTruthy();
+    expect(screen.queryByRole("button", { name: "Block Ana" })).toBeNull();
+    press("Report Bo Li");
+    expect(screen.getByText("Report Bo Li")).toBeTruthy();
+    fireEvent.click(screen.getByRole("radio", { name: "Something else" }));
+    press("Send report");
+    await waitFor(() => expect(api.report).toHaveBeenCalledWith({ userId: 8, reason: "other" }));
+  });
+
+  it("in a direct message offers both for the other person; once blocked there is nowhere to write", async () => {
+    rows = [msg(1, { channelId: null, dmThreadId: 3, userId: 9, userName: "Cy" })];
+    await room({ thread: "3" });
+    blockNow();
+    press("Block");
+    await waitFor(() => expect(screen.queryByLabelText("Your message")).toBeNull());
+    expect(api.block).toHaveBeenCalledWith(9);
+    expect(screen.getAllByText("Cy").length).toBeGreaterThan(0);
+  });
+
+  it("a direct message the server refuses says so in one plain sentence", async () => {
+    await room({ thread: "3" });
+    write("hello");
+    press("Send");
+    await arrive("bench:error", { error: "x", code: "DM_NOT_ALLOWED" });
+    expect(screen.getByText(DM_REFUSED)).toBeTruthy();
+    expect(screen.getByText("Not sent.")).toBeTruthy();
+  });
+});
+
+describe("blocked people and reports", () => {
+  it("the list leads to the blocked people, and to the reports for moderators only", async () => {
+    await show(<Bench />);
+    press("Blocked people");
+    expect(routerMock.push).toHaveBeenCalledWith("/bench-blocked");
+    expect(screen.queryByRole("button", { name: "Reports to review" })).toBeNull();
+    cleanup();
+    signedIn([], ["bench:moderate"]);
+    await show(<Bench />);
+    press("Reports to review");
+    expect(routerMock.push).toHaveBeenLastCalledWith("/bench-reports");
+  });
+
+  it("lists the people blocked and unblocks one", async () => {
+    await show(<BenchBlocked />);
+    expect(screen.getByText("Bo Li")).toBeTruthy();
+    press("Unblock Bo Li");
+    await waitFor(() => expect(screen.getByText("Nobody is blocked")).toBeTruthy());
+    expect(api.unblock).toHaveBeenCalledWith(8);
+  });
+
+  it("shows a moderator the open reports; hides a message after asking, or dismisses", async () => {
+    signedIn([], ["bench:moderate"]);
+    await show(<BenchReports />);
+    expect(screen.getByText("Harassment or bullying")).toBeTruthy();
+    expect(screen.getByText("“Message 1”")).toBeTruthy();
+    expect(screen.getByText("Reported by Cy")).toBeTruthy();
+    const alert = vi.spyOn(Alert, "alert").mockImplementation((_t, _m, buttons) => void buttons?.find((b) => b.text === "Hide")?.onPress?.());
+    press("Hide message");
+    expect(alert).toHaveBeenCalled();
+    await waitFor(() => expect(api.act).toHaveBeenCalledWith("r1", "hide"));
+    await waitFor(() => expect(api.reports).toHaveBeenCalledTimes(2));
+    await settle();
+    press("Dismiss");
+    await waitFor(() => expect(api.act).toHaveBeenLastCalledWith("r1", "dismiss"));
+    expect(api.reports.mock.calls.length).toBeGreaterThanOrEqual(3);
+  });
+
+  it("says when someone else closed the report first", async () => {
+    signedIn(["Administrator"]);
+    api.act.mockRejectedValueOnce(new ApiError("conflict", "x", 409, undefined, "INVALID_STATE"));
+    await show(<BenchReports />);
+    press("Dismiss");
+    await waitFor(() => expect(screen.getByText("Someone already closed this report.")).toBeTruthy());
+  });
+
+  it("shows nothing of the reports to someone who is not a moderator", async () => {
+    await show(<BenchReports />);
+    expect(screen.getByText("Only moderators can review reports.")).toBeTruthy();
+    expect(screen.queryByText("Reported by Cy")).toBeNull();
+  });
+});
+

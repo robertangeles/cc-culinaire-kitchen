@@ -1,4 +1,4 @@
-import { BenchChannelListSchema, BenchMessagePageSchema, DmThreadListSchema, OpenedThreadSchema, PinListSchema, SearchListSchema, type BenchChannel, type BenchMessage, type BenchPin, type BenchSearchHit, type DmThread } from "@culinaire/shared/schemas/bench";
+import { BenchChannelListSchema, BenchMessagePageSchema, BenchReportListSchema, BlockedListSchema, DmThreadListSchema, OpenedThreadSchema, PinListSchema, SearchListSchema, type BenchChannel, type BenchMessage, type BenchPerson, type BenchPin, type BenchReport, type BenchReportRequest, type BenchSearchHit, type DmThread } from "@culinaire/shared/schemas/bench";
 import type { ApiClient } from "../api/client";
 
 /** One conversation: a channel ("everyone", or a kitchen's "org_<id>") or the direct messages with one person. */
@@ -46,6 +46,27 @@ export function createBenchApi(client: ApiClient) {
     },
     search(key: string, q: string): Promise<BenchSearchHit[]> {
       return client.request("GET", `${channel(key)}/search?q=${encodeURIComponent(q.trim())}&limit=50`, { schema: SearchListSchema });
+    },
+    /** The people this person blocked: the server keeps their messages, reactions, typing and presence from this person. */
+    async blocked(): Promise<BenchPerson[]> {
+      const found = await client.request("GET", "/api/bench/blocks", { schema: BlockedListSchema });
+      return found.map((p) => ({ ...p, userPhotoPath: whole(p.userPhotoPath) }));
+    },
+    async block(userId: number): Promise<void> {
+      await client.request("POST", "/api/bench/blocks", { body: { userId } });
+    },
+    async unblock(userId: number): Promise<void> {
+      await client.request("DELETE", `/api/bench/blocks/${userId}`);
+    },
+    async report(report: BenchReportRequest): Promise<void> {
+      await client.request("POST", "/api/bench/reports", { body: report });
+    },
+    /** Moderators (`bench:moderate`): the open reports, newest first. */
+    reports(): Promise<BenchReport[]> {
+      return client.request("GET", "/api/bench/reports?status=open", { schema: BenchReportListSchema });
+    },
+    async act(id: string, action: "hide" | "dismiss"): Promise<void> {
+      await client.request("POST", `/api/bench/reports/${encodeURIComponent(id)}/${action}`, { body: {} });
     },
   };
 }

@@ -1,5 +1,5 @@
-import { useEffect, useMemo, useState } from "react";
-import { FlatList, Pressable, ScrollView, View } from "react-native";
+import { useEffect, useMemo, useRef, useState } from "react";
+import { Alert, FlatList, Pressable, ScrollView, View } from "react-native";
 import type { BenchMessage, BenchPerson, BenchPin, BenchSearchHit } from "@culinaire/shared/schemas/bench";
 import type { AuthUser } from "../api/auth";
 import { ApiError } from "../api/client";
@@ -18,9 +18,10 @@ import { benchFailure, type PendingPost } from "./benchStore";
 import { canPin, dayLabel, DEFAULT_BANNER, timeOf, typingText } from "./benchView";
 import { Composer } from "./Composer";
 import { MessageRow } from "./MessageRow";
+import { ReportForm, type ReportTarget } from "./ReportForm";
 
 type Row = { key: string } & ({ type: "day"; label: string } | { type: "message"; message: BenchMessage } | { type: "pending"; post: PendingPost });
-type Panel = "people" | "pins" | "search" | null;
+type Panel = "people" | "pins" | "search" | "report" | null;
 
 /**
  * One room: its messages, newest at the bottom, and where to write. `onBack` on a phone; on a tablet the list is beside it.
@@ -33,11 +34,18 @@ export function RoomView({ room, user, onBack, onOpen }: { room: Room; user: Aut
   const [panel, setPanel] = useState<Panel>(null);
   const [pins, setPins] = useState<BenchPin[] | null>(null);
   const [pinError, setPinError] = useState<string | null>(null);
+  const [reporting, setReporting] = useState<ReportTarget | null>(null);
+  /** What the last report or block came to. */
+  const [said, setSaid] = useState<string | null>(null);
+  const [blockedHere, setBlockedHere] = useState(false);
   const state = snap.room;
   const channel = room.kind === "channel" ? snap.channels.find((x) => x.channelKey === room.key) : undefined;
   const thread = room.kind === "dm" ? snap.threads.find((t) => t.dmThreadId === room.threadId) : undefined;
+  // A blocked person's thread leaves the list; their name stays on the room still open.
+  const other = useRef(thread);
+  if (thread) other.current = thread;
   const kitchen = channel?.channelType === "organisation";
-  const title = channel?.channelName ?? thread?.otherUserName ?? "The Bench";
+  const title = channel?.channelName ?? other.current?.otherUserName ?? "The Bench";
   // Who was there before the connection went says nothing about now.
   const here: BenchPerson[] = kitchen && room.kind === "channel" && status === "online" ? (snap.presence[room.key] ?? []) : [];
   const mayPin = canPin(user, room);
@@ -68,6 +76,31 @@ export function RoomView({ room, user, onBack, onOpen }: { room: Room; user: Aut
     await loadPins();
     setOpenId(null);
   }
+
+  const report = (target: ReportTarget) => {
+    setReporting(target);
+    setPanel("report");
+    setOpenId(null);
+  };
+  const confirmBlock = (userId: number, name: string) =>
+    Alert.alert(`Block ${name}?`, "You won't see their messages, reactions or when they're here, and neither of you can message the other. They aren't told.", [
+      { text: "Cancel", style: "cancel" },
+      {
+        text: "Block",
+        style: "destructive",
+        onPress: () =>
+          void store.block(userId).then((failed) => {
+            setSaid(failed ?? `You blocked ${name}. Unblock them under Blocked people.`);
+            if (!failed && room.kind === "dm") setBlockedHere(true);
+            setOpenId(null);
+          }),
+      },
+    ]);
+  const closeReport = (sent: boolean) => {
+    setPanel(null);
+    setReporting(null);
+    if (sent) setSaid("Thanks for telling us. A moderator will look at it.");
+  };
 
   const write = async (userId: number) => {
     const threadId = await store.startThread(userId);
@@ -101,6 +134,11 @@ export function RoomView({ room, user, onBack, onOpen }: { room: Room; user: Aut
     setPanel(panel === next ? null : next);
     if (next === "pins") void loadPins();
   };
+  const act = (label: string, onPress: () => void) => (
+    <Pressable key={label} accessibilityRole="button" onPress={onPress} style={{ minHeight: size.tap, justifyContent: "center" }}>
+      <Text style={{ fontFamily: fontFamily.uiStrong, color: c.accentText }}>{label}</Text>
+    </Pressable>
+  );
   const tool = (label: string, to: Panel) => (
     <Pressable key={label} accessibilityRole="button" accessibilityState={{ expanded: panel === to }} onPress={() => togglePanel(to)} style={{ minHeight: size.tap, justifyContent: "center" }}>
       <Text style={{ fontFamily: fontFamily.uiStrong, color: c.accentText }}>{label}</Text>
@@ -128,6 +166,11 @@ export function RoomView({ room, user, onBack, onOpen }: { room: Room; user: Aut
               {tool("Pinned", "pins")}
               {tool("Search", "search")}
             </View>
+          ) : other.current && !blockedHere ? (
+            <View style={{ flexDirection: "row", flexWrap: "wrap", columnGap: space.xl }}>
+              {act("Report", () => report({ userId: other.current!.otherUserId, userName: title }))}
+              {act("Block", () => confirmBlock(other.current!.otherUserId, title))}
+            </View>
           ) : (
             <View style={{ height: space.md }} />
           )}
@@ -136,9 +179,10 @@ export function RoomView({ room, user, onBack, onOpen }: { room: Room; user: Aut
 
       {panel ? (
         // Scrolls by itself: a long list must not push the messages and the composer off the screen. A search takes the room it needs: the composer steps aside.
-        <ScrollView style={{ flexGrow: 0, flexShrink: 1, maxHeight: panel === "search" ? "100%" : "50%", borderBottomWidth: 1, borderBottomColor: c.border }} contentContainerStyle={{ paddingHorizontal: space.xl, paddingVertical: space.md }} keyboardShouldPersistTaps="handled">
+        <ScrollView style={{ flexGrow: 0, flexShrink: 1, maxHeight: panel === "search" || panel === "report" ? "100%" : "50%", borderBottomWidth: 1, borderBottomColor: c.border }} contentContainerStyle={{ paddingHorizontal: space.xl, paddingVertical: space.md }} keyboardShouldPersistTaps="handled">
           <Column style={{ gap: space.sm }}>
-            {panel === "people" ? <People people={here} me={user.userId} canWrite={store.canMessage} onWrite={(id) => void write(id)} /> : null}
+            {panel === "people" ? <People people={here} me={user.userId} canWrite={store.canMessage} onWrite={(id) => void write(id)} onReport={(p) => report(p)} onBlock={(p) => confirmBlock(p.userId, p.userName)} /> : null}
+            {panel === "report" && reporting ? <ReportForm key={JSON.stringify(reporting)} target={reporting} send={api.report} onSent={() => closeReport(true)} onCancel={() => closeReport(false)} /> : null}
             {panel === "pins" ? <Pins pins={pins} error={pinError} onUnpin={mayPin ? (id) => void togglePin(id, true) : undefined} /> : null}
             {panel === "search" && room.kind === "channel" ? <Search find={(q) => api.search(room.key, q)} /> : null}
           </Column>
@@ -198,6 +242,8 @@ export function RoomView({ room, user, onBack, onOpen }: { room: Room; user: Aut
                   pinned: pins?.some((p) => p.messageId === item.message.messageId) ?? false,
                   pin: mayPin ? () => void togglePin(item.message.messageId, pins?.some((p) => p.messageId === item.message.messageId) ?? false) : undefined,
                   write: room.kind === "channel" && store.canMessage(item.message.userId) ? () => void write(item.message.userId) : undefined,
+                  report: item.message.userId === user.userId ? undefined : () => report({ userId: item.message.userId, userName: item.message.userName, messageId: item.message.messageId, words: item.message.messageBody }),
+                  block: item.message.userId === user.userId ? undefined : () => confirmBlock(item.message.userId, item.message.userName),
                 }}
               />
             )}
@@ -207,22 +253,23 @@ export function RoomView({ room, user, onBack, onOpen }: { room: Room; user: Aut
 
       {state?.phase === "ready" ? (
         // Hidden, not gone, while searching: what was being written is still there after.
-        <View style={{ display: panel === "search" ? "none" : "flex" }}>
+        <View style={{ display: panel === "search" || panel === "report" ? "none" : "flex" }}>
           <View style={{ paddingHorizontal: space.xl }}>
             <Column style={{ gap: space.sm }}>
               {status !== "online" ? <OfflineBanner text="Not connected. New messages show when you're back online, and nothing you write is sent until then." /> : null}
               {state.notice ? <Text variant="error" accessibilityLiveRegion="polite">{state.notice}</Text> : null}
               {pinError && panel !== "pins" ? <Text variant="error" accessibilityLiveRegion="polite">{pinError}</Text> : null}
+              {said ? <Text variant="meta" accessibilityLiveRegion="polite">{said}</Text> : null}
               <Text variant="meta" accessibilityLiveRegion="polite" style={{ minHeight: 24 }}>{typingText(state.typing.map((t) => t.userName))}</Text>
             </Column>
           </View>
-          <Composer
+          {blockedHere ? null : <Composer
             key={JSON.stringify(room)}
             placeholder={room.kind === "dm" ? `Message ${title}` : kitchen ? "Message your kitchen team" : "Message everyone"}
             people={room.kind === "dm" ? [] : people}
             onTyping={store.typing}
             onPost={store.post}
-          />
+          />}
         </View>
       ) : null}
     </View>
@@ -252,7 +299,20 @@ function PendingRow({ post, connected, onRetry, onDiscard }: { post: PendingPost
   );
 }
 
-function People({ people, me, canWrite, onWrite }: { people: BenchPerson[]; me: number; canWrite: (id: number) => boolean; onWrite: (id: number) => void }) {
+function link(name: string, label: string, onPress: () => void) {
+  return (
+    <Pressable key={label} accessibilityRole="button" accessibilityLabel={name} onPress={onPress} style={{ minHeight: size.tap, justifyContent: "center" }}>
+      <LinkText>{label}</LinkText>
+    </Pressable>
+  );
+}
+
+function LinkText({ children }: { children: string }) {
+  const c = useColors();
+  return <Text style={{ fontFamily: fontFamily.uiStrong, color: c.accentText }}>{children}</Text>;
+}
+
+function People({ people, me, canWrite, onWrite, onReport, onBlock }: { people: BenchPerson[]; me: number; canWrite: (id: number) => boolean; onWrite: (id: number) => void; onReport: (p: BenchPerson) => void; onBlock: (p: BenchPerson) => void }) {
   const c = useColors();
   return (
     <Surface>
@@ -262,14 +322,14 @@ function People({ people, me, canWrite, onWrite }: { people: BenchPerson[]; me: 
         </View>
       ) : null}
       {people.map((p, i) => (
-        <View key={p.userId} style={[{ minHeight: size.tap, flexDirection: "row", alignItems: "center", gap: space.md, paddingHorizontal: space.lg }, rowDivider(i, c.border)]}>
-          <Avatar photoPath={p.userPhotoPath} name={p.userName} size={32} />
-          <Text style={{ flex: 1, fontFamily: fontFamily.uiStrong }}>{p.userId === me ? `${p.userName} (you)` : p.userName}</Text>
-          {canWrite(p.userId) ? (
-            <Pressable accessibilityRole="button" accessibilityLabel={`Message ${p.userName}`} onPress={() => onWrite(p.userId)} style={{ minHeight: size.tap, justifyContent: "center" }}>
-              <Text style={{ fontFamily: fontFamily.uiStrong, color: c.accentText }}>Message</Text>
-            </Pressable>
-          ) : null}
+        <View key={p.userId} style={[{ minHeight: size.tap, flexDirection: "row", flexWrap: "wrap", alignItems: "center", columnGap: space.lg, paddingHorizontal: space.lg }, rowDivider(i, c.border)]}>
+          <View style={{ flexGrow: 1, flexDirection: "row", alignItems: "center", gap: space.md, minHeight: size.tap }}>
+            <Avatar photoPath={p.userPhotoPath} name={p.userName} size={32} />
+            <Text style={{ fontFamily: fontFamily.uiStrong }}>{p.userId === me ? `${p.userName} (you)` : p.userName}</Text>
+          </View>
+          {canWrite(p.userId) ? link(`Message ${p.userName}`, "Message", () => onWrite(p.userId)) : null}
+          {p.userId !== me ? link(`Report ${p.userName}`, "Report", () => onReport(p)) : null}
+          {p.userId !== me ? link(`Block ${p.userName}`, "Block", () => onBlock(p)) : null}
         </View>
       ))}
     </Surface>

@@ -3,7 +3,7 @@ import type { BenchChannel, BenchMessage, DmThread } from "@culinaire/shared/sch
 import { ApiError } from "../api/client";
 import { PAGE, type BenchApi, type Room } from "./benchApi";
 import type { BenchLive } from "./benchLive";
-import { createBenchStore, DM_REFUSED } from "./benchStore";
+import { benchFailure, createBenchStore, DM_REFUSED } from "./benchStore";
 
 const at = (n: number) => new Date(Date.UTC(2026, 10, 26, 1, 0, n)).toISOString();
 const msg = (n: number, over: Partial<BenchMessage> = {}): BenchMessage => ({ messageId: `m${n}`, channelId: 2, dmThreadId: null, userId: 8, userName: "Bo", userPhotoPath: null, messageBody: `text ${n}`, messageType: "text", recipeTitle: null, editedInd: false, createdDttm: at(n), reactions: [], ...over });
@@ -584,5 +584,59 @@ describe("the lists", () => {
     t.api.channels.mockRejectedValueOnce(new ApiError("network"));
     await t.store.refreshLists();
     expect(t.store.getSnapshot()).toMatchObject({ lists: "ready", channels: [everyone, kitchen] });
+  });
+});
+
+describe("blocking", () => {
+  it("takes the person's messages, thread and presence off the screen at once, and cannot message them", async () => {
+    const t = setup();
+    const block = vi.fn(async () => undefined);
+    Object.assign(t.api, { block, unblock: vi.fn(async () => undefined) });
+    t.server.rows = [msg(1), msg(2, { userId: 9, userName: "Cy" })];
+    await t.store.refreshLists();
+    await t.store.open(KITCHEN);
+    t.arrive("bench:presence:update", { channelKey: "org_5", users: [{ userId: 8, userName: "Bo", userPhotoPath: null }, { userId: 9, userName: "Cy", userPhotoPath: null }] });
+    expect(t.store.canMessage(8)).toBe(true);
+
+    expect(await t.store.block(8)).toBeNull();
+    expect(block).toHaveBeenCalledWith(8);
+    expect(t.ids()).toEqual(["m2"]);
+    expect(t.store.getSnapshot().threads).toEqual([]);
+    expect(t.store.getSnapshot().presence.org_5.map((p) => p.userId)).toEqual([9]);
+    expect(t.store.canMessage(8)).toBe(false);
+  });
+
+  it("says why a block did not go through, and changes nothing", async () => {
+    const t = setup();
+    Object.assign(t.api, { block: vi.fn(async () => { throw new ApiError("network"); }) });
+    await t.store.open(KITCHEN);
+    expect(await t.store.block(8)).toBe("Can't reach the server. Check your signal and try again.");
+    expect(t.ids()).toEqual(["m1", "m2"]);
+  });
+
+  it("reads the room and the lists again after an unblock", async () => {
+    const t = setup();
+    const unblock = vi.fn(async () => undefined);
+    Object.assign(t.api, { block: vi.fn(async () => undefined), unblock });
+    await t.store.open(KITCHEN);
+    await t.store.block(8);
+    t.api.messages.mockClear();
+    t.api.threads.mockClear();
+    expect(await t.store.unblock(8)).toBeNull();
+    expect(unblock).toHaveBeenCalledWith(8);
+    expect(t.api.messages).toHaveBeenCalled();
+    expect(t.api.threads).toHaveBeenCalled();
+    expect(t.ids()).toEqual(["m1", "m2"]);
+  });
+
+  it("a direct message the server refuses says so plainly and is not left waiting", async () => {
+    const t = setup();
+    await t.store.refreshLists();
+    await t.store.open(DM);
+    t.store.post("hello");
+    t.arrive("bench:error", { error: "You can't message this person", code: "DM_NOT_ALLOWED" });
+    expect(t.room().notice).toBe(DM_REFUSED);
+    expect(t.pending()).toEqual([["hello", "failed"]]);
+    expect(benchFailure(new ApiError("forbidden", "x", 403, undefined, "DM_NOT_ALLOWED"))).toBe(DM_REFUSED);
   });
 });
