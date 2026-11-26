@@ -7,7 +7,7 @@ import { Surface } from "../ui/Surface";
 import { Text } from "../ui/Text";
 import type { CachedList, ListSnapshot } from "./cachedList";
 
-const savedAtLabel = (iso: string) => new Date(iso).toLocaleString([], { day: "numeric", month: "short", hour: "numeric", minute: "2-digit" });
+export const savedAtLabel = (iso: string) => new Date(iso).toLocaleString([], { day: "numeric", month: "short", hour: "numeric", minute: "2-digit" });
 
 /** An empty list: one heading, one sentence, in a card. */
 export function EmptyCard({ title, text }: { title: string; text: string }) {

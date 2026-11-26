@@ -5,6 +5,7 @@ import { readSignedImage } from "../api/signedFile";
 import { createComplianceApi, type ComplianceApi, type NewDocument } from "./complianceApi";
 import { UnsureError, writeMessage } from "../api/onlineWrite";
 import { createDocumentStore } from "./documentStore";
+import { memoryCache } from "../../testing/mocks";
 import { canChange, canNudge, documentSections, expiryLine, isExpired, readFields, readType, statusLabel, uploadMessage } from "./documentView";
 
 const TODAY = "2026-11-26";
@@ -168,5 +169,22 @@ describe("sending, changing and deleting", () => {
       throw new ApiError("not_found", "Document not found", 404);
     });
     await expect(t.store.remove("d1")).resolves.toBeUndefined();
+  });
+});
+
+describe("documents saved for a start with no signal", () => {
+  it("keeps the list (never a photo), shows it with its time offline, and drops it when the permission goes", async () => {
+    const cache = memoryCache();
+    const api = { mine: vi.fn(async () => [doc()]) } as unknown as ComplianceApi & { mine: ReturnType<typeof vi.fn> };
+    await createDocumentStore(api, cache).refresh();
+    expect(cache.write).toHaveBeenCalledWith("documents", "1:L1", [doc()]);
+    const offline = createDocumentStore(api, cache);
+    api.mine.mockRejectedValueOnce(new ApiError("network"));
+    await offline.refresh();
+    expect(offline.getSnapshot()).toMatchObject({ phase: "ready", docs: [{ complianceDocumentId: "d1" }], savedAt: "2026-11-25T20:00:00.000Z" });
+    api.mine.mockRejectedValueOnce(new ApiError("forbidden", undefined, 403));
+    await offline.refresh();
+    expect(offline.getSnapshot()).toMatchObject({ phase: "failed", docs: [], savedAt: null });
+    expect(cache.rows.size).toBe(0);
   });
 });

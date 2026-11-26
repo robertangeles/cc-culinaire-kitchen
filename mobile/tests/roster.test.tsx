@@ -9,8 +9,10 @@ import { createAvailabilityStore } from "../src/roster/availabilityStore";
 import { RosterContextProvider } from "../src/roster/RosterProvider";
 import type { RosterApi } from "../src/roster/rosterApi";
 import { createRosterStore } from "../src/roster/rosterStore";
-import { routerMock, searchParams, sessionState } from "../testing/mocks";
+import { memoryCache, routerMock, searchParams, sessionState } from "../testing/mocks";
 
+// The sealed copy and the lock are native; the stores here get `memoryCache` instead.
+vi.mock("../src/runtime/lockedCache", () => ({ lockedCache: {}, useAfterUnlock: () => {} }));
 vi.mock("../src/runtime/appContext", async () => {
   const { sessionMock, sessionState, authApiMock } = await import("../testing/mocks");
   return { session: sessionMock, authApi: authApiMock, client: {}, googleEnabled: false, appleEnabled: false, useSession: () => sessionState.current };
@@ -97,9 +99,23 @@ describe("my shifts", () => {
     await screen.findByText("This week");
     api.shifts.mockRejectedValueOnce(new ApiError("network"));
     await t.ctx.roster.refresh();
-    expect(await screen.findByText("This needs a connection: it isn't kept on this phone. What you see may be out of date.")).toBeTruthy();
+    expect(await screen.findByText("Can't reach the server. What you see may be out of date.")).toBeTruthy();
     press("Try again");
     await vi.waitFor(() => expect(screen.queryByText(/out of date/)).toBeNull());
+  });
+
+  it("with no signal shows the copy saved on this phone, how old it is, and the fresh list once it can", async () => {
+    const cache = memoryCache("2026-11-25T20:00:00.000Z");
+    cache.rows.set("roster", { shifts: [shift()], swaps: [] });
+    api.shifts.mockRejectedValueOnce(new ApiError("network"));
+    api.swaps.mockResolvedValue([]);
+    const roster = createRosterStore({ api: api as unknown as RosterApi, now: () => NOW, cache });
+    render(<RosterContextProvider value={{ roster, availability: createAvailabilityStore(api as unknown as RosterApi) }}><Roster /></RosterContextProvider>);
+    expect(await screen.findByText(/^Can't reach the server\. Saved on this phone 2 h ago \(.+\)\. Changes need a connection\.$/)).toBeTruthy();
+    expect(screen.getByText("This week")).toBeTruthy();
+    api.shifts.mockResolvedValue([shift()]);
+    press("Try again");
+    await vi.waitFor(() => expect(screen.queryByText(/Saved on this phone/)).toBeNull());
   });
 
   it("counts the open swaps of colleagues that have not started", async () => {
@@ -261,7 +277,7 @@ describe("my availability", () => {
     const availability = createAvailabilityStore(api as unknown as RosterApi);
     const roster = createRosterStore({ api: api as unknown as RosterApi, now: () => NOW });
     render(<RosterContextProvider value={{ roster, availability }}><AvailabilityScreen /></RosterContextProvider>);
-    expect(await screen.findByText("This needs a connection: it isn't kept on this phone.")).toBeTruthy();
+    expect(await screen.findByText("Can't reach the server.")).toBeTruthy();
     expect(screen.queryByRole("button", { name: "Add availability" })).toBeNull();
   });
 
