@@ -91,7 +91,10 @@ function removeUserSocket(userId: number): boolean {
 async function enter(socket: Socket, userId: number) {
   const blocked = await blockedBy(userId);
   if (!userSocketCount.has(userId)) return; // gone before the read came back
-  if (!blocks.has(userId)) blocks.set(userId, new Set(blocked)); // another socket of theirs may have been told of a change since
+  // Merged: a block made while this was read is already in. One lifted meanwhile stays until they reconnect, hidden rather than shown.
+  const mine = blocks.get(userId) ?? new Set<number>();
+  for (const id of blocked) mine.add(id);
+  blocks.set(userId, mine);
   socket.join("bench:everyone");
   socket.join(`bench:user_${userId}`);
 }
@@ -175,8 +178,9 @@ function broadcastPresence(channelKey: string) {
  * What is on their screen already the client takes away itself.
  */
 export function noteBlock(userId: number, otherId: number, blocked: boolean): void {
-  const mine = blocks.get(userId);
-  if (!io || !mine) return; // not connected: read when they connect
+  if (!io || !userSocketCount.has(userId)) return; // not connected: read when they connect
+  const mine = blocks.get(userId) ?? new Set<number>();
+  blocks.set(userId, mine);
   if (blocked) mine.add(otherId);
   else mine.delete(otherId);
   const rooms = new Set<string>();
