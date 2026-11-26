@@ -13,9 +13,9 @@ Run commands from the repository root. `eas` is the Expo build service; use it t
 | Build numbers | EAS keeps them (`appVersionSource: remote`, `autoIncrement` on preview and production) | never edit a build number by hand |
 | Updates over the air | `runtimeVersion: { policy: "appVersion" }`, one channel per profile (`development`, `preview`, `production`) | a JavaScript update reaches only builds with the same `version`, so it can never meet a build whose native code differs |
 | Server address | per EAS environment, never in a file | a test build can never silently point at production |
-| Permissions | Face ID (the app lock), photos and camera (the profile picture), notifications (only when turned on) | each with its own wording in `app.json`, asked for when it is first used; later ones arrive with their feature |
+| Permissions | Face ID (the app lock), photos and camera (the profile picture, a photo of a certificate), notifications (only when turned on) | each with its own wording in `app.json`, asked for when it is first used; later ones arrive with their feature |
 | Encryption | `ITSAppUsesNonExemptEncryption: false` (HTTPS only) | no export-compliance question on every iOS build |
-| App lock | on for people who approve orders or manage rosters or compliance documents, always; needs a device passcode, fingerprint or face | owner's lost-phone policy (Q6) |
+| App lock | on for people who approve orders or see or manage rosters or compliance documents (their own included), always; needs a device passcode, fingerprint or face | owner's lost-phone policy (Q6) |
 | Billing | none in the app: no pricing, purchase or upgrade link (a test enforces it) | owner decision; see the Apple rule 3.1.3(b) note below |
 
 **The version rule.** Change `version` whenever a build needs new native code (a new native module, an Expo SDK bump) or whenever you ship to the stores. Then no over-the-air update can reach an older binary. Never raise `mobile_min_app_version` (Settings, Site Settings) above a version that is already live in both stores: you would lock people out of an app they cannot yet update.
@@ -55,7 +55,7 @@ Run commands from the repository root. `eas` is the Expo build service; use it t
 1. First release only: in the Play Console create an internal testing release and upload the first `.aab` by hand (Play does not let the API create a first release). Build it: `pnpm --dir mobile exec eas build --profile production --platform android`; download the `.aab` from the build page.
 2. After that: `pnpm --dir mobile exec eas submit --platform android --profile internal` (uses the latest production build and the `internal` track).
 3. Add testers (Testing, Internal testing, Testers): an email list. They install from the opt-in link.
-4. Before any production release the Play Console also needs: Data safety form (the app holds name, email, and later identity documents from compliance uploads: declare them), content rating, target audience, the privacy policy URL (use the existing web Privacy URL, `https://<your site>/privacy`), and the **account deletion** answer: in-app path "Account (a tab, or under More), Delete my account", web page `https://<your site>/delete-account`.
+4. Before any production release the Play Console also needs: Data safety form (the app holds name, email, and certificate photos from compliance uploads: declare them), content rating, target audience, the privacy policy URL (use the existing web Privacy URL, `https://<your site>/privacy`), and the **account deletion** answer: in-app path "Account (a tab, or under More), Delete my account", web page `https://<your site>/delete-account`.
 5. Production: `eas submit --platform android --profile production` (the draft goes to the Play Console for you to review and roll out).
 
 ## TestFlight and the App Store
@@ -110,6 +110,6 @@ The script prints the host before it writes anything and never prints the passwo
 - Sign in on a fresh account that has no organisation: first-run screen, join by key, join a location, reach the count.
 - Delete a test account from the Account screen (a tab, or under More); confirm the phone returns to sign-in with nothing left on it.
 - App lock, signed in as someone who approves orders: cold start shows the lock screen; Unlock works with Face ID or a fingerprint, and with the passcode after biometrics fail; cancel it and fail it five times (still locked, still signed in); lock the phone or switch apps for over a minute (locked) and for a few seconds (not locked); the app switcher shows a blank page; wait two minutes and approve an order (asked again; cancel sends nothing). On a spare device with no passcode: the app asks for one.
-- App lock, signed in as a cook: no lock anywhere.
+- App lock, signed in as someone with no approval, roster or compliance permission (not even `roster:read-own`): no lock anywhere. A cook with their own shifts and documents is locked.
 - Open Terms and Privacy from sign-in (signed out) and from the Account screen.
 - Set `mobile_min_app_version` above the installed version on a test server: the update screen appears with no link, then (after setting the store link) with the right store's button.

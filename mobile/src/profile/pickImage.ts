@@ -1,13 +1,12 @@
 import * as ImagePicker from "expo-image-picker";
-import type { PickedImage } from "../api/account";
+import type { Photo } from "../api/photo";
+import { takePhoto } from "../photos/photoFiles";
 
-/** The types the server's avatar upload takes; anything else (an iPhone's HEIC) is refused on the phone, before it is sent. */
-const UPLOADABLE = ["image/jpeg", "image/png", "image/webp"];
-
-export type PickResult = { kind: "picked"; image: PickedImage } | { kind: "cancelled" } | { kind: "denied" } | { kind: "unsupported" };
+export type PickResult = { kind: "picked"; photo: Photo } | { kind: "cancelled" } | { kind: "denied" } | { kind: "unsupported" };
 
 /**
- * A square picture from the library or the camera, cropped on the phone and compressed (the server's limit is a few MB).
+ * A square picture from the library or the camera, cropped on the phone and compressed (the server's limit is a few MB), without its place
+ * and time; a format the server cannot take (an iPhone's HEIC) is refused here, before it is sent.
  * The library needs no permission on Android 13+ (the system photo picker); the camera asks the first time.
  */
 export async function pickImage(from: "library" | "camera"): Promise<PickResult> {
@@ -18,8 +17,6 @@ export async function pickImage(from: "library" | "camera"): Promise<PickResult>
   }
   const result = from === "camera" ? await ImagePicker.launchCameraAsync(options) : await ImagePicker.launchImageLibraryAsync(options);
   if (result.canceled || !result.assets[0]) return { kind: "cancelled" };
-  const asset = result.assets[0];
-  const mimeType = asset.mimeType ?? "image/jpeg";
-  if (!UPLOADABLE.includes(mimeType)) return { kind: "unsupported" };
-  return { kind: "picked", image: { uri: asset.uri, mimeType } };
+  const photo = await takePhoto(result.assets[0].uri).catch(() => null);
+  return photo ? { kind: "picked", photo } : { kind: "unsupported" };
 }

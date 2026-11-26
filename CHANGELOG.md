@@ -65,6 +65,18 @@ Server only. No migration, no permission change, no change in the web client.
 
 - **Bench socket input validation hardening:** every Bench socket event is checked before it is handled; malformed events are dropped and the sender gets `bench:error` with code `VALIDATION`. A typing notice is accepted only for a room the sender has joined.
 
+### Added (mobile Wave 8, phone: the staff side of roster and documents)
+
+Phone app only; no server or web change, no migration, no new permission. `expo-file-system` (already part of Expo) is now a dependency of its own; the camera and photo sentences in `app.json` also name certificates, so the development build's stamp changes.
+
+- **Roster** under More for `roster:read-own` holders: my published shifts this week, next week and later, always on the venue's clock; confirm or decline; the public-holiday question; offer a shift for swap, take the offer back, take a colleague's; my availability. Draft shifts are never shown.
+- **Documents** under More for `compliance:read-own` holders: my certificates, what needs me first; add one by camera or photo library (read by the server, checked by the person), correct, delete, remind the manager, see the stored photo.
+- **Nothing is stored or queued:** roster and compliance data stays in memory and every write needs a connection; one whose answer was lost is looked for before it is made again.
+- **A certificate's photo** is sent without its place, time and device, and no copy of it stays on the phone.
+- **Fixed: the profile picture upload was broken on the phone** (since it was merged): Expo's fetch refuses the kind of file part it sent, which looked like no signal. It now goes the way certificates do, also without its place and time.
+- **The app lock now also covers** anyone who holds `roster:read-own` or `compliance:read-own`, so a person's own shifts, swaps and certificate photos need the same unlock as approval, manager and verifier permissions.
+- Notifications about the person's own shifts and documents open them. Every difference from the web is listed in `mobile/README.md`.
+
 ### Added (open swaps say the shift's status and the venue's zone and name)
 
 Server only, additive. No migration, no permission change, no change to who sees which swaps.

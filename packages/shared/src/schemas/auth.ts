@@ -37,6 +37,8 @@ export const StoreLocationSchema = z.object({
   organisationId: z.number(),
   locationName: z.string(),
   classification: z.string().catch(""),
+  /** The venue's IANA zone; absent from a session saved before the phone read it. */
+  ianaTimezone: z.string().optional().catch(undefined),
 });
 export type StoreLocation = z.infer<typeof StoreLocationSchema>;
 

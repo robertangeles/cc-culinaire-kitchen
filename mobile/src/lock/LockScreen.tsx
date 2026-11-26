@@ -27,7 +27,7 @@ export function LockScreen({ problem, busy, onUnlock, onSignOut }: Pick<LockSnap
       {problem === "unprotected" ? (
         <>
           <Text variant="title">Set up a screen lock</Text>
-          <Text>Your account approves orders or sees other people&apos;s records, so the app opens only on a device with a passcode, a fingerprint or a face set up. Turn one on in the device&apos;s settings, then tap Unlock. Or sign out.</Text>
+          <Text>Your account has access to sensitive records, so the app opens only on a device with a passcode, a fingerprint or a face set up. Turn one on in the device&apos;s settings, then tap Unlock. Or sign out.</Text>
         </>
       ) : (
         <>

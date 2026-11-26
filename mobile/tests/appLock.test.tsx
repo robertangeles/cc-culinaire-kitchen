@@ -15,7 +15,7 @@ vi.mock("../src/runtime/appContext", () => ({ useSession: () => ({}), client: {}
 vi.mock("../src/storage/kv", () => ({ sqliteKv: {} }));
 
 const approver = person(["purchasing:approve"]);
-const cook = person(["waste:log", "roster:read-own"]);
+const cook = person(["waste:log"]);
 const clock = { now: 1_000_000 };
 const authenticate = vi.fn<(reason: string) => Promise<AuthResult>>();
 const onSignOut = vi.fn();
@@ -81,7 +81,7 @@ afterEach(() => {
 });
 
 describe("the lock screen", () => {
-  it.each([["an approver", approver], ["an Administrator", admin]])("is what %s meets on a cold start, in the app's look, with nothing readable behind it", (_who, user) => {
+  it.each([["an approver", approver], ["an Administrator", admin], ["someone who sees only their own shifts and documents", person(["roster:read-own", "compliance:read-own"])]])("is what %s meets on a cold start, in the app's look, with nothing readable behind it", (_who, user) => {
     open(user);
     expect(screen.getByRole("heading", { name: "Locked" })).toBeTruthy();
     expect(screen.getByText("App lock")).toBeTruthy();

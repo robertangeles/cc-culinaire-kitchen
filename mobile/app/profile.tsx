@@ -81,7 +81,7 @@ export default function Profile() {
     if (picked.kind !== "picked") return setMessage({ text: PICK_FAILED[picked.kind], error: true });
     setUploading(true);
     try {
-      await accountApi.uploadAvatar(picked.image);
+      await accountApi.uploadAvatar(picked.photo);
       await session.refreshUser();
       setMessage({ text: "Picture updated." });
     } catch (err) {

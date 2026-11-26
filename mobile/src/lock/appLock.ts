@@ -8,9 +8,9 @@ import type { AuthUser } from "../api/auth";
 import { hasAnyPermission } from "../shell/tabs";
 
 /**
- * Approving orders, and managing (or reading everyone's) rosters and compliance documents. Not the `read-own` keys, which every cook holds.
+ * Approving orders, and reading or managing rosters and compliance documents, a person's own shifts and certificates included (owner, Q6).
  */
-export const LOCK_PERMISSIONS = ["purchasing:approve", "roster:read-all", "roster:manage", "roster:publish", "roster:manage-award-rules", "compliance:read-all", "compliance:verify", "compliance:manage-rules"];
+export const LOCK_PERMISSIONS = ["purchasing:approve", "roster:read-own", "roster:read-all", "roster:manage", "roster:publish", "roster:manage-award-rules", "compliance:read-own", "compliance:read-all", "compliance:verify", "compliance:manage-rules"];
 
 /** How long the app may be in the background before it locks. */
 export const GRACE_MS = 60_000;

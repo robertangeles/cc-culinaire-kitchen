@@ -36,6 +36,8 @@ const WEB = [
   [/^9[0-4]/, `${C}/pages/PurchasingPage.tsx (receiving)`],
   [/^b/, `${C}/pages/YourBrainPage.tsx, components/brain (/your-brain)`],
   [/^c/, `${C}/pages/BenchPage.tsx, components/bench (/bench; pins and search have no web page)`],
+  [/^r/, `${C}/components/roster/MyShiftsView.tsx, MyAvailabilityManager.tsx (/roster)`],
+  [/^d/, `${C}/components/compliance/MyDocumentsTab.tsx, MyDocumentsList.tsx, DocumentUploadForm.tsx (/profile, My Documents)`],
   [/^m/, `${C}/pages/MenuIntelligencePage.tsx, components/menu, components/menu-intelligence/RecordSaleModal.tsx (/menu-intelligence)`],
   [/^l/, "none: the web has no app lock (phone only)"],
   [/^o/, `${C}/pages/PurchasingPage.tsx (/purchasing: Orders, Approvals; credit notes have no web page)`],
