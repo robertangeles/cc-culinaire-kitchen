@@ -50,5 +50,5 @@ export const insertMention = (draft: string, name: string) => draft.replace(/@\w
 const isAdmin = (user: AuthUser) => user.roles.includes("Administrator");
 export const canEdit = (user: AuthUser, m: BenchMessage) => m.userId === user.userId && m.messageType === "text";
 export const canDelete = (user: AuthUser, m: BenchMessage) => m.userId === user.userId || isAdmin(user);
-/** Whoever can reach a channel may pin in it; direct messages have no pins. */
-export const canPin = (room: Room) => room.kind === "channel";
+/** As the server has it: in a kitchen's own channel its members pin (only they can reach it), in Everyone administrators. Direct messages have no pins. */
+export const canPin = (user: AuthUser, room: Room) => room.kind === "channel" && (room.key.startsWith("org_") || isAdmin(user));
