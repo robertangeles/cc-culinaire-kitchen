@@ -2,7 +2,7 @@ import { AvailabilityListSchema, MyShiftsSchema, OpenSwapsSchema, type Availabil
 import type { ApiClient } from "../api/client";
 import type { AvailabilityWindow } from "./availabilityView";
 
-/** The staff side of the roster. Every call is online: no roster data is stored on the phone or queued (owner, Q6). */
+/** The staff side of the roster. Every call is online: nothing is queued, and the last answer of a read is kept sealed by `lockedCache` (owner, Q6). */
 export function createRosterApi(client: ApiClient) {
   const id = encodeURIComponent;
   return {

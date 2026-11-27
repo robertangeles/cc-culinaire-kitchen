@@ -3,6 +3,7 @@ import type { MyShift, OpenSwap } from "@culinaire/shared/schemas/roster";
 import { ApiError, type ApiClient } from "../api/client";
 import { createRosterApi, type RosterApi } from "./rosterApi";
 import { createRosterStore } from "./rosterStore";
+import { memoryCache } from "../../testing/mocks";
 
 const NOW = Date.parse("2026-11-25T22:00:00Z");
 const shift = (over: Partial<MyShift> = {}): MyShift => ({ shiftId: "s1", assignmentId: "a1", storeLocationId: "L1", locationName: "Bar", ianaTimezone: "Australia/Melbourne", roleName: "Chef", startDatetime: "2026-11-27T22:00:00Z", endDatetime: "2026-11-28T06:00:00Z", status: "Published", isPublicHoliday: false, assignmentStatus: "Pending", publicHolidayConsent: null, ...over });
@@ -53,11 +54,11 @@ describe("reading the roster", () => {
     const t = setup();
     t.api.shifts.mockRejectedValueOnce(err("network"));
     await t.store.refresh();
-    expect(t.store.getSnapshot()).toMatchObject({ phase: "failed", error: "This needs a connection: it isn't kept on this phone." });
+    expect(t.store.getSnapshot()).toMatchObject({ phase: "failed", error: "Can't reach the server." });
     await t.store.refresh();
     t.api.shifts.mockRejectedValueOnce(err("network"));
     await t.store.refresh();
-    expect(t.store.getSnapshot()).toMatchObject({ phase: "ready", shifts: [{ assignmentId: "a1" }], error: "This needs a connection: it isn't kept on this phone." });
+    expect(t.store.getSnapshot()).toMatchObject({ phase: "ready", shifts: [{ assignmentId: "a1" }], error: "Can't reach the server." });
   });
 
   it("takes everything off the screen when the permission is taken away", async () => {
@@ -217,5 +218,64 @@ describe("swaps", () => {
       expect(await t.store.claim(swap())).toBe(false);
       expect(t.store.getSnapshot().notice).toMatchObject({ bad: true, text });
     }
+  });
+});
+
+describe("the saved copy for a start with no signal", () => {
+  function cached() {
+    const t = setup({ swaps: [swap()] });
+    const cache = memoryCache();
+    return { ...t, cache, store: createRosterStore({ api: t.api as unknown as RosterApi, now: () => NOW, cache }) };
+  }
+
+  it("keeps the last answer, shifts and swaps, and shows it marked with its time when the server cannot be reached", async () => {
+    const t = cached();
+    await t.store.refresh();
+    expect(t.cache.write).toHaveBeenCalledWith("roster", "1:L1", { shifts: [shift()], swaps: [swap()] });
+    expect(t.store.getSnapshot().savedAt).toBeNull();
+    const fresh = createRosterStore({ api: t.api as unknown as RosterApi, now: () => NOW, cache: t.cache });
+    t.api.shifts.mockRejectedValueOnce(err("network"));
+    await fresh.refresh();
+    expect(fresh.getSnapshot()).toMatchObject({ phase: "ready", shifts: [{ assignmentId: "a1" }], swaps: [{ swapRequestId: "w1" }], savedAt: "2026-11-25T20:00:00.000Z", error: "Can't reach the server." });
+    await fresh.refresh();
+    expect(fresh.getSnapshot()).toMatchObject({ savedAt: null, error: null });
+  });
+
+  it("fails plainly with no saved copy, and keeps what is on screen rather than an older copy", async () => {
+    const t = cached();
+    t.api.shifts.mockRejectedValueOnce(err("timeout"));
+    await t.store.refresh();
+    expect(t.store.getSnapshot()).toMatchObject({ phase: "failed", savedAt: null });
+    await t.store.refresh();
+    t.api.shifts.mockRejectedValueOnce(err("network"));
+    await t.store.refresh();
+    expect(t.cache.read).toHaveBeenCalledTimes(1);
+    expect(t.store.getSnapshot()).toMatchObject({ phase: "ready", savedAt: null });
+  });
+
+  it("drops the copy when the permission is taken away or the roster is switched off, and never shows it for a refusal", async () => {
+    for (const refusal of [err("forbidden", 403), err("not_found", 404)]) {
+      const t = cached();
+      await t.store.refresh();
+      t.api.shifts.mockRejectedValueOnce(refusal);
+      await t.store.refresh();
+      expect(t.cache.rows.size).toBe(0);
+    }
+    const t = cached();
+    t.cache.rows.set("roster", { shifts: [shift()], swaps: [] });
+    t.api.shifts.mockRejectedValueOnce(err("bad_request", 400));
+    await t.store.refresh();
+    expect(t.store.getSnapshot()).toMatchObject({ phase: "failed", shifts: [] });
+  });
+
+  it("saves only the newest answer", async () => {
+    const t = cached();
+    let slow!: (rows: MyShift[]) => void;
+    t.api.shifts.mockReturnValueOnce(new Promise((r) => (slow = r)));
+    const first = t.store.refresh();
+    await t.store.refresh();
+    slow([shift({ assignmentStatus: "Confirmed" })]);
+    await first;
+    expect(t.cache.write).toHaveBeenCalledTimes(1);
   });
 });

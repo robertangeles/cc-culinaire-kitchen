@@ -5,6 +5,13 @@ Format: [Keep a Changelog](https://keepachangelog.com/en/1.0.0/).
 
 ## [Unreleased]
 
+### Added (phone: roster and documents open with no signal)
+
+Phone app only; no server or web change, no migration, no new permission, no new dependency (`expo-crypto` and `expo-secure-store` were already in the app).
+
+- **My shifts, open swaps, My availability and My documents** show the last answer saved on the phone when the server cannot be reached, with a banner saying how old it is. Every change still needs a connection; a certificate's photo is never kept.
+- **The saved copy is encrypted** with a key kept in the Keychain or Keystore, read only after the app lock is passed, and emptied at sign-out, at another account or kitchen, when the account loses the permission, and when the phone has no screen lock any more. Details in `mobile/README.md` ("The sealed copy").
+
 ### Fixed (compliance documents and the staff roster: follow-ups to the phone's staff screens)
 
 Server, web and shared. No migration, no permission change. Older apps keep working: every error sentence and status is unchanged except the oversize file, and the new id is optional.

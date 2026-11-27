@@ -1,14 +1,15 @@
 /**
- * My shifts and the open swaps, in memory only: no roster data is stored, cached or queued on the phone (offline storage is a later change; the app lock now covers these holders).
- * Every write is online: an answer is to the shift as it stands now, and a swap is first come, first served. The server holds the truth:
+ * My shifts and the open swaps. The last answer is kept sealed on the phone (`lockedCache`) and shown, with its time, when the server cannot be
+ * reached; nothing is queued. Every write is online: an answer is to the shift as it stands now, and a swap is first come, first served. The server holds the truth:
  * after a write it is read again, and a write whose answer was lost (or that the server says was already made) counts as done only when
  * the fresh copy shows it.
  */
 
-import { AssignmentBlockedBodySchema, SWAP_CODES, type MyShift, type OpenSwap } from "@culinaire/shared/schemas/roster";
+import { AssignmentBlockedBodySchema, MyShiftsSchema, OpenSwapsSchema, SWAP_CODES, type MyShift, type OpenSwap } from "@culinaire/shared/schemas/roster";
 import { formatAuDate } from "@culinaire/shared";
 import { ApiError } from "../api/client";
 import { answerLost, readMessage } from "../api/onlineWrite";
+import type { StoreCache } from "../lock/lockedCache";
 import type { RosterApi } from "./rosterApi";
 import { worksShift } from "./shiftView";
 
@@ -18,6 +19,8 @@ export interface RosterSnapshot {
   off: boolean;
   /** Why the last read failed; whatever was read before it stays on screen. */
   error: string | null;
+  /** When what is shown was saved, if it is the phone's copy because the server could not be reached. */
+  savedAt: string | null;
   shifts: MyShift[];
   /** Null when swaps are switched off here. */
   swaps: OpenSwap[] | null;
@@ -28,6 +31,7 @@ export interface RosterSnapshot {
 }
 
 const isOff = (err: unknown) => err instanceof ApiError && err.code === "not_found";
+const Copy = { parse: (data: unknown) => { const d = data as { shifts: unknown; swaps: unknown }; return { shifts: MyShiftsSchema.parse(d.shifts), swaps: d.swaps === null ? null : OpenSwapsSchema.parse(d.swaps) }; } };
 const DAY = 86_400_000;
 
 /** One plain sentence for a refused claim, by the server's code. */
@@ -48,8 +52,8 @@ export function claimMessage(err: ApiError): string {
   return err.message;
 }
 
-export function createRosterStore({ api, now }: { api: RosterApi; now: () => number }) {
-  let snapshot: RosterSnapshot = { phase: "loading", off: false, error: null, shifts: [], swaps: null, busy: null, notice: null };
+export function createRosterStore({ api, now, cache }: { api: RosterApi; now: () => number; cache?: StoreCache }) {
+  let snapshot: RosterSnapshot = { phase: "loading", off: false, error: null, savedAt: null, shifts: [], swaps: null, busy: null, notice: null };
   const listeners = new Set<() => void>();
   const set = (next: Partial<RosterSnapshot>) => {
     snapshot = { ...snapshot, ...next };
@@ -63,16 +67,27 @@ export function createRosterStore({ api, now }: { api: RosterApi; now: () => num
     const mine = ++reads;
     // Nine days back reaches this week's Monday in every zone; `weekOf` decides what is this week on each venue's clock.
     const from = new Date(now() - 9 * DAY).toISOString().slice(0, 10);
+    const owner = cache?.owner() ?? null;
     try {
       const [shifts, swaps] = await Promise.all([api.shifts(from), api.swaps().catch((err) => { if (isOff(err)) return null; throw err; })]);
-      if (mine === reads) set({ phase: "ready", off: false, error: null, shifts, swaps });
+      if (mine === reads) {
+        set({ phase: "ready", off: false, error: null, savedAt: null, shifts, swaps });
+        void cache?.write("roster", owner, { shifts, swaps });
+      }
       return true;
     } catch (err) {
       if (mine !== reads) return false;
-      if (isOff(err)) set({ phase: "ready", off: true, error: null, shifts: [], swaps: null });
+      if (isOff(err) || (err instanceof ApiError && err.code === "forbidden")) void cache?.remove("roster");
+      if (isOff(err)) set({ phase: "ready", off: true, error: null, savedAt: null, shifts: [], swaps: null });
       // A permission taken away takes what was shown with it.
-      else if (err instanceof ApiError && err.code === "forbidden") set({ phase: "failed", error: "You don't have access to the roster.", shifts: [], swaps: null });
-      else set({ phase: snapshot.phase === "ready" ? "ready" : "failed", error: readMessage(err) });
+      else if (err instanceof ApiError && err.code === "forbidden") set({ phase: "failed", error: "You don't have access to the roster.", savedAt: null, shifts: [], swaps: null });
+      else {
+        // What is on screen is newer than any saved copy.
+        const copy = snapshot.phase !== "ready" && answerLost(err) ? await cache?.read("roster", Copy) : null;
+        if (mine !== reads) return false;
+        if (copy) set({ phase: "ready", off: false, error: readMessage(err), savedAt: copy.at, ...copy.data });
+        else set({ phase: snapshot.phase === "ready" ? "ready" : "failed", error: readMessage(err) });
+      }
       return false;
     }
   }

@@ -1,11 +1,12 @@
 /**
- * My documents, in memory only: nothing about a person's certificates is stored or cached on the phone (offline storage is a later change; the app lock now covers these holders), and
- * nothing is queued. Every write waits for the server, and one that may have landed is looked for before it is made again.
+ * My documents. The last list is kept sealed on the phone (`lockedCache`) and shown, with its time, when the server cannot be reached; a
+ * certificate's photo never is, and nothing is queued. Every write waits for the server, and one that may have landed is looked for before it is made again.
  */
 
-import type { MyDocument } from "@culinaire/shared/schemas/compliance";
+import { MyDocumentsSchema, type MyDocument } from "@culinaire/shared/schemas/compliance";
 import { ApiError } from "../api/client";
-import { onlineWrite, readMessage, UnsureError } from "../api/onlineWrite";
+import { answerLost, onlineWrite, readMessage, UnsureError } from "../api/onlineWrite";
+import type { StoreCache } from "../lock/lockedCache";
 import type { ComplianceApi, DocumentFields, NewDocument } from "./complianceApi";
 
 export interface DocumentsSnapshot {
@@ -13,11 +14,13 @@ export interface DocumentsSnapshot {
   /** The kitchen has not switched compliance on (the server answers 404 to everyone). */
   off: boolean;
   error: string | null;
+  /** When what is shown was saved, if it is the phone's copy because the server could not be reached. */
+  savedAt: string | null;
   docs: MyDocument[];
 }
 
-export function createDocumentStore(api: ComplianceApi) {
-  let snapshot: DocumentsSnapshot = { phase: "loading", off: false, error: null, docs: [] };
+export function createDocumentStore(api: ComplianceApi, cache?: StoreCache) {
+  let snapshot: DocumentsSnapshot = { phase: "loading", off: false, error: null, savedAt: null, docs: [] };
   const listeners = new Set<() => void>();
   const set = (next: Partial<DocumentsSnapshot>) => {
     snapshot = { ...snapshot, ...next };
@@ -28,16 +31,26 @@ export function createDocumentStore(api: ComplianceApi) {
   /** True when it read what the server holds now. */
   async function refresh(): Promise<boolean> {
     const mine = ++reads;
+    const owner = cache?.owner() ?? null;
     try {
       const docs = await api.mine();
-      if (mine === reads) set({ phase: "ready", off: false, error: null, docs });
+      if (mine === reads) {
+        set({ phase: "ready", off: false, error: null, savedAt: null, docs });
+        void cache?.write("documents", owner, docs);
+      }
       return true;
     } catch (err) {
       if (mine !== reads) return false;
       const code = err instanceof ApiError ? err.code : null;
-      if (code === "not_found") set({ phase: "ready", off: true, error: null, docs: [] });
-      else if (code === "forbidden") set({ phase: "failed", error: "You don't have access to documents.", docs: [] });
-      else set({ phase: snapshot.phase === "ready" ? "ready" : "failed", error: readMessage(err) });
+      if (code === "not_found" || code === "forbidden") void cache?.remove("documents");
+      if (code === "not_found") set({ phase: "ready", off: true, error: null, savedAt: null, docs: [] });
+      else if (code === "forbidden") set({ phase: "failed", error: "You don't have access to documents.", savedAt: null, docs: [] });
+      else {
+        const copy = snapshot.phase !== "ready" && answerLost(err) ? await cache?.read("documents", MyDocumentsSchema) : null;
+        if (mine !== reads) return false;
+        if (copy) set({ phase: "ready", off: false, error: readMessage(err), savedAt: copy.at, docs: copy.data });
+        else set({ phase: snapshot.phase === "ready" ? "ready" : "failed", error: readMessage(err) });
+      }
       return false;
     }
   }

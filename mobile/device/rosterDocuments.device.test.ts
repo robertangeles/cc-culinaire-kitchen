@@ -299,11 +299,6 @@ describe.skipIf(!process.env.SCREENS_OUT)(`roster and documents on ${FORM}`, { t
     await press("Save");
     await waitFor(/^Saturday 09:00–17:00$/, 30_000);
     await shot("r17-availability");
-    // No signal: the emulator does not always lose its way to the server in airplane mode, so this picture is taken only when it does.
-    await setAirplane(true);
-    await press("Back");
-    if (await waitFor(/needs a connection/, 60_000).catch(() => null)) await shot("r18-roster-no-signal");
-    await setAirplane(false);
   });
 
   it("documents: what needs me, what is with the manager, one of each", async () => {
@@ -383,6 +378,32 @@ describe.skipIf(!process.env.SCREENS_OUT)(`roster and documents on ${FORM}`, { t
     await press("Back to my documents");
     await waitFor(/^Food Handler/, 30_000);
     await shot("d17-documents-after");
+  });
+
+  it("no signal: the copies saved on this phone, with their age", async () => {
+    // Opened again with a signal, so Metro hands over the app and the screens hold nothing in memory; then the signal goes.
+    forceStop();
+    await openApp(METRO);
+    await waitFor(/^More(,|$)|^Account(,|$)/, 120_000);
+    // Not airplane mode: the emulator's own link to this machine survives it. A dead link is the same to the app.
+    adb(["shell", "svc", "wifi", "disable"]);
+    adb(["shell", "svc", "data", "disable"]);
+    try {
+      await sleep(4000);
+      await home("Roster", "My availability");
+      await waitFor(/Saved on this phone/, 60_000);
+      await shot("r18-roster-saved");
+      await press("My availability");
+      await waitFor(/Saved on this phone/, 60_000);
+      await shot("r19-availability-saved");
+      await home("Documents", "Add a certificate");
+      await waitFor(/Saved on this phone/, 60_000);
+      await shot("d18-documents-saved");
+    } finally {
+      adb(["shell", "svc", "wifi", "enable"]);
+      adb(["shell", "svc", "data", "enable"]);
+      await sleep(6000);
+    }
   });
 
   it("profile picture: chosen, cropped and sent the same way", async (ctx) => {

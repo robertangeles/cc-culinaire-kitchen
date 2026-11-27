@@ -1,5 +1,5 @@
 /**
- * Writes that are never queued (roster and compliance data is not stored on the phone): send, then read again. A lost answer, or a refusal that
+ * Writes that are never queued (roster and compliance changes need a connection): send, then read again. A lost answer, or a refusal that
  * can mean "already done", counts as done only when the fresh copy shows it.
  */
 
@@ -48,8 +48,8 @@ export function writeMessage(err: unknown, doing: string): string {
   return err.message;
 }
 
-/** One clear sentence for a list that could not be read and is not kept on the phone. */
+/** One clear sentence for a list that could not be read. */
 export function readMessage(err: unknown): string {
   if (!(err instanceof ApiError)) return "Something went wrong. Try again.";
-  return err.code === "network" || err.code === "timeout" ? "This needs a connection: it isn't kept on this phone." : err.message;
+  return err.code === "network" || err.code === "timeout" ? "Can't reach the server." : err.message;
 }

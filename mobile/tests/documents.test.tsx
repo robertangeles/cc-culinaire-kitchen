@@ -8,13 +8,15 @@ import { ApiError } from "../src/api/client";
 import type { ComplianceApi } from "../src/compliance/complianceApi";
 import { createDocumentStore } from "../src/compliance/documentStore";
 import { DocumentsContextProvider } from "../src/compliance/DocumentsProvider";
-import { routerMock, searchParams, sessionState } from "../testing/mocks";
+import { memoryCache, routerMock, searchParams, sessionState } from "../testing/mocks";
 
 const picker = vi.hoisted(() => ({ requestCameraPermissionsAsync: vi.fn(), launchCameraAsync: vi.fn(), launchImageLibraryAsync: vi.fn(), UIImagePickerPreferredAssetRepresentationMode: { Compatible: "compatible" } }));
 vi.mock("expo-image-picker", () => picker);
 /** The phone's files: the cleaned photo, null when it is not one the server takes. */
 const files = vi.hoisted(() => ({ takePhoto: vi.fn() }));
 vi.mock("../src/photos/photoFiles", () => files);
+// The sealed copy and the lock are native; the stores here get `memoryCache` instead.
+vi.mock("../src/runtime/lockedCache", () => ({ lockedCache: {}, useAfterUnlock: () => {} }));
 vi.mock("../src/runtime/appContext", async () => {
   const { sessionMock, sessionState, authApiMock } = await import("../testing/mocks");
   return { session: sessionMock, authApi: authApiMock, client: {}, googleEnabled: false, appleEnabled: false, useSession: () => sessionState.current };
@@ -86,6 +88,16 @@ describe("my documents", () => {
     api.mine.mockRejectedValue(new ApiError("network"));
     await u.store.refresh();
     expect(await screen.findByText(/may be out of date/)).toBeTruthy();
+    expect(screen.getByRole("button", { name: /^RSA/ })).toBeTruthy();
+  });
+
+  it("with no signal shows the list saved on this phone and how old it is", async () => {
+    const cache = memoryCache("2026-11-25T23:00:00.000Z");
+    cache.rows.set("documents", [doc()]);
+    api.mine.mockRejectedValue(new ApiError("timeout"));
+    const store = createDocumentStore(api as unknown as ComplianceApi, cache);
+    render(<DocumentsContextProvider value={store}><Documents /></DocumentsContextProvider>);
+    expect(await screen.findByText(/^Can't reach the server\. Saved on this phone 1 h ago \(.+\)\. Changes need a connection\.$/)).toBeTruthy();
     expect(screen.getByRole("button", { name: /^RSA/ })).toBeTruthy();
   });
 });

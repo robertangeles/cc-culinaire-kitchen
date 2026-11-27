@@ -1557,3 +1557,9 @@ builds all tables with CHECKs enforcing. Stop it again when done.
 - **Problem**: Every screen and unit test of the certificate upload passed; on the emulator it failed as "no connection". Expo SDK 58 installs its own `fetch` globally, and its multipart encoder throws on React Native's `{ uri, name, type }` part, which the client reads as a dead network. The merged profile picture upload was broken on the phone the same way.
 - **Fix**: Both send a part with `bytes()` from one place (`src/api/photo.ts`), and `photo.test.ts` puts each through Expo's own encoder.
 - **Rule**: An upload is proved on a device against a server, not with a mocked client: the tests fake exactly the part that breaks.
+
+## 2026-11-27 — An "is it unlocked" check that has no user answers yes
+
+- **Problem**: The first design of the roster and documents offline copy gated reads on `appLock.isLocked()`. That returns false while the lock has no user yet (`lockedFor` needs a user), so a read made before `setUser` ran would have shown the copy to someone who never unlocked. An owner mismatch only hid the old kitchen's copy instead of deleting it, and a request started for one account could save its answer after a switch to another.
+- **Fix**: `lockedCache` reads only when `unlockedUserId` equals the signed-in user, deletes everything (key included) when another account or kitchen opens, takes the owner before each request and refuses a write for a different one, and runs key changes and writes one at a time.
+- **Rule**: Gate sensitive reads on a positive match (this person unlocked), never on the absence of a lock. A cache that follows an account captures the account before the request, not when the answer lands.
