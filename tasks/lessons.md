@@ -1563,3 +1563,9 @@ builds all tables with CHECKs enforcing. Stop it again when done.
 - **Problem**: The first design of the roster and documents offline copy gated reads on `appLock.isLocked()`. That returns false while the lock has no user yet (`lockedFor` needs a user), so a read made before `setUser` ran would have shown the copy to someone who never unlocked. An owner mismatch only hid the old kitchen's copy instead of deleting it, and a request started for one account could save its answer after a switch to another.
 - **Fix**: `lockedCache` reads only when `unlockedUserId` equals the signed-in user, deletes everything (key included) when another account or kitchen opens, takes the owner before each request and refuses a write for a different one, and runs key changes and writes one at a time.
 - **Rule**: Gate sensitive reads on a positive match (this person unlocked), never on the absence of a lock. A cache that follows an account captures the account before the request, not when the answer lands.
+
+## 2026-11-27 — Server tests run against the built shared package
+
+- **Problem**: In a fresh worktree a `documentStorageService` test about photo cleaning failed with nothing changed in the server: the server resolves `@culinaire/shared` through its `main`, `dist/`, and that `dist/` was built before the latest `photoMetadata.ts` change on `main`.
+- **Fix**: `pnpm --filter @culinaire/shared build`, then the test passed.
+- **Rule**: After pulling `main` or changing `packages/shared`, build it before running server tests; a server failure in code that comes from shared is a stale `dist/` until shown otherwise.

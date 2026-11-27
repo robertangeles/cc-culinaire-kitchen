@@ -1,5 +1,5 @@
 import { describe, it, expect } from "vitest";
-import { stripMetadata } from "./photoMetadata.js";
+import { readMetadata, stripMetadata } from "./photoMetadata.js";
 
 const ascii = (s: string) => [...s].map((c) => c.charCodeAt(0));
 const seg = (marker: number, body: number[]) => [0xff, marker, (body.length + 2) >> 8, (body.length + 2) & 255, ...body];
@@ -117,5 +117,55 @@ describe("a PNG without its metadata", () => {
   it("refuses one that is cut short", () => {
     expect(stripMetadata(png(HEAD, DATA))).toBeNull();
     expect(stripMetadata(png([0x7f, 0xff, 0xff, 0xff, ...ascii("IDAT"), 0, 0, 0, 0]))).toBeNull();
+  });
+});
+
+describe("what a stored photo carries", () => {
+  const u16 = (v: number) => [v >> 8, v & 255];
+  const u32 = (v: number) => [...u16(v >> 16), ...u16(v & 0xffff)];
+  const entry = (tag: number, type: number, count: number, value: number[]) => [...u16(tag), ...u16(type), ...u32(count), ...value];
+  /** A big-endian TIFF block whose first directory points at a GPS directory holding the given tags. */
+  const tiffWithGps = (gpsTags: number[]) => [
+    ...ascii("MM"), ...u16(42), ...u32(8),
+    ...u16(1), ...entry(0x8825, 4, 1, u32(26)), ...u32(0),
+    ...u16(gpsTags.length), ...gpsTags.flatMap((tag) => entry(tag, 5, 1, u32(0))), ...u32(0),
+  ];
+  const gpsExif = (gpsTags: number[]) => seg(0xe1, [...ascii("Exif\0\0"), ...tiffWithGps(gpsTags)]);
+  const ORIENTATION_ONLY = [0xff, 0xe1, 0, 34, ...ascii("Exif\0\0MM"), 0, 0x2a, 0, 0, 0, 8, 0, 1, 0x01, 0x12, 0, 3, 0, 0, 0, 1, 0, 6, 0, 0, 0, 0, 0, 0];
+
+  it("finds a place in the camera's GPS latitude or longitude", () => {
+    expect(readMetadata(jpeg(JFIF, gpsExif([2]), TABLE))).toEqual({ location: true, metadata: true });
+    expect(readMetadata(jpeg(JFIF, gpsExif([4]), TABLE))).toEqual({ location: true, metadata: true });
+  });
+
+  it("does not call a GPS block with no position a place", () => {
+    expect(readMetadata(jpeg(JFIF, gpsExif([7]), TABLE))).toEqual({ location: false, metadata: true });
+  });
+
+  it("finds a place written as XMP, or in a second picture after the end", () => {
+    expect(readMetadata(jpeg(seg(0xe1, ascii("http://ns.adobe.com/xap/1.0/\0<exif:GPSLatitude>37,48N"))))?.location).toBe(true);
+    const second = [0xff, 0xd8, ...gpsExif([2]), ...PIXELS];
+    expect(readMetadata(new Uint8Array([...jpeg(JFIF, TABLE), ...second]))).toEqual({ location: true, metadata: true });
+  });
+
+  it("counts other metadata without a place as metadata only", () => {
+    expect(readMetadata(jpeg(JFIF, IPTC, COMMENT, TABLE))).toEqual({ location: false, metadata: true });
+  });
+
+  it("reads a photo the upload path already cleaned, rotation kept, as clean", () => {
+    expect(readMetadata(jpeg(JFIF, ORIENTATION_ONLY, TABLE))).toEqual({ location: false, metadata: false });
+    expect(readMetadata(jpeg(JFIF, TABLE))).toEqual({ location: false, metadata: false });
+  });
+
+  it("finds a place in a PNG's EXIF chunk", () => {
+    const chunk = (type: string, body: number[]) => [...u32(body.length), ...ascii(type), ...body, 1, 2, 3, 4];
+    const png = (...chunks: number[][]) => new Uint8Array([0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a, ...chunks.flat()]);
+    expect(readMetadata(png(chunk("IHDR", [5]), chunk("eXIf", tiffWithGps([2])), chunk("IEND", [])))).toEqual({ location: true, metadata: true });
+    expect(readMetadata(png(chunk("IHDR", [5]), chunk("IEND", [])))).toEqual({ location: false, metadata: false });
+  });
+
+  it("cannot read one that is cut short or not a photo", () => {
+    expect(readMetadata(new Uint8Array([0xff, 0xd8, 0xff, 0xe1, 0x40, 0x00, 1, 2]))).toBeNull();
+    expect(readMetadata(new Uint8Array(ascii("%PDF-1.7 and more")))).toBeNull();
   });
 });

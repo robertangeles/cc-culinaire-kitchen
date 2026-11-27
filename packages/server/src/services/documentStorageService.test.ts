@@ -1,4 +1,4 @@
-import { describe, it, expect, vi, beforeEach } from "vitest";
+import { describe, it, expect, vi, beforeEach, afterEach } from "vitest";
 
 const insertValues = vi.fn().mockResolvedValue(undefined);
 vi.mock("../db/index.js", () => ({
@@ -35,6 +35,7 @@ import {
   storeDocument,
   signedUrlForDocument,
   deleteStoredDocument,
+  downloadStoredDocument,
   isStorageConfigured,
   DocumentStorageError,
   SIGNED_URL_TTL_SECONDS,
@@ -295,6 +296,38 @@ describe("deleteStoredDocument", () => {
     credsMissing();
     await expect(deleteStoredDocument("pid-1")).rejects.toMatchObject({ status: 503 });
     expect(destroy).not.toHaveBeenCalled();
+  });
+});
+
+describe("downloadStoredDocument", () => {
+  const fetchMock = vi.fn();
+  beforeEach(() => vi.stubGlobal("fetch", fetchMock));
+  afterEach(() => vi.unstubAllGlobals());
+
+  it("reads the stored bytes through a short-lived signed URL, without writing an access row", async () => {
+    credsOk();
+    fetchMock.mockResolvedValue(new Response(new Uint8Array([1, 2, 3]), { status: 200 }));
+    const bytes = await downloadStoredDocument("pid-1", "jpg");
+    expect([...bytes!]).toEqual([1, 2, 3]);
+    expect(privateDownloadUrl).toHaveBeenCalledWith("pid-1", "jpg", expect.objectContaining({ expires_at: expect.any(Number) }));
+    expect(fetchMock).toHaveBeenCalledWith("https://signed.example/doc.pdf");
+    expect(insertValues).not.toHaveBeenCalled();
+  });
+
+  it("returns null for a file storage no longer has", async () => {
+    credsOk();
+    fetchMock.mockResolvedValue(new Response("", { status: 404 }));
+    await expect(downloadStoredDocument("pid-1", "jpg")).resolves.toBeNull();
+  });
+
+  it("throws a storage error for any other failure, and never fetches without credentials", async () => {
+    credsOk();
+    fetchMock.mockResolvedValue(new Response("", { status: 500 }));
+    await expect(downloadStoredDocument("pid-1", "jpg")).rejects.toMatchObject({ code: "STORAGE_UNAVAILABLE" });
+    fetchMock.mockClear();
+    credsMissing();
+    await expect(downloadStoredDocument("pid-1", "jpg")).rejects.toMatchObject({ status: 503 });
+    expect(fetchMock).not.toHaveBeenCalled();
   });
 });
 
