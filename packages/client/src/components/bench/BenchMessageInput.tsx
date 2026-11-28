@@ -6,6 +6,7 @@
 import { useState, useRef, useEffect } from "react";
 import { Send } from "lucide-react";
 import type { PresenceUser } from "../../hooks/useBenchPresence.js";
+import type { RefusedPost } from "../../hooks/useBenchMessages.js";
 
 interface BenchMessageInputProps {
   onSend: (body: string) => void;
@@ -14,14 +15,24 @@ interface BenchMessageInputProps {
   placeholder?: string;
   /** Online users for @mention autocomplete */
   onlineUsers?: PresenceUser[];
+  /** A post the server refused: put back to be changed. */
+  returned?: RefusedPost | null;
 }
 
-export function BenchMessageInput({ onSend, onTyping, disabled, placeholder, onlineUsers = [] }: BenchMessageInputProps) {
+/** One empty list: a new one each render would re-run the mention effect, which renders again, for ever (a direct message passes none). */
+const NO_ONE: PresenceUser[] = [];
+
+export function BenchMessageInput({ onSend, onTyping, disabled, placeholder, onlineUsers = NO_ONE, returned }: BenchMessageInputProps) {
   const [text, setText] = useState("");
   const [mentionQuery, setMentionQuery] = useState<string | null>(null);
   const [mentionResults, setMentionResults] = useState<PresenceUser[]>([]);
   const [mentionIndex, setMentionIndex] = useState(0);
   const inputRef = useRef<HTMLInputElement>(null);
+
+  // Back in front of whatever was typed since it was sent
+  useEffect(() => {
+    if (returned) setText((now) => (now.trim() ? `${returned.body} ${now}` : returned.body));
+  }, [returned]);
 
   // Detect @mention trigger
   useEffect(() => {
