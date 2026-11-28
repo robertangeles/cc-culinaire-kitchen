@@ -267,7 +267,7 @@ describe("one order", () => {
     await press(await find("Email to supplier"));
     expect(await screen.findByText("Emailed to orders@farms.test.")).toBeTruthy();
     api.email.mockResolvedValue({ emailed: false, to: null, message: "This supplier has no contact email on file." });
-    fireEvent.click(button("Email to supplier"));
+    await press(button("Email to supplier"));
     expect(await screen.findByText("This supplier has no contact email on file.")).toBeTruthy();
   });
 
@@ -294,7 +294,7 @@ describe("one order", () => {
     await press(button("Reorder"));
     await waitFor(() => expect(routerMock.push).toHaveBeenLastCalledWith({ pathname: "/order", params: { poId: "P9", info: "1 item left out: already at or above par." } }));
     api.clone.mockResolvedValue({ poId: "P9", poNumber: "PO-900", skippedItems: [], quantityWarnings: [{ ingredientName: "Rye" }] });
-    fireEvent.click(button("Reorder"));
+    await press(button("Reorder"));
     await waitFor(() => expect(routerMock.push).toHaveBeenLastCalledWith({ pathname: "/order", params: { poId: "P9", info: "Check the quantity of Rye: a unit could not be converted, so the last order's quantity may have been kept." } }));
   });
 });

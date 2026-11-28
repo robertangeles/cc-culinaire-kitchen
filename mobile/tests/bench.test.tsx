@@ -435,8 +435,8 @@ describe("blocked people and reports", () => {
     // Inside act, so Dismiss is enabled again before it is pressed: react-native-web hands it that in an effect.
     await act(async () => press("Hide message"));
     expect(alert).toHaveBeenCalled();
-    expect(api.act).toHaveBeenCalledWith("r1", "hide");
-    expect(api.reports).toHaveBeenCalledTimes(2);
+    await waitFor(() => expect(api.act).toHaveBeenCalledWith("r1", "hide"));
+    await waitFor(() => expect(api.reports).toHaveBeenCalledTimes(2));
     press("Dismiss");
     await waitFor(() => expect(api.act).toHaveBeenLastCalledWith("r1", "dismiss"));
     expect(api.reports.mock.calls.length).toBeGreaterThanOrEqual(3);
