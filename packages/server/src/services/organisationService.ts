@@ -37,7 +37,7 @@ export function shouldGrantOperationsAdminRole(existingRoleIds: number[], opsAdm
  * Additive, never a replacement: an existing Subscriber/Paid Subscriber role
  * is untouched (stripeService.ts reads those for billing).
  */
-async function grantOperationsAdminRole(userId: number): Promise<void> {
+export async function grantOperationsAdminRole(userId: number): Promise<void> {
   const [opsAdminRole] = await db.select().from(role).where(eq(role.roleName, "Operations Admin"));
   // Guarded, not thrown: an environment where db/seed.ts hasn't run yet
   // degrades to today's behaviour instead of failing org creation.

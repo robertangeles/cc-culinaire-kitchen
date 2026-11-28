@@ -1,5 +1,5 @@
 import { describe, it, expect } from "vitest";
-import { assertDemoCredentials, assertDemoSeedAllowed, DEMO_AREAS } from "./seedReviewerDemo.js";
+import { assertDemoSeedAllowed, DEMO_AREAS, DEMO_BENCH_MESSAGES, demoAccountsFrom } from "./seedReviewerDemo.js";
 
 describe("assertDemoSeedAllowed", () => {
   it("refuses a missing DATABASE_URL", () => {
@@ -18,13 +18,30 @@ describe("assertDemoSeedAllowed", () => {
   });
 });
 
-describe("assertDemoCredentials", () => {
-  it("needs an email address and a password of at least 12 characters", () => {
-    expect(() => assertDemoCredentials(undefined, "a-long-enough-password")).toThrow(/EMAIL/);
-    expect(() => assertDemoCredentials("not-an-email", "a-long-enough-password")).toThrow(/EMAIL/);
-    expect(() => assertDemoCredentials("r@x.test", "short")).toThrow(/12 characters/);
-    expect(() => assertDemoCredentials("r@x.test", undefined)).toThrow(/12 characters/);
-    expect(() => assertDemoCredentials("r@x.test", "a-long-enough-password")).not.toThrow();
+describe("demoAccountsFrom", () => {
+  const env = {
+    REVIEWER_DEMO_EMAIL: "r@x.test",
+    REVIEWER_DEMO_PASSWORD: "a-long-enough-password",
+    REVIEWER_DEMO_EMAIL_2: "r2@x.test",
+    REVIEWER_DEMO_PASSWORD_2: "another-long-password",
+  };
+
+  it("reads both accounts", () => {
+    expect(demoAccountsFrom(env)).toEqual([
+      { email: "r@x.test", password: "a-long-enough-password" },
+      { email: "r2@x.test", password: "another-long-password" },
+    ]);
+  });
+
+  it.each(["", "_2"])("needs an email address and a password of at least 12 characters for account %#", (n) => {
+    expect(() => demoAccountsFrom({ ...env, [`REVIEWER_DEMO_EMAIL${n}`]: undefined })).toThrow(`REVIEWER_DEMO_EMAIL${n} must`);
+    expect(() => demoAccountsFrom({ ...env, [`REVIEWER_DEMO_EMAIL${n}`]: "not-an-email" })).toThrow(`REVIEWER_DEMO_EMAIL${n} must`);
+    expect(() => demoAccountsFrom({ ...env, [`REVIEWER_DEMO_PASSWORD${n}`]: "short" })).toThrow(`REVIEWER_DEMO_PASSWORD${n} must be at least 12 characters`);
+    expect(() => demoAccountsFrom({ ...env, [`REVIEWER_DEMO_PASSWORD${n}`]: undefined })).toThrow(`REVIEWER_DEMO_PASSWORD${n} must be at least 12 characters`);
+  });
+
+  it("refuses the same address twice", () => {
+    expect(() => demoAccountsFrom({ ...env, REVIEWER_DEMO_EMAIL_2: "R@x.test" })).toThrow(/must differ/);
   });
 });
 
@@ -35,5 +52,13 @@ describe("the demo kitchen", () => {
     expect(new Set(names).size).toBeLessThan(names.length);
     const valid = ["proteins", "produce", "dairy", "dry_goods", "beverages", "spirits", "frozen", "bakery", "condiments", "other"];
     for (const a of DEMO_AREAS) for (const [, category] of a.items) expect(valid).toContain(category);
+  });
+});
+
+describe("the demo Bench messages", () => {
+  it("are a few short, distinct posts (a rerun tells them apart by their text)", () => {
+    expect(DEMO_BENCH_MESSAGES.length).toBeGreaterThanOrEqual(2);
+    expect(new Set(DEMO_BENCH_MESSAGES).size).toBe(DEMO_BENCH_MESSAGES.length);
+    for (const m of DEMO_BENCH_MESSAGES) expect(m.length).toBeLessThan(120);
   });
 });
