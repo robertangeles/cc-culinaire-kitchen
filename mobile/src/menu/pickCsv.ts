@@ -16,7 +16,7 @@ export async function pickCsv(): Promise<CsvPick> {
   if (picked.canceled) return { kind: "cancelled" };
   const file = picked.result;
   try {
-    if (!/\.csv$/i.test(file.name)) return { kind: "refused", reason: "Pick a .csv file." };
+    // No extension check: Android's picker hands over a content link whose name can be an id ("msf:42"); the mime filter and the server's parse decide.
     if ((file.size ?? 0) > CSV_MAX_BYTES) return { kind: "refused", reason: "That file is over 5 MB. Split it into smaller files." };
     return { kind: "picked", csv: { name: file.name, bytes: await file.bytes() } };
   } catch {

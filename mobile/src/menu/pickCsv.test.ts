@@ -39,9 +39,9 @@ describe("picking a sales CSV", () => {
     expect(picker.deleted).toBe(0);
   });
 
-  it("refuses a file that is not a CSV, one over the server's limit, and one it cannot read, deleting the copy each time", async () => {
-    picker.name = "sales.xlsx";
-    expect(await pickCsv()).toEqual({ kind: "refused", reason: "Pick a .csv file." });
+  it("takes a file whose Android content link has no .csv name, and refuses one over the server's limit or one it cannot read, deleting the copy each time", async () => {
+    Object.assign(picker, { name: "msf:42" });
+    expect((await pickCsv()).kind).toBe("picked");
     Object.assign(picker, { name: "SALES.CSV", size: CSV_MAX_BYTES + 1 });
     expect(await pickCsv()).toMatchObject({ kind: "refused", reason: expect.stringContaining("over 5 MB") });
     Object.assign(picker, { size: null, unreadable: true });

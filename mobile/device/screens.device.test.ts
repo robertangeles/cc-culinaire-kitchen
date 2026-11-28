@@ -1086,6 +1086,7 @@ describe.skipIf(!process.env.SCREENS_OUT)(`screens on ${FORM}`, { timeout: 600_0
     const day = (offset: number) => new Date(Date.now() + offset * 86_400_000).toISOString().slice(0, 10);
     sql(`update menu_item set period_start = '${day(-7)}', period_end = '${day(1)}' where menu_item_id = '${margherita}'`);
     // A CSV in the emulator's Downloads, for the system's document picker.
+    mkdirSync(OUT, { recursive: true });
     const csv = resolve(OUT, "menu-sales.csv");
     writeFileSync(csv, "item,quantity\nMargherita,2\nFocaccia,1\nCalzone,3\n");
     adb(["push", csv, "/sdcard/Download/menu-sales.csv"]);
@@ -1096,7 +1097,7 @@ describe.skipIf(!process.env.SCREENS_OUT)(`screens on ${FORM}`, { timeout: 600_0
     await waitFor("Dozen dinner rolls", 60_000);
     await shot("m10-menu-waste");
     await choose("Dashboard");
-    await waitFor("Top and bottom", 30_000);
+    await waitFor(/^Items analysed/, 30_000);
     await shot("m10b-dashboard");
     await scroll("down");
     await shot("m10c-dashboard-more");
@@ -1110,12 +1111,12 @@ describe.skipIf(!process.env.SCREENS_OUT)(`screens on ${FORM}`, { timeout: 600_0
     await waitFor("Open Margherita", 30_000);
     await shot("m11b-matrix-picked");
     await choose("Open Margherita");
-    await waitFor("Plate P&L", 30_000);
+    await waitFor(/^Price per serving/, 30_000);
     await shot("m12-item-figures");
     await scroll("down");
     await shot("m12b-item-variance");
     await choose("Get recommendations");
-    await waitFor("Suggested menu description", 60_000);
+    await waitFor(/^Made by the fake model/, 60_000); // "Ask again" is below the fold
     await shot("m12c-item-recommendations");
     await choose("Write a replacement recipe");
     await waitFor("What would you like to create?", 30_000);
@@ -1129,7 +1130,7 @@ describe.skipIf(!process.env.SCREENS_OUT)(`screens on ${FORM}`, { timeout: 600_0
     await sleep(4000);
     await shot("m13b-document-picker");
     await tap("menu-sales.csv", 30_000);
-    await waitFor("2 matched", 60_000);
+    await waitFor(/^2 matched/i, 60_000); // a copper capitals label
     await shot("m13c-import-matched");
     await choose("Record 2 sales");
     await waitFor("2 recorded", 60_000);
@@ -1519,8 +1520,9 @@ describe.skipIf(!process.env.SCREENS_OUT)(`screens on ${FORM}`, { timeout: 600_0
       await waitFor("Sale recorded", 30_000);
       await shot("m9c-sale-no-costs");
       await choose("Back");
+      await choose("Back to the menu");
       await choose("Dashboard");
-      await waitFor("Top and bottom", 30_000);
+      await waitFor(/^Items analysed/, 30_000);
       await shot("m9d-dashboard-no-costs");
     } finally {
       await asCook.request("DELETE", `/api/organisations/${organisation.organisationId}/leave`).catch(() => {});
