@@ -17,10 +17,10 @@ import { listAreas } from "../services/storageAreaService.js";
 import { deleteOwnAccount } from "../services/accountDeletionService.js";
 import { getMembership } from "../services/organisationService.js";
 import { getChannelByKey, getMessages, getUserChannels } from "../services/benchService.js";
-import { DEMO_AREAS, DEMO_BENCH_MESSAGES, seedReviewerDemo } from "./seedReviewerDemo.js";
+import { DEMO_AREAS, DEMO_BENCH_MESSAGES, DEMO_FIRST_BENCH_MESSAGES, seedReviewerDemo } from "./seedReviewerDemo.js";
 
 /**
- * The reviewer can sign in and count straight away, sees the second account's Bench messages, a second run changes nothing,
+ * The reviewer can sign in and count straight away, each sees the other's Bench messages, a second run changes nothing,
  * and a deleted account comes back in the same kitchen. Gated on TENANT_IT=1 like the other real-DB suites.
  */
 const RUN = process.env.TENANT_IT === "1";
@@ -99,7 +99,7 @@ describe.skipIf(!RUN)("seedReviewerDemo (real DB)", { timeout: 120_000 }, () => 
     expect(me?.permissions).toContain("inventory:count");
   });
 
-  it("puts both accounts in the kitchen and its Bench room, neither a moderator, with the second account's messages for the first to see", async () => {
+  it("puts both accounts in the kitchen and its Bench room, neither a moderator, each seeing the other's messages", async () => {
     for (const id of [userId, secondUserId]) {
       expect((await getUserWithRolesAndPermissions(id))?.permissions).not.toContain("bench:moderate");
       expect((await getUserChannels(id)).map((c) => c.channelKey)).toContain(`org_${orgId}`);
@@ -107,9 +107,13 @@ describe.skipIf(!RUN)("seedReviewerDemo (real DB)", { timeout: 120_000 }, () => 
     }
     const members = await db.select().from(userOrganisation).where(eq(userOrganisation.organisationId, orgId));
     expect(members.map((m) => [m.userId, m.role]).sort()).toEqual([[userId, "admin"], [secondUserId, "admin"]].sort());
-    expect((await benchAs(userId)).sort((a, b) => a.body.localeCompare(b.body))).toEqual(
-      [...DEMO_BENCH_MESSAGES].sort().map((body) => ({ userId: secondUserId, body })),
-    );
+    const expected = [
+      ...DEMO_FIRST_BENCH_MESSAGES.map((body) => ({ userId, body })),
+      ...DEMO_BENCH_MESSAGES.map((body) => ({ userId: secondUserId, body })),
+    ].sort((a, b) => a.body.localeCompare(b.body));
+    for (const viewer of [userId, secondUserId]) {
+      expect((await benchAs(viewer)).sort((a, b) => a.body.localeCompare(b.body))).toEqual(expected);
+    }
   });
 
   it("a second run reuses everything: two users, one organisation, one location, one open stock take, no new messages", async () => {
@@ -123,7 +127,7 @@ describe.skipIf(!RUN)("seedReviewerDemo (real DB)", { timeout: 120_000 }, () => 
     expect(await db.select().from(userOrganisation).where(eq(userOrganisation.organisationId, orgId))).toHaveLength(2);
     expect(await db.select().from(storeLocation).where(eq(storeLocation.organisationId, orgId))).toHaveLength(1);
     expect((await listAreas(out.storeLocationId, orgId)).filter((a) => a.itemCount > 0)).toHaveLength(3);
-    expect(await benchAs(userId)).toHaveLength(DEMO_BENCH_MESSAGES.length);
+    expect(await benchAs(userId)).toHaveLength(DEMO_FIRST_BENCH_MESSAGES.length + DEMO_BENCH_MESSAGES.length);
   });
 
   it("the reviewer can delete the first account, and a rerun brings it back in the same kitchen, still able to approve", async () => {
@@ -134,13 +138,14 @@ describe.skipIf(!RUN)("seedReviewerDemo (real DB)", { timeout: 120_000 }, () => 
     expect(out.secondUserId).toBe(secondUserId);
     expect(out.organisationId).toBe(orgId);
     expect(out.locationsSeenByPhone).toBe(1);
-    expect(out.benchMessagesPosted).toBe(0);
+    expect(out.benchMessagesPosted).toBe(DEMO_FIRST_BENCH_MESSAGES.length);
     userId = out.userId;
     expect((await getMembership(userId, orgId))?.role).toBe("admin");
     const me = await getUserWithRolesAndPermissions(userId);
     expect(me?.permissions).toContain("purchasing:approve");
     expect(me?.permissions).not.toContain("bench:moderate");
-    expect(await benchAs(userId)).toHaveLength(DEMO_BENCH_MESSAGES.length);
+    expect((await benchAs(userId)).filter((m) => m.userId === secondUserId)).toHaveLength(DEMO_BENCH_MESSAGES.length);
+    expect((await benchAs(secondUserId)).filter((m) => m.userId === userId)).toHaveLength(DEMO_FIRST_BENCH_MESSAGES.length);
   });
 
   it("the reviewer can delete the second account, and a rerun brings it back with its messages", async () => {
@@ -152,5 +157,6 @@ describe.skipIf(!RUN)("seedReviewerDemo (real DB)", { timeout: 120_000 }, () => 
     expect(out.benchMessagesPosted).toBe(DEMO_BENCH_MESSAGES.length);
     secondUserId = out.secondUserId;
     expect((await benchAs(userId)).filter((m) => m.userId === secondUserId)).toHaveLength(DEMO_BENCH_MESSAGES.length);
+    expect((await benchAs(secondUserId)).filter((m) => m.userId === userId)).toHaveLength(DEMO_FIRST_BENCH_MESSAGES.length);
   });
 });

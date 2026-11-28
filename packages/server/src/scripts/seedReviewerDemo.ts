@@ -3,8 +3,8 @@
  *
  * The App Store and Google Play reviewer's accounts: two verified users with a password, no MFA, both admins of a small
  * organisation of their own with one location, three storage areas holding eleven items (butter is in two areas), and a stock take open by
- * area, so the reviewer can sign in on the phone and count straight away. The second account has a few messages in the kitchen's
- * Bench room, so the first has a message to report and a person to block. Neither holds bench:moderate. Owner-run. Safe to run
+ * area, so the reviewer can sign in on the phone and count straight away. Both accounts have messages in the kitchen's Bench
+ * room, so whichever one the reviewer signs in with has a message to report and a person to block. Neither holds bench:moderate. Owner-run. Safe to run
  * again: it reuses what exists and only adds what is missing (if the reviewer deleted an account, as Apple's review does, it
  * makes a new one in the same kitchen).
  *
@@ -53,6 +53,9 @@ export const DEMO_AREAS: Array<{ area: string; items: Array<[string, string, str
   { area: "Cool Room", items: [["Butter", "dairy", "kg", "11.50"], ["Cream", "dairy", "L", "5.20"], ["Free-range eggs", "dairy", "dozen", "6.40"], ["Chicken thigh", "proteins", "kg", "9.80"]] },
   { area: "Freezer", items: [["Butter", "dairy", "kg", "11.50"], ["Frozen peas", "frozen", "kg", "3.10"], ["Vanilla ice cream", "frozen", "L", "7.60"], ["King prawns", "frozen", "kg", "24.00"]] },
 ];
+
+/** Made up and harmless: the first account's post in the kitchen's Bench room, for the reviewer on the second account to report or block. */
+export const DEMO_FIRST_BENCH_MESSAGES = ["Welcome to the demo kitchen. Stock counts are open by area today."];
 
 /** Made up and harmless: the second account's posts in the kitchen's Bench room, for the reviewer to report or block. */
 export const DEMO_BENCH_MESSAGES = [
@@ -160,15 +163,17 @@ export async function seedReviewerDemo(firstAccount: DemoAccount, secondAccount:
 
   // The kitchen's Bench room is open to its members; a message the reviewer deleted is posted again.
   const room = await getOrCreateOrgChannel(organisationId, org.organisationName);
-  const posted = await db
-    .select({ body: benchMessage.messageBody })
-    .from(benchMessage)
-    .where(and(eq(benchMessage.channelId, room.channelId), eq(benchMessage.userId, secondUserId), eq(benchMessage.deletedInd, false)));
   let benchMessagesPosted = 0;
-  for (const body of DEMO_BENCH_MESSAGES) {
-    if (posted.some((p) => p.body === body)) continue;
-    await createMessage(room.channelId, secondUserId, body);
-    benchMessagesPosted++;
+  for (const [authorId, messages] of [[userId, DEMO_FIRST_BENCH_MESSAGES], [secondUserId, DEMO_BENCH_MESSAGES]] as const) {
+    const posted = await db
+      .select({ body: benchMessage.messageBody })
+      .from(benchMessage)
+      .where(and(eq(benchMessage.channelId, room.channelId), eq(benchMessage.userId, authorId), eq(benchMessage.deletedInd, false)));
+    for (const body of messages) {
+      if (posted.some((p) => p.body === body)) continue;
+      await createMessage(room.channelId, authorId, body);
+      benchMessagesPosted++;
+    }
   }
 
   const context = await getUserLocationContext(userId);

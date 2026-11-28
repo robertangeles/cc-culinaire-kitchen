@@ -1,5 +1,5 @@
 import { describe, it, expect } from "vitest";
-import { assertDemoSeedAllowed, DEMO_AREAS, DEMO_BENCH_MESSAGES, demoAccountsFrom } from "./seedReviewerDemo.js";
+import { assertDemoSeedAllowed, DEMO_AREAS, DEMO_BENCH_MESSAGES, DEMO_FIRST_BENCH_MESSAGES, demoAccountsFrom } from "./seedReviewerDemo.js";
 
 describe("assertDemoSeedAllowed", () => {
   it("refuses a missing DATABASE_URL", () => {
@@ -57,8 +57,10 @@ describe("the demo kitchen", () => {
 
 describe("the demo Bench messages", () => {
   it("are a few short, distinct posts (a rerun tells them apart by their text)", () => {
+    const all = [...DEMO_FIRST_BENCH_MESSAGES, ...DEMO_BENCH_MESSAGES];
+    expect(DEMO_FIRST_BENCH_MESSAGES.length).toBeGreaterThanOrEqual(1);
     expect(DEMO_BENCH_MESSAGES.length).toBeGreaterThanOrEqual(2);
-    expect(new Set(DEMO_BENCH_MESSAGES).size).toBe(DEMO_BENCH_MESSAGES.length);
-    for (const m of DEMO_BENCH_MESSAGES) expect(m.length).toBeLessThan(120);
+    expect(new Set(all).size).toBe(all.length);
+    for (const m of all) expect(m.length).toBeLessThan(120);
   });
 });

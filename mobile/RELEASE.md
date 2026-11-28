@@ -77,7 +77,7 @@ Run commands from the repository root. `eas` is the Expo build service; use it t
 
 ## The reviewer demo account
 
-Apple and Google reviewers must sign in without you. The script makes (or finds) two verified accounts with no second step, both admins of their own organisation "CulinAIre Demo Kitchen" with one location, three storage areas of eleven items (butter is in two, so the shared-item marker shows) and a stock take open by area. Both are in the kitchen's Bench room, where the second account ("Demo Cook") has three short made-up messages, so the first has a message to report and a person to block. Neither account is a Bench moderator. It is safe to run again: it adds no second room, account or message; if a reviewer deletes either account (Apple tests this), run it again to restore it in the same kitchen.
+Apple and Google reviewers must sign in without you. The script makes (or finds) two verified accounts with no second step, both admins of their own organisation "CulinAIre Demo Kitchen" with one location, three storage areas of eleven items (butter is in two, so the shared-item marker shows) and a stock take open by area. Both are in the kitchen's Bench room, where each has short made-up messages (the first account "App Review" one, the second "Demo Cook" three), so whichever account the reviewer signs in with has a message to report and a person to block. Neither account is a Bench moderator. It is safe to run again: it adds no second room, account or message; if a reviewer deletes either account (Apple tests this), run it again to restore it in the same kitchen.
 
 ```bash
 # Local first, to see it work (a local database needs no confirmation):
@@ -100,7 +100,7 @@ The script prints the host before it writes anything and never prints the passwo
 >
 > Second demo account, in the same kitchen: <second email> / <second password>
 >
-> The Bench (team chat): open the Bench (a tab, or under More) and the room "CulinAIre Demo Kitchen". To report a message, tap one of Demo Cook's messages, then Report, choose a reason and send. To block a person, tap one of their messages and choose Block, or open a direct message with them (Message Demo Cook in the same menu) and use Block at the top. Blocked people, on the Bench's first screen, lists the people you blocked and lets you unblock them. A moderator account is available on request.
+> The Bench (team chat): open the Bench (a tab, or under More) and the room "CulinAIre Demo Kitchen". Either demo account can be used. To report a message, tap one of the other account's messages (Demo Cook's if you are App Review, App Review's if you are Demo Cook), then Report, choose a reason and send. To block a person, tap one of their messages and choose Block, or open a direct message with them (Message in the same menu) and use Block at the top. Blocked people, on the Bench's first screen, lists the people you blocked and lets you unblock them. A moderator account is available on request.
 >
 > Account deletion: Account (a tab, or under More), "Delete my account" (asks for the password). The demo account may be deleted during review; if it is, please contact us and we will restore it.
 >
