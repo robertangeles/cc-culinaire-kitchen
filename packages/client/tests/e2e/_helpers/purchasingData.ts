@@ -170,6 +170,8 @@ export async function seedPurchaseOrders(api: APIRequestContext, defer: Defer) {
   // The receiving test moves its order to RECEIVING, so it gets its own SENT order.
   const sentToReceive = await createPo("sent-to-receive", "1");
   await submit(sentToReceive);
+  const sentForExtras = await createPo("sent-for-extras", "1");
+  await submit(sentForExtras);
 
-  return { ...catalog, pos: { draft, pending, sent, sentToReceive } };
+  return { ...catalog, pos: { draft, pending, sent, sentToReceive, sentForExtras } };
 }

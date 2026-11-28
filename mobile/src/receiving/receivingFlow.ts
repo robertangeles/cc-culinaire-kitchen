@@ -3,7 +3,9 @@
  * server enforces (SHORT needs a quantity below the order, a price change needs the price) so the
  * phone says so before the round trip; the server stays the authority.
  */
+import { expiryDateProblem, formatAuDateShort, receivingText, receivingTextProblem } from "@culinaire/shared";
 import { ApiError } from "../api/client";
+import { parseTypedDate } from "../ui/typedDate";
 
 export type LineStatus = "RECEIVED" | "SHORT" | "REJECTED" | "PRICE_VARIANCE" | "SUBSTITUTED";
 export type RejectionReason = "quality" | "damaged" | "temperature" | "expired" | "other";
@@ -41,6 +43,9 @@ export interface ReceivingLine {
   receivedQty: string;
   actualUnitCost: string | null;
   status: LineStatus;
+  /** "YYYY-MM-DD"; absent from a server older than the receiving extras. */
+  expiryDate?: string | null;
+  lotNumber?: string | null;
 }
 
 export interface LineInput {
@@ -49,6 +54,12 @@ export interface LineInput {
   actualUnitCost?: string;
   rejectionReason?: RejectionReason;
   rejectionNote?: string;
+}
+
+/** Sent with no status: the server changes only these two and leaves the line's status and issue alone. Null clears. */
+export interface DetailsInput {
+  expiryDate: string | null;
+  lotNumber: string | null;
 }
 
 /** "5.0000" -> "5", "2.50" -> "2.5": the server sends numerics as strings with trailing zeros. */
@@ -86,6 +97,8 @@ export function lineSummary(line: ReceivingLine, orderUnitCost: string | null): 
     arrived,
     repriced ? `price now ${formatMoney(price)}/${line.orderedUnit}` : null,
     line.status === "SUBSTITUTED" ? "substituted" : null,
+    line.expiryDate ? `use by ${formatAuDateShort(line.expiryDate)}` : null,
+    line.lotNumber ? `lot ${line.lotNumber}` : null,
   ]
     .filter(Boolean)
     .join(", ");
@@ -117,6 +130,18 @@ export function priceInput(entry: string): Checked<LineInput> {
   const price = Number(entry);
   if (entry === "" || !Number.isFinite(price)) return { ok: false, message: "Enter the price charged." };
   return { ok: true, value: { status: "PRICE_VARIANCE", actualUnitCost: String(price) } };
+}
+
+/** The expiry as typed on the number pad (DD/MM/YYYY, blank for none) and the lot, checked by the server's own rules. */
+export function detailsInput(typedExpiry: string, lot: string, receivedAt: string, lineStatus: string): Checked<DetailsInput> {
+  let expiryDate: string | null = null;
+  if (typedExpiry.trim() !== "") {
+    expiryDate = parseTypedDate(typedExpiry);
+    if (!expiryDate) return { ok: false, message: "Enter the expiry date as DD/MM/YYYY." };
+  }
+  const problem = (expiryDate ? expiryDateProblem(expiryDate, receivedAt, lineStatus) : null) ?? receivingTextProblem("lot", lot);
+  if (problem) return { ok: false, message: problem.message };
+  return { ok: true, value: { expiryDate, lotNumber: receivingText(lot) } };
 }
 
 export const rejectInput = (reason: RejectionReason, note: string): LineInput => ({

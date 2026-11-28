@@ -3,6 +3,7 @@ import { ApiError } from "../api/client";
 import {
   allGood,
   confirmedMessage,
+  detailsInput,
   expectedLabel,
   failureMessage,
   finishedElsewhere,
@@ -26,6 +27,30 @@ const line = (over: Partial<ReceivingLine> = {}): ReceivingLine => ({
   actualUnitCost: "2.0000",
   status: "RECEIVED",
   ...over,
+});
+
+describe("expiry and lot", () => {
+  const receivedAt = "2026-11-28T03:00:00.000Z";
+  it("turns the typed day into the server's form and trims the lot", () => {
+    expect(detailsInput("05/12/2026", " L-42 ", receivedAt, "RECEIVED")).toEqual({ ok: true, value: { expiryDate: "2026-12-05", lotNumber: "L-42" } });
+  });
+  it("sends null for both when blank, which clears them", () => {
+    expect(detailsInput("", "  ", receivedAt, "RECEIVED")).toEqual({ ok: true, value: { expiryDate: null, lotNumber: null } });
+  });
+  it.each([["31/02/2026", "Enter the expiry date as DD/MM/YYYY."], ["05/12", "Enter the expiry date as DD/MM/YYYY."], ["01/11/2026", "The expiry date has passed. Clear it to accept this line, or keep the line rejected."], ["01/01/2040", "The expiry date must be within 10 years of the delivery."]])(
+    "refuses %s: %s",
+    (typed, message) => expect(detailsInput(typed, "", receivedAt, "RECEIVED")).toEqual({ ok: false, message }),
+  );
+  it("takes a past expiry on a rejected line, and still refuses it on a short one", () => {
+    expect(detailsInput("01/11/2026", "", receivedAt, "REJECTED")).toEqual({ ok: true, value: { expiryDate: "2026-11-01", lotNumber: null } });
+    expect(detailsInput("01/11/2026", "", receivedAt, "SHORT")).toEqual({ ok: false, message: "The expiry date has passed. Clear it to accept this line, or keep the line rejected." });
+  });
+  it("refuses a lot longer than 50 characters", () => {
+    expect(detailsInput("", "L".repeat(51), receivedAt, "RECEIVED")).toMatchObject({ ok: false, message: "A lot number is at most 50 characters." });
+  });
+  it("shows them in the line's summary", () => {
+    expect(lineSummary(line({ expiryDate: "2026-12-05", lotNumber: "L-42" }), "2")).toBe("5 kg, use by 05/12/2026, lot L-42");
+  });
 });
 
 describe("formatQty", () => {

@@ -87,6 +87,19 @@ test.describe("Purchasing & Receiving v1", () => {
     await expect(page.getByText(/Receiving:/i).first()).toBeVisible();
   });
 
+  test("Receiving records a line's expiry date and lot number, and offers the docket number", async ({ page }) => {
+    const row = await expandRow(page, seed.pos.sentForExtras.id);
+    await row.getByRole("button", { name: "Receive Delivery" }).click({ timeout: 10_000 });
+
+    await page.getByRole("button", { name: "Expiry & Lot" }).first().click({ timeout: 15_000 });
+    const expiry = new Date(Date.now() + 14 * 86_400_000).toISOString().slice(0, 10);
+    await page.getByLabel("Expiry date").fill(expiry);
+    await page.getByLabel("Lot number").fill("L-4471");
+    await page.getByRole("button", { name: "Save Expiry & Lot" }).click();
+    await expect(page.getByText("· Lot L-4471")).toBeVisible({ timeout: 15_000 });
+    await expect(page.getByLabel("Supplier docket number")).toBeVisible();
+  });
+
   test('"Sent" status filter narrows the list', async ({ page }) => {
     const { draft, pending, sent } = seed.pos;
     // Exact name: the order cards' buttons have long names and cannot match.

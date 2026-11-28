@@ -98,7 +98,24 @@ describe.skipIf(!process.env.CI && (!email || !password || !totpSecret))("receiv
     expect(await stockOf(flourId)).toBe(before + 3);
   });
 
-  it("refuses a short quantity that is not short, with a code, and writes nothing", async () => {
+  it("records an expiry date and lot number on a line and the docket number at confirm; a second phone sees the line's", async () => {
+    const poId = await sentOrder([{ ingredientId: flourId, qty: "3", cost: "2" }]);
+    const started = await receiving.startSession(poId, locationId);
+    const line = started.lines[0];
+    const expiry = new Date(Date.now() + 7 * 86_400_000).toISOString().slice(0, 10);
+    const saved = await receiving.actionLine(started.session.sessionId, line.receivingLineId, { expiryDate: expiry, lotNumber: "L-42" });
+    expect(saved).toMatchObject({ status: "RECEIVED", expiryDate: expiry, lotNumber: "L-42" });
+
+    const resumed = await receiving.startSession(poId, locationId);
+    expect(resumed.lines[0]).toMatchObject({ expiryDate: expiry, lotNumber: "L-42" });
+    await expect(receiving.actionLine(started.session.sessionId, line.receivingLineId, { expiryDate: "2001-01-01", lotNumber: null })).rejects.toMatchObject({
+      body: { code: "EXPIRY_DATE_OUT_OF_RANGE" },
+    });
+
+    expect(await receiving.confirm(started.session.sessionId, "D-900")).toMatchObject({ poStatus: "RECEIVED", docketNumber: "D-900" });
+  });
+
+    it("refuses a short quantity that is not short, with a code, and writes nothing", async () => {
     const poId = await sentOrder([{ ingredientId: flourId, qty: "6", cost: "2" }]);
     const started = await receiving.startSession(poId, locationId);
     const line = started.lines[0];

@@ -13,6 +13,15 @@ Server, web, phone and shared. No migration, no new permission, no new dependenc
 - **The list lives in the `site_setting` table** under `bench.blocked_terms` (one term per line), read with a cache of at most 60 seconds. An empty or missing list filters nothing and logs a warning, so nothing is refused until the owner adds terms by hand. The list is not in the repository; the server never logs message text or the matched term.
 - **The sender sees "This message can't be posted."** (a new machine-readable code in `ApiErrorBody` and the socket error event). The web and the phone keep the draft in the composer for editing and never mark it sent.
 
+### Added (receiving: expiry date, lot number and supplier docket number)
+
+Server, web, phone and shared. **Migration `0010_receiving_extras` must be applied before this server version deploys** (it adds four nullable columns; the server reads them on every receiving and FIFO batch query). No new permission, no new dependency.
+
+- **Expiry date and lot number per delivery line**, on the web checklist ("Expiry & Lot") and on the phone ("Expiry and lot"). They are carried into the line's FIFO batch when the delivery is confirmed, and a second phone resuming the delivery sees them.
+- **Supplier docket number per delivery**, typed above Confirm on both and stored on the receiving session at confirm.
+- **The rules are shared** (`utils/receivingExtras.ts`): an expiry is a real day, not before the delivery day on a line that is taken in (one day of slack for kitchens east of UTC; a rejected line may carry any past day, as the evidence it arrived expired) and at most 10 years after it on any line; lot and docket numbers are trimmed, at most 50 characters, blank clears. Refusals answer 400 with `EXPIRY_DATE_INVALID`, `EXPIRY_DATE_OUT_OF_RANGE`, `LOT_NUMBER_TOO_LONG` or `DOCKET_NUMBER_TOO_LONG`.
+- **Installed apps keep working**: `POST .../lines/:lineId` takes the new fields optionally and accepts a body with no `status` (only the expiry and lot change; the line's status and discrepancy stay); a status change that leaves them out keeps them. `POST .../confirm` takes an optional `{ docketNumber }` and still works with no body.
+
 ### Added (a published contact address on the phone and the website)
 
 Web, phone and shared. No server change, no migration, no new dependency.

@@ -1569,3 +1569,9 @@ builds all tables with CHECKs enforcing. Stop it again when done.
 - **Problem**: In a fresh worktree a `documentStorageService` test about photo cleaning failed with nothing changed in the server: the server resolves `@culinaire/shared` through its `main`, `dist/`, and that `dist/` was built before the latest `photoMetadata.ts` change on `main`.
 - **Fix**: `pnpm --filter @culinaire/shared build`, then the test passed.
 - **Rule**: After pulling `main` or changing `packages/shared`, build it before running server tests; a server failure in code that comes from shared is a stale `dist/` until shown otherwise.
+
+## 2026-11-28 — A field added to a status action cannot be saved by sending the status again
+
+- **Problem**: Receiving's line action rebuilds the line's discrepancy on every call (a bare `REJECTED` resets the reason to "other", `SUBSTITUTED` loses the substitute, `RECEIVED` puts back the ordered quantity and price). Saving a new expiry or lot by re-sending the line's current status would have quietly rewritten the issue the chef recorded.
+- **Fix**: The status became optional: a body with only the expiry and lot changes those two columns and nothing else, and a status change that leaves them out keeps them, so installed apps never wipe them.
+- **Rule**: Before adding a field to a route that runs side effects per call, check what a repeat call with the same status does; give the new field a path that runs none of them.

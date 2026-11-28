@@ -40,8 +40,9 @@ const StartSessionSchema = z.object({
   storeLocationId: z.string().uuid(),
 });
 
+// The status is left out when only the expiry date or lot number changes (the service checks their values).
 const ActionLineSchema = z.object({
-  status: z.enum(["RECEIVED", "SHORT", "REJECTED", "PRICE_VARIANCE", "SUBSTITUTED"]),
+  status: z.enum(["RECEIVED", "SHORT", "REJECTED", "PRICE_VARIANCE", "SUBSTITUTED"]).optional(),
   receivedQty: z.string().refine(
     (v) => v.trim() !== "" && !isNaN(Number(v)) && Number(v) >= 0, "Must be a non-negative number",
   ).optional(),
@@ -51,6 +52,16 @@ const ActionLineSchema = z.object({
   rejectionReason: z.enum(["quality", "damaged", "temperature", "expired", "other"]).optional(),
   rejectionNote: z.string().max(500).optional(),
   substitutedIngredientId: z.string().uuid().optional(),
+  expiryDate: z.string().nullable().optional(),
+  lotNumber: z.string().nullable().optional(),
+}).refine(
+  (b) => b.status !== undefined || b.expiryDate !== undefined || b.lotNumber !== undefined,
+  "Send a status, an expiry date or a lot number",
+);
+
+// Older apps confirm with no body at all.
+const ConfirmReceiptSchema = z.object({
+  docketNumber: z.string().nullable().optional(),
 });
 
 const CreateCreditNoteSchema = z.object({
@@ -142,7 +153,7 @@ export async function handleActionLine(
 
     const parsed = ActionLineSchema.safeParse(req.body);
     if (!parsed.success) {
-      res.status(400).json({ error: "Validation failed", details: parsed.error.flatten() });
+      res.status(400).json({ error: "Validation failed", code: "VALIDATION", details: parsed.error.flatten() });
       return;
     }
 
@@ -169,8 +180,14 @@ export async function handleConfirmReceipt(
     if (orgId === null) return;
 
     const sessionId = req.params.sessionId as string;
+    const parsed = ConfirmReceiptSchema.safeParse(req.body ?? {});
+    if (!parsed.success) {
+      res.status(400).json({ error: "Validation failed", code: "VALIDATION", details: parsed.error.flatten() });
+      return;
+    }
+
     await assertSessionAccess(req, sessionId, orgId);
-    const result = await receivingService.confirmReceipt(sessionId, orgId, req.user!.sub);
+    const result = await receivingService.confirmReceipt(sessionId, orgId, req.user!.sub, parsed.data);
 
     logger.info({ sessionId, poStatus: result.poStatus }, "Receipt confirmed");
     res.json(result);

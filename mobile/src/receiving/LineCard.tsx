@@ -1,4 +1,5 @@
 import { useEffect, useState } from "react";
+import { RECEIVING_TEXT_MAX, formatAuDate } from "@culinaire/shared";
 import { Pressable, View } from "react-native";
 import { Button } from "../ui/Button";
 import { Keypad } from "../ui/Keypad";
@@ -8,10 +9,12 @@ import { TextField } from "../ui/TextField";
 import { fontFamily, fontSize, size, space } from "../theme";
 import { useColors } from "../ui/theme";
 import { limitMessage, press, type Key } from "../count/keypad";
+import { maskDate, parseTypedDate, typedDate } from "../ui/typedDate";
 import {
   REJECTION_REASONS,
   STATUS_LABEL,
   allGood,
+  detailsInput,
   formatMoney,
   formatQty,
   isShort,
@@ -19,12 +22,13 @@ import {
   priceInput,
   rejectInput,
   shortInput,
+  type DetailsInput,
   type LineInput,
   type ReceivingLine,
   type RejectionReason,
 } from "./receivingFlow";
 
-type Panel = "short" | "price" | "reject" | null;
+type Panel = "short" | "price" | "reject" | "details" | null;
 
 interface Props {
   line: ReceivingLine;
@@ -32,26 +36,30 @@ interface Props {
   orderUnitCost: string | null;
   open: boolean;
   saving: boolean;
+  /** When receiving started (the session's startedAt): an expiry may not be before that day. */
+  receivedAt: string;
   /** The server's reason the last change was refused, shown under the line. */
   error?: string;
   onToggle: () => void;
   /** True while a keypad or reject panel is open, so the screen can hide Confirm and nothing is confirmed by a stray tap. */
   onPanel?: (active: boolean) => void;
   /** Resolves true when the server accepted the change. */
-  onSubmit: (input: LineInput) => Promise<boolean>;
+  onSubmit: (input: LineInput | DetailsInput) => Promise<boolean>;
 }
 
 /**
  * One delivery line: collapsed it is a name and one fact (a perfect delivery needs no taps on it);
  * opened it offers the four things a chef can say about it. Every number goes through the count keypad.
  */
-export function LineCard({ line, orderUnitCost, open, saving, error, onToggle, onPanel, onSubmit }: Props) {
+export function LineCard({ line, orderUnitCost, open, saving, receivedAt, error, onToggle, onPanel, onSubmit }: Props) {
   const c = useColors();
   const [panel, setPanel] = useState<Panel>(null);
   const [entry, setEntry] = useState("");
   const [hint, setHint] = useState<string | null>(null);
   const [reason, setReason] = useState<RejectionReason>("quality");
   const [note, setNote] = useState("");
+  const [expiry, setExpiry] = useState("");
+  const [lot, setLot] = useState("");
 
   const close = () => {
     setPanel(null);
@@ -59,13 +67,19 @@ export function LineCard({ line, orderUnitCost, open, saving, error, onToggle, o
     setHint(null);
     setNote("");
   };
-  const send = async (input: LineInput) => {
+  const openDetails = () => {
+    setExpiry(typedDate(line.expiryDate));
+    setLot(line.lotNumber ?? "");
+    setHint(null);
+    setPanel("details");
+  };
+  const send = async (input: LineInput | DetailsInput) => {
     if (await onSubmit(input)) {
       close();
       onToggle();
     }
   };
-  const submitChecked = (checked: ReturnType<typeof shortInput>) => {
+  const submitChecked = (checked: ReturnType<typeof shortInput> | ReturnType<typeof detailsInput>) => {
     if (!checked.ok) return setHint(checked.message);
     void send(checked.value);
   };
@@ -110,6 +124,21 @@ export function LineCard({ line, orderUnitCost, open, saving, error, onToggle, o
             <View style={{ flex: 1 }}><Button label="Wrong price" kind="ghost" disabled={saving} onPress={() => setPanel("price")} /></View>
             <View style={{ flex: 1 }}><Button label="Reject" kind="ghost" disabled={saving} onPress={() => setPanel("reject")} /></View>
           </View>
+          <Button label="Expiry and lot" kind="ghost" disabled={saving} onPress={openDetails} />
+        </View>
+      ) : null}
+
+      {open && panel === "details" ? (
+        <View style={{ padding: space.lg, paddingTop: 0, gap: space.md }}>
+          <View style={{ gap: space.xs }}>
+            <TextField label="Expiry date" value={expiry} onChangeText={(t) => setExpiry(maskDate(t))} keyboardType="number-pad" placeholder="DD/MM/YYYY" maxLength={10} />
+            {/* The day in words: 08/07 read the wrong way round is a month out. */}
+            {parseTypedDate(expiry) ? <Text variant="meta">{formatAuDate(parseTypedDate(expiry)!)}</Text> : null}
+          </View>
+          <TextField label="Lot number" value={lot} onChangeText={setLot} maxLength={RECEIVING_TEXT_MAX} autoCapitalize="characters" autoCorrect={false} />
+          {hint ? <Text variant="error" accessibilityLiveRegion="polite">{hint}</Text> : null}
+          <Button label={saving ? "Saving…" : "Save expiry and lot"} disabled={saving} onPress={() => submitChecked(detailsInput(expiry, lot, receivedAt, line.status))} />
+          <Button kind="quiet" label="Back" onPress={close} />
         </View>
       ) : null}
 

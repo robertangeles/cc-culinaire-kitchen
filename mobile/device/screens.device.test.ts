@@ -710,7 +710,7 @@ describe.skipIf(!process.env.SCREENS_OUT)(`screens on ${FORM}`, { timeout: 600_0
     await shot("14b-count-attention");
   });
 
-  it("receive: queue, checklist, short, wrong price, reject, a shortfall", async () => {
+  it("receive: queue, checklist, short, expiry and lot, wrong price, reject, docket, a shortfall", async () => {
     await signedIn();
     const supplier = (name: string) => m.client.request<{ supplierId: string }>("POST", `${INV}/suppliers`, { body: { supplierName: name, contactPhone: "0400 111 222" } });
     const produce = (await supplier(NAMES.supplier)).supplierId;
@@ -738,6 +738,15 @@ describe.skipIf(!process.env.SCREENS_OUT)(`screens on ${FORM}`, { timeout: 600_0
     await shot("92c-receive-short");
     await tap("Mark short");
     await waitFor(new RegExp(`^${NAMES.salt}, Short: 7 of 10 kg`), 30_000);
+    await tap(new RegExp(`^${NAMES.salt}, Short: 7 of 10 kg`));
+    await tap("Expiry and lot");
+    const [y, mo, d] = dayFromNow(21).split("-");
+    await type("Expiry date", `${d}/${mo}/${y}`);
+    await type("Lot number", "L-4471");
+    await hideKeyboard();
+    await shot("92f-receive-expiry-lot");
+    await press("Save expiry and lot");
+    await waitFor(new RegExp(`^${NAMES.salt}, Short: 7 of 10 kg, use by .*, lot L-4471`), 30_000);
     await tap(new RegExp(`^${NAMES.long}, 4 kg, Received`));
     await tap("Wrong price");
     await waitFor("Save price");
@@ -752,6 +761,9 @@ describe.skipIf(!process.env.SCREENS_OUT)(`screens on ${FORM}`, { timeout: 600_0
     await tap("Reject item");
     await waitFor(new RegExp(`^${NAMES.lamb}, Rejected`), 30_000);
     await shot("93-receive-issues");
+    await type("Supplier docket number", "D-20931");
+    await hideKeyboard();
+    await shot("93c-receive-docket");
     await tap("Back to deliveries");
     await waitFor(mixed, 30_000);
     await sleep(1500);

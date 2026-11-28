@@ -23,6 +23,8 @@ export interface CreateBatchParams {
   arrivalDate?: Date;
   /** Expiry date if applicable */
   expiryDate?: Date | null;
+  /** The supplier's lot, from the receiving line */
+  lotNumber?: string | null;
 }
 
 /**
@@ -42,6 +44,7 @@ export async function createBatch(params: CreateBatchParams, tx: DbOrTx = db) {
     sourceTransferId,
     arrivalDate = new Date(),
     expiryDate,
+    lotNumber,
   } = params;
 
   const costValue = unitCost != null ? String(unitCost) : undefined;
@@ -58,6 +61,7 @@ export async function createBatch(params: CreateBatchParams, tx: DbOrTx = db) {
       sourcePoLineId: sourcePoLineId ?? undefined,
       sourceTransferId: sourceTransferId ?? undefined,
       expiryDate: expiryDate ?? undefined,
+      lotNumber: lotNumber ?? undefined,
       isDepleted: false,
     })
     .returning();

@@ -2546,6 +2546,8 @@ export const fifoBatch = pgTable(
     sourcePoLineId: uuid("source_po_line_id").references(() => purchaseOrderLine.lineId),
     sourceTransferId: uuid("source_transfer_id"),
     expiryDate: timestamp("expiry_date", { withTimezone: true }),
+    /** The supplier's lot, from the receiving line (migration 0010). */
+    lotNumber: varchar("lot_number", { length: 50 }),
     isDepleted: boolean("is_depleted").notNull().default(false),
     createdDttm: timestamp("created_dttm", { withTimezone: true }).defaultNow().notNull(),
     updatedDttm: timestamp("updated_dttm", { withTimezone: true }).defaultNow().notNull(),
@@ -2645,6 +2647,8 @@ export const receivingSession = pgTable(
     startedAt: timestamp("started_at", { withTimezone: true }).defaultNow().notNull(),
     completedAt: timestamp("completed_at", { withTimezone: true }),
     notes: text("notes"),
+    /** The supplier's delivery docket number, recorded at confirm (migration 0010). */
+    docketNumber: varchar("docket_number", { length: 50 }),
     createdDttm: timestamp("created_dttm", { withTimezone: true }).defaultNow().notNull(),
     updatedDttm: timestamp("updated_dttm", { withTimezone: true }).defaultNow().notNull(),
   },
@@ -2681,6 +2685,9 @@ export const receivingLine = pgTable(
     receivedQty: numeric("received_qty").notNull(),
     actualUnitCost: numeric("actual_unit_cost"),
     status: varchar("status", { length: 20 }).notNull().default("RECEIVED"),
+    /** Use-by day printed on the goods, and the supplier's lot; both carried into the FIFO batch on confirm (migration 0010). */
+    expiryDate: date("expiry_date"),
+    lotNumber: varchar("lot_number", { length: 50 }),
     createdDttm: timestamp("created_dttm", { withTimezone: true }).defaultNow().notNull(),
     updatedDttm: timestamp("updated_dttm", { withTimezone: true }).defaultNow().notNull(),
   },
