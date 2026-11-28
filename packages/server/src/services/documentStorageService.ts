@@ -276,6 +276,24 @@ export async function signedUrlForDocument(params: {
 }
 
 /**
+ * Read a stored document's bytes, for maintenance run by the owner (scripts/cleanStoredPhotoMetadata.ts).
+ * No person is viewing it, so no `document_access_log` row is written. Null when storage no longer has the file.
+ */
+export async function downloadStoredDocument(publicId: string, format: string): Promise<Uint8Array | null> {
+  await requireCloudinary();
+  const url = cloudinary.utils.private_download_url(publicId, format, {
+    expires_at: Math.floor(Date.now() / 1000) + SIGNED_URL_TTL_SECONDS,
+  });
+  const res = await fetch(url);
+  if (res.status === 404) return null;
+  if (!res.ok) {
+    logger.error({ publicId, status: res.status }, "Compliance document download failed");
+    throw new DocumentStorageError("Storage didn't return the file.", 502, "STORAGE_UNAVAILABLE");
+  }
+  return new Uint8Array(await res.arrayBuffer());
+}
+
+/**
  * Destroy the stored object.
  *
  * The retention purge calls this. Deleting the database row alone would strand

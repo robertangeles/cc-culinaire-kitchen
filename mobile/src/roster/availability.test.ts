@@ -3,6 +3,7 @@ import type { Availability } from "@culinaire/shared/schemas/roster";
 import { ApiError } from "../api/client";
 import { UnsureError } from "../api/onlineWrite";
 import { createAvailabilityStore } from "./availabilityStore";
+import { memoryCache } from "../../testing/mocks";
 import { byWeek, datesText, readForm, windowText, type AvailabilityWindow } from "./availabilityView";
 
 const monday: AvailabilityWindow = { storeLocationId: null, dayOfWeek: 1, availableFrom: "09:00", availableUntil: "17:00", effectiveFrom: "2026-11-26", effectiveUntil: null };
@@ -83,5 +84,22 @@ describe("availability is online, and safe to repeat", () => {
       throw new ApiError("not_found", "Availability window not found", 404);
     });
     await expect(t.store.remove("v1")).resolves.toBeUndefined();
+  });
+});
+
+describe("availability saved for a start with no signal", () => {
+  it("keeps the last answer, shows it with its time offline, and drops it when the permission goes", async () => {
+    const cache = memoryCache();
+    const api = { availability: vi.fn(async () => [saved()]), addAvailability: vi.fn(), changeAvailability: vi.fn(), removeAvailability: vi.fn() };
+    await createAvailabilityStore(api, cache).refresh();
+    expect(cache.write).toHaveBeenCalledWith("availability", "1:L1", [saved()]);
+    const offline = createAvailabilityStore(api, cache);
+    api.availability.mockRejectedValueOnce(new ApiError("network"));
+    await offline.refresh();
+    expect(offline.getSnapshot()).toMatchObject({ phase: "ready", rows: [{ staffAvailabilityId: "v1" }], savedAt: "2026-11-25T20:00:00.000Z" });
+    api.availability.mockRejectedValueOnce(new ApiError("forbidden", undefined, 403));
+    await offline.refresh();
+    expect(offline.getSnapshot()).toMatchObject({ phase: "failed", rows: [], savedAt: null });
+    expect(cache.rows.size).toBe(0);
   });
 });

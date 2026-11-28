@@ -5,6 +5,21 @@ Format: [Keep a Changelog](https://keepachangelog.com/en/1.0.0/).
 
 ## [Unreleased]
 
+### Added (phone: roster and documents open with no signal)
+
+Phone app only; no server or web change, no migration, no new permission, no new dependency (`expo-crypto` and `expo-secure-store` were already in the app).
+
+- **My shifts, open swaps, My availability and My documents** show the last answer saved on the phone when the server cannot be reached, with a banner saying how old it is. Every change still needs a connection; a certificate's photo is never kept.
+- **The saved copy is encrypted** with a key kept in the Keychain or Keystore, read only after the app lock is passed, and emptied at sign-out, at another account or kitchen, when the account loses the permission, and when the phone has no screen lock any more. Details in `mobile/README.md` ("The sealed copy").
+
+### Added (a maintenance script for compliance photos stored before uploads were cleaned)
+
+Server and shared. No migration, no route change, nothing on the web or the phone.
+
+- **`packages/server/src/scripts/cleanStoredPhotoMetadata.ts`**, run by the owner. Without flags it is a dry run: it reads every stored compliance JPEG and PNG and prints how many carry a location, how many carry other metadata only, how many are clean and how many could not be read, as counts and document ids. With `--apply` it replaces each photo that carries metadata with a copy cleaned by the upload path's own code; the document keeps its id, and the original is removed only after the copy is stored, read back clean and the document points at it. Each step is recorded in the audit log; it stops at the first storage error and a second run picks up where it stopped. How to run it is at the top of the file. PDFs, and rows with no recorded file format, are not read. One narrow window: after `--apply` moves a document to its cleaned copy, a client that retries a create for that document with the old file id may get 409 CONFLICT. Run `--apply` when few phone uploads are in flight; a client that gets the conflict can re-fetch its documents.
+- **`readMetadata`** in `@culinaire/shared` says whether a JPEG or PNG carries a GPS position and whether it carries any metadata at all.
+- **`downloadStoredDocument`** in `documentStorageService` reads a stored document's bytes for this maintenance.
+
 ### Fixed (compliance documents and the staff roster: follow-ups to the phone's staff screens)
 
 Server, web and shared. No migration, no permission change. Older apps keep working: every error sentence and status is unchanged except the oversize file, and the new id is optional.

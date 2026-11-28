@@ -9,6 +9,7 @@ import { appLockOff } from "../src/config";
 import { LockProvider } from "../src/lock/LockProvider";
 import { session, useSession } from "../src/runtime/appContext";
 import { appLock } from "../src/runtime/appLock";
+import { startLockedCache } from "../src/runtime/lockedCache";
 import { startOutbox } from "../src/runtime/appOutbox";
 import { startNotifications } from "../src/runtime/notifications";
 import { clearPickedPhotos } from "../src/photos/photoFiles";
@@ -39,6 +40,7 @@ export default function RootLayout() {
   useEffect(() => {
     startOutbox();
     startNotifications();
+    startLockedCache();
     // A photo left behind when the app was closed partway through a form.
     clearPickedPhotos();
     void session.restore();

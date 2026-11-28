@@ -98,3 +98,39 @@ export function stripMetadata(b: Uint8Array): Uint8Array | null {
   if (at(b, 0, 0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a)) return stripPng(b);
   return null;
 }
+
+/** True when a TIFF block (EXIF's layout) starting at `tiff` has a GPS directory holding a latitude or longitude. */
+function gpsAt(b: Uint8Array, tiff: number): boolean {
+  const little = at(b, tiff, 0x49, 0x49, 0x2a, 0);
+  if (!little && !at(b, tiff, 0x4d, 0x4d, 0, 0x2a)) return false;
+  const u16 = (i: number) => (little ? b[i] | (b[i + 1] << 8) : (b[i] << 8) | b[i + 1]);
+  const u32 = (i: number) => (little ? u16(i) + u16(i + 2) * 65536 : u16(i) * 65536 + u16(i + 2));
+  const entries = (ifd: number) => {
+    const out: number[] = [];
+    if (ifd + 2 > b.length) return out;
+    for (let e = ifd + 2, last = e + 12 * u16(ifd); e + 12 <= last && last <= b.length; e += 12) out.push(e);
+    return out;
+  };
+  const pointer = entries(tiff + u32(tiff + 4)).find((e) => u16(e) === 0x8825 && u32(e + 4) === 1);
+  return pointer !== undefined && entries(tiff + u32(pointer + 8)).some((e) => u16(e) === 2 || u16(e) === 4);
+}
+
+const LATITUDE = [..."GPSLatitude"].map((c) => c.charCodeAt(0));
+const LONGITUDE = [..."GPSLongitude"].map((c) => c.charCodeAt(0));
+
+/**
+ * What a stored photo carries: a GPS position (EXIF, in any embedded picture, or XMP's GPSLatitude/GPSLongitude), and whether it has any
+ * metadata at all, meaning stripMetadata would change it. A photo the upload path already cleaned reads as having none. Null when it is not a
+ * whole JPEG or PNG. Compressed PNG text is not read for a position; it still counts as metadata.
+ */
+export function readMetadata(b: Uint8Array): { location: boolean; metadata: boolean } | null {
+  const cleaned = stripMetadata(b);
+  if (!cleaned) return null;
+  const metadata = cleaned.length !== b.length || cleaned.some((v, i) => v !== b[i]);
+  // the whole file is searched, but only a photo with something to remove can carry a place, so the pixels alone never count
+  let location = false;
+  for (let i = 0; metadata && !location && i + 8 <= b.length; i++) {
+    location = gpsAt(b, i) || (b[i] === 0x47 && (at(b, i, ...LATITUDE) || at(b, i, ...LONGITUDE)));
+  }
+  return { location, metadata };
+}

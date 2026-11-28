@@ -1,5 +1,6 @@
-import { createContext, useContext, useMemo, useSyncExternalStore, type ReactNode } from "react";
+import { createContext, useCallback, useContext, useMemo, useSyncExternalStore, type ReactNode } from "react";
 import { client } from "../runtime/appContext";
+import { lockedCache, useAfterUnlock } from "../runtime/lockedCache";
 import { createAvailabilityStore, type AvailabilityStore } from "./availabilityStore";
 import { createRosterApi } from "./rosterApi";
 import { createRosterStore, type RosterStore } from "./rosterStore";
@@ -11,12 +12,13 @@ export interface RosterCtx {
 
 const RosterContext = createContext<RosterCtx | null>(null);
 
-/** The roster module: my shifts, the open swaps and my availability, shared by its screens. Held in memory; gone when the account signs out. */
+/** The roster module: my shifts, the open swaps and my availability, shared by its screens. The last answers are sealed on the phone (`lockedCache`). */
 export function RosterProvider({ userId, children }: { userId: number; children: ReactNode }) {
   const ctx = useMemo(() => {
     const api = createRosterApi(client);
-    return { roster: createRosterStore({ api, now: Date.now }), availability: createAvailabilityStore(api) };
+    return { roster: createRosterStore({ api, now: Date.now, cache: lockedCache }), availability: createAvailabilityStore(api, lockedCache) };
   }, [userId]);
+  useAfterUnlock(useCallback(() => [ctx.roster, ctx.availability].forEach((s) => s.getSnapshot().phase === "failed" && void s.refresh()), [ctx]));
   return <RosterContext.Provider value={ctx}>{children}</RosterContext.Provider>;
 }
 

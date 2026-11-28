@@ -20,6 +20,7 @@ vi.mock("../src/runtime/appLock", async () => {
 });
 vi.mock("../src/runtime/appOutbox", () => ({ startOutbox: vi.fn() }));
 vi.mock("../src/runtime/notifications", () => ({ startNotifications: vi.fn() }));
+vi.mock("../src/runtime/lockedCache", () => ({ startLockedCache: vi.fn() }));
 vi.mock("../src/photos/photoFiles", () => ({ clearPickedPhotos: mocks.clearPickedPhotos }));
 vi.mock("expo-splash-screen", () => ({ preventAutoHideAsync: async () => {}, hideAsync: async () => {} }));
 vi.mock("expo-status-bar", () => ({ StatusBar: () => null }));

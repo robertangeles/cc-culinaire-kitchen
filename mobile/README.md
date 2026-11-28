@@ -30,7 +30,7 @@ Run the screenshot walk (`device/README.md`, "The screenshot walk") after changi
 | `src/outbox` | The offline queue (below). |
 | `src/ingredients` | The shared ingredient picker's data (below); its component is `src/ui/IngredientPicker.tsx`. |
 | `src/count`, `src/waste`, `src/prep`, `src/consumption`, `src/movements`, `src/chat`, `src/recipes`, `src/notifications`, `src/transfers`, `src/stock`, `src/orders`, `src/menu`, `src/brain`, `src/bench`, `src/roster`, `src/compliance` | One folder per module: API calls, store (screen state), pure view functions, commands. |
-| `src/lock` | The app lock (below): its state (`appLock.ts`, no React), the lock screen, the system prompt, and `useAppLock().confirm(reason)` for guarded actions. |
+| `src/lock` | The app lock (below): its state (`appLock.ts`, no React), the lock screen, the system prompt, and `useAppLock().confirm(reason)` for guarded actions; the sealed copy of the roster's and documents' last answers (`lockedCache.ts`). |
 | `src/profile` | The profile picture's picker and the kitchen profile form's rules. |
 | `src/photos` | A picked photo without its metadata, in memory only (profile picture, certificates). Upload one with `photoForm` (`src/api/photo.ts`), never as `{ uri }`. |
 | `src/ui` | Components shared by every module, `Column` (the tablet column) among them. |
@@ -591,8 +591,8 @@ shown only at a venue the person works at or has a shift at; the rest are counte
 **Drafts are never shown** (the owner has not decided on draft visibility): the server is asked for `excludeDrafts`, and a draft it still sends (one with a public-holiday question on it)
 is left out. The list then says a question is waiting and to answer it on the web. A swap of a draft or cancelled shift is not shown either (`shiftStatus`).
 
-**Nothing is kept on the phone.** Shifts, swaps and the server's availability are held in memory only, and gone at sign-out: the app lock covers everyone who sees it (`roster:read-own` included), and keeping roster data offline is a
-separate change. With no signal a screen says it needs a connection; what was read before stays on screen while the app is open.
+**Read offline, changed online.** The last answer of My shifts (with the open swaps) and of My availability is kept on the phone, sealed (see "The sealed copy" below), and shown with no signal
+under a banner saying how old it is ("Saved on this phone 2 h ago"); it is read again when the screen is opened or Try again is pressed with a signal. Nothing is queued: every answer, offer and availability change needs a connection.
 
 - **My shifts**: this week, next week, then anything further on, so a shift three weeks out that needs an answer is not hidden. A shift's page has Confirm and Decline, the public-holiday question
   (apart from the shift's own answer) and Offer to swap. Every answer is **online**: it is given to the shift as it stands. After each write the shifts are read again, and one whose reply was lost, or
@@ -621,6 +621,7 @@ Differences from the web (`MyShiftsView.tsx`, `MyAvailabilityManager.tsx`), foun
 | The first day defaults to the UTC date | The venue's today | Morning in Sydney is yesterday in UTC. |
 | Remove acts at once; a failed remove is silent | Asks first; the row says why when it fails | |
 | No time off, no requests to one person | The same | Neither the web nor the server has them. |
+| No offline view | The last answer, sealed, with its age | |
 
 ## Documents, the staff side of compliance (`src/compliance`, `app/(app)/(documents)`)
 
@@ -630,7 +631,7 @@ one about a colleague's says so.
 
 **There are no temperature logs, checklists or sign-off tasks on the web or the server**, so there are none here: a staff member's compliance work is their documents.
 
-**Online only, nothing kept.** Nothing is queued or cached: the app lock covers `compliance:read-own` holders, and keeping documents offline is a separate change. An upload
+**Read offline, changed online.** The last list is kept on the phone, sealed (see "The sealed copy" below), and shown with no signal with its age; a certificate's photo never is. Nothing is queued. An upload
 that cannot be sent says so in one sentence, keeps the form, and sends the same photo again on a tap. Sending is safe to repeat: every upload has its own file id, so after a lost reply the phone looks for that
 file among the person's documents before it sends anything again (`documentStore.ts`).
 
@@ -656,7 +657,22 @@ Differences from the web (`MyDocumentsTab.tsx`, `MyDocumentsList.tsx`, `Document
 | Dates in the browser's date box | Typed on the number pad, day first, with the date in words under it | |
 | A gold dot marks what was read off the photo | "Read from the photo. Check it." | |
 | Edit, delete, nudge after 48 hours | The same rules | |
+| No offline view | The last list, sealed, with its age; never the photo | |
 | Which documents the person still has to add is not shown | The same | The required list needs `compliance:manage-rules`. |
+
+### The sealed copy (`src/lock/lockedCache.ts`)
+
+Roster and documents are the only screens whose saved copy is encrypted (owner, Q6: allowed once the app lock covers `roster:read-own` and `compliance:read-own`). One copy per store (`roster`, `availability`, `documents`), the last
+successful answer only, in the kv table as AES-256-GCM (`expo-crypto`) under a random key kept in the Keychain or Keystore, where the tokens are (`nativeSeal.ts`). Each copy is sealed with its account, kitchen and name,
+so it opens nowhere else.
+
+- **Read** only when the server cannot be reached and nothing fresher is on screen, only by the person who passed the app lock (`unlockedUserId`), for the account and kitchen that saved it, while they hold the screen's permission.
+  A screen opened under the lock (a tapped push) reads it once the lock is passed. Device walks run with the lock off and read it as if it were passed.
+- **Not saved** when an answer arrives after the account or kitchen changed, or when the key cannot be kept (an iPhone with no passcode).
+- **Emptied, key and all,** at sign-out (a session that ended included), when the account is deleted, when another account or another kitchen opens (not while the kitchen is being chosen: that can be cancelled), and when the unlock prompt says
+  the phone has no screen lock any more. A copy is dropped when the server refuses it (403) or the module is off (404), and at sign-in or a change of the person's permissions when they no longer hold its key.
+- On iOS the Keychain drops the key when the passcode is removed and keeps it out of backups. Android has no such option: a screen lock removed and set again without opening the app in between keeps the copy.
+- The inbox keeps its own copy, not sealed: a notification's text can name a document and a date (`src/notifications/inboxStore.ts`).
 
 ## Inbox and push (`src/notifications`, `app/(app)/(inbox)`, `app/notification-settings.tsx`)
 

@@ -24,3 +24,17 @@ export const authApiMock = { register: vi.fn(), forgotPassword: vi.fn(), resendV
 
 /** The phone's "reduce motion" setting, as react-native-web reads it (jsdom has no matchMedia of its own). */
 export const reduceMotion = { current: false };
+
+/** The roster's and documents' saved copies, in memory and always readable (the lock and the sealing are `lockedCache.test.ts`'s). */
+export function memoryCache(at = "2026-11-25T20:00:00.000Z") {
+  const rows = new Map<string, unknown>();
+  const read = async <T>(name: string, schema: { parse(data: unknown): T }) => (rows.has(name) ? { at, data: schema.parse(rows.get(name)) } : null);
+  return {
+    rows,
+    owner: () => "1:L1",
+    // A spy that keeps the generic signature the stores call.
+    read: vi.fn(read) as unknown as typeof read,
+    write: vi.fn(async (name: string, _owner: string | null, data: unknown) => void rows.set(name, data)),
+    remove: vi.fn(async (name: string) => void rows.delete(name)),
+  };
+}

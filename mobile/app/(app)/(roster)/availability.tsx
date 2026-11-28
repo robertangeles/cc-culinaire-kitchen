@@ -14,7 +14,7 @@ import { Text } from "../../../src/ui/Text";
 import { space } from "../../../src/theme";
 import { useColors } from "../../../src/ui/theme";
 
-/** The weekly windows I can work. Changes need a connection: nothing about the roster is stored on the phone. */
+/** The weekly windows I can work. Changes need a connection; the last list is kept sealed (`lockedCache`) and shown with no signal. */
 export default function AvailabilityScreen() {
   const { store, snap } = useAvailability();
   const router = useRouter();

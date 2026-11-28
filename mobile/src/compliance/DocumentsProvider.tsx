@@ -1,13 +1,15 @@
-import { createContext, useContext, useMemo, useSyncExternalStore, type ReactNode } from "react";
+import { createContext, useCallback, useContext, useMemo, useSyncExternalStore, type ReactNode } from "react";
 import { client } from "../runtime/appContext";
+import { lockedCache, useAfterUnlock } from "../runtime/lockedCache";
 import { createComplianceApi } from "./complianceApi";
 import { createDocumentStore, type DocumentStore } from "./documentStore";
 
 const DocumentsContext = createContext<DocumentStore | null>(null);
 
-/** The documents module: one person's own documents, held in memory and gone when the account signs out. */
+/** The documents module: one person's own documents. The last list is sealed on the phone (`lockedCache`); a photo never is. */
 export function DocumentsProvider({ userId, children }: { userId: number; children: ReactNode }) {
-  const store = useMemo(() => createDocumentStore(createComplianceApi(client)), [userId]);
+  const store = useMemo(() => createDocumentStore(createComplianceApi(client), lockedCache), [userId]);
+  useAfterUnlock(useCallback(() => void (store.getSnapshot().phase === "failed" && store.refresh()), [store]));
   return <DocumentsContext.Provider value={store}>{children}</DocumentsContext.Provider>;
 }
 

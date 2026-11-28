@@ -18,7 +18,7 @@ export interface NewDocument extends DocumentFields {
   storageFormat: string | null;
 }
 
-/** The staff side of compliance: the person's own documents. Online only: a certificate's photo is never kept on the phone. */
+/** The staff side of compliance: the person's own documents. Every call is online: nothing is queued, and a certificate's photo is never kept on the phone. */
 export function createComplianceApi(client: ApiClient) {
   const path = (id: string) => `/api/compliance/documents/${encodeURIComponent(id)}`;
   return {
