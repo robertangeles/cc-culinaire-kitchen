@@ -65,7 +65,8 @@ Run commands from the repository root. `eas` is the Expo build service; use it t
 3. Add internal testers (your iPhone and iPad) in TestFlight. iPad is supported, so the store listing needs iPad screenshots.
 4. Before submitting for review: privacy nutrition labels, age rating, the privacy policy URL (the existing web Privacy URL), the terms URL (the existing web Terms URL), support URL, and the reviewer notes below, with the demo account.
 5. The build the reviewers get must have the Bench switched on (`EXPO_PUBLIC_BENCH=on`; the reviewer notes below walk them through the Bench's report and block); otherwise it stays off (App Store 1.2; see "Still needed for a store build" in `mobile/README.md`).
-6. Apple rule 3.1.3(b): the day the website starts selling paid plans, an app that unlocks those features must either also sell them in the app or qualify for an exemption. Billing in the app is deferred, so nothing in the app mentions plans. Revisit before the web billing launch.
+6. The contact address in each store listing (support contact) must be the same as the one in the app, `contactEmail` in `mobile/src/config.ts` (also the website footer), and the Bench report form must be reachable from the app (a message's actions, "Report"). The Privacy Policy and Terms text is in the database and may name another address: the owner decides that.
+7. Apple rule 3.1.3(b): the day the website starts selling paid plans, an app that unlocks those features must either also sell them in the app or qualify for an exemption. Billing in the app is deferred, so nothing in the app mentions plans. Revisit before the web billing launch.
 
 ## Owner chores that are not code (with the long lead times first)
 
