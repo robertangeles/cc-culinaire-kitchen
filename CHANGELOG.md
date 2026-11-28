@@ -5,6 +5,12 @@ Format: [Keep a Changelog](https://keepachangelog.com/en/1.0.0/).
 
 ## [Unreleased]
 
+### Added (a published contact address on the phone and the website)
+
+Web, phone and shared. No server change, no migration, no new dependency.
+
+- **`CONTACT_EMAIL`** in `@culinaire/shared` is the one published contact address. The phone's sign-in, first-run and Account screens gain a "Contact us" link beside Terms and Privacy that opens a new mail to it (with no mail app, the screen shows the address to select). The website footer's "Contact" link, which pointed at a page that does not exist, now opens a new mail to it too. Store listing steps are in `mobile/RELEASE.md`.
+
 ### Added (phone: roster and documents open with no signal)
 
 Phone app only; no server or web change, no migration, no new permission, no new dependency (`expo-crypto` and `expo-secure-store` were already in the app).
