@@ -1,5 +1,5 @@
 import { useEffect, useState } from "react";
-import { Alert, KeyboardAvoidingView, Pressable, ScrollView, View } from "react-native";
+import { Alert, KeyboardAvoidingView, Pressable, ScrollView, useWindowDimensions, View } from "react-native";
 import { useRouter } from "expo-router";
 import { SafeAreaView } from "react-native-safe-area-context";
 import type { OrderGuide, SupplierOption } from "@culinaire/shared/schemas/purchasing";
@@ -24,6 +24,10 @@ import { useColors } from "../ui/theme";
 
 /** More suppliers than this and the list is searched instead of shown whole. */
 const SHOWN = 6;
+/** From this width (a tablet) the form uses the width as the web's does: supplier beside the delivery day, each line's fields in one row. */
+export const WIDE_FORM_FROM = 768;
+/** The form's column on a tablet, wider than `COLUMN_WIDTH` so a line's four fields fit side by side. */
+export const WIDE_FORM_WIDTH = 960;
 
 /** Choose the supplier: the whole list when it is short, a search when it is not. */
 function SupplierChoice({ suppliers, chosen, onChoose }: { suppliers: SupplierOption[]; chosen: string; onChoose: (s: SupplierOption) => void }) {
@@ -92,6 +96,7 @@ export function OrderForm({ store, title, editing }: { store: DraftStore; title:
   const [search, setSearch] = useState("");
   const [openId, setOpenId] = useState<string | null>(null);
   const [week, setWeek] = useState(0);
+  const wide = useWindowDimensions().width >= WIDE_FORM_FROM;
   useEffect(() => {
     if (rights.create) void store.load();
   }, [store, rights.create]);
@@ -124,12 +129,33 @@ export function OrderForm({ store, title, editing }: { store: DraftStore; title:
     ]);
   }
   const guideFor = (id: string) => snap.guideItems.find((g) => g.ingredientId === id);
+  const delivery = (
+    <View style={{ gap: space.xs }}>
+      <ChoiceChips
+        label="Expected delivery (optional)"
+        options={days.map((d) => d.label)}
+        value={dayName}
+        clearable
+        onChange={(label) => store.update({ expectedDate: days.find((d) => d.label === label)?.value ?? null })}
+      />
+      <View style={{ flexDirection: "row", justifyContent: "space-between" }}>
+        {week > 0 ? <Button kind="quiet" label="Earlier days" onPress={() => setWeek(week - 1)} /> : <View />}
+        <Button kind="quiet" label="Later days" onPress={() => setWeek(week + 1)} />
+      </View>
+      {draft.expectedDate && !dayName ? (
+        <View style={{ flexDirection: "row", flexWrap: "wrap", alignItems: "center", justifyContent: "space-between", gap: space.md }}>
+          <Text>Expected {calendarDay(draft.expectedDate)}</Text>
+          <Button kind="quiet" label="Clear the date" onPress={() => store.update({ expectedDate: null })} />
+        </View>
+      ) : null}
+    </View>
+  );
 
   return (
     <SafeAreaView style={{ flex: 1, backgroundColor: c.bg }}>
       <KeyboardAvoidingView style={{ flex: 1 }} behavior="padding">
         <ScrollView contentContainerStyle={{ padding: space.xl }} keyboardShouldPersistTaps="handled">
-          <Column style={{ gap: space.lg }}>
+          <Column style={{ gap: space.lg, ...(wide ? { maxWidth: WIDE_FORM_WIDTH } : null) }}>
             <ScreenHeader label={state.location.locationName} title={title} />
             {!rights.create ? <Text variant="muted">You don&apos;t have permission to raise orders.</Text> : null}
             {rights.create && snap.phase === "loading" ? <Text variant="muted">Loading suppliers and items…</Text> : null}
@@ -163,7 +189,16 @@ export function OrderForm({ store, title, editing }: { store: DraftStore; title:
                   </View>
                 ) : null}
 
-                <SupplierChoice suppliers={snap.suppliers} chosen={draft.supplierName} onChoose={store.chooseSupplier} />
+                {wide ? (
+                  <View style={{ flexDirection: "row", alignItems: "flex-start", gap: space.xl }}>
+                    <View style={{ flex: 2 }}>
+                      <SupplierChoice suppliers={snap.suppliers} chosen={draft.supplierName} onChoose={store.chooseSupplier} />
+                    </View>
+                    <View style={{ flex: 1 }}>{delivery}</View>
+                  </View>
+                ) : (
+                  <SupplierChoice suppliers={snap.suppliers} chosen={draft.supplierName} onChoose={store.chooseSupplier} />
+                )}
 
                 <IngredientPicker
                   label="Add an item"
@@ -191,6 +226,7 @@ export function OrderForm({ store, title, editing }: { store: DraftStore; title:
                             item={snap.items.find((it) => it.ingredientId === line.ingredientId)}
                             guide={guideFor(line.ingredientId)}
                             open={openId === line.ingredientId}
+                            wide={wide}
                             onToggle={() => setOpenId(openId === line.ingredientId ? null : line.ingredientId)}
                             onChange={store.setLine}
                             onRemove={() => {
@@ -227,25 +263,7 @@ export function OrderForm({ store, title, editing }: { store: DraftStore; title:
                   </View>
                 ) : null}
 
-                <View style={{ gap: space.xs }}>
-                  <ChoiceChips
-                    label="Expected delivery (optional)"
-                    options={days.map((d) => d.label)}
-                    value={dayName}
-                    clearable
-                    onChange={(label) => store.update({ expectedDate: days.find((d) => d.label === label)?.value ?? null })}
-                  />
-                  <View style={{ flexDirection: "row", justifyContent: "space-between" }}>
-                    {week > 0 ? <Button kind="quiet" label="Earlier days" onPress={() => setWeek(week - 1)} /> : <View />}
-                    <Button kind="quiet" label="Later days" onPress={() => setWeek(week + 1)} />
-                  </View>
-                  {draft.expectedDate && !dayName ? (
-                    <View style={{ flexDirection: "row", flexWrap: "wrap", alignItems: "center", justifyContent: "space-between", gap: space.md }}>
-                      <Text>Expected {calendarDay(draft.expectedDate)}</Text>
-                      <Button kind="quiet" label="Clear the date" onPress={() => store.update({ expectedDate: null })} />
-                    </View>
-                  ) : null}
-                </View>
+                {wide ? null : delivery}
                 <TextField label="Notes (optional)" value={draft.notes} onChangeText={(notes) => store.update({ notes })} maxLength={2000} multiline placeholder="Special instructions, delivery notes" />
 
                 {snap.saveError ? <Text variant="error" accessibilityLiveRegion="polite">{snap.saveError}</Text> : null}

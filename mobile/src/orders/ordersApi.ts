@@ -11,6 +11,7 @@ import {
   OrderListSchema,
   OrderSubmitReplySchema,
   OrderWriteReplySchema,
+  SuggestionsReplySchema,
   SupplierListSchema,
   type CreditNote,
   type Discrepancy,
@@ -19,6 +20,7 @@ import {
   type OrderGuideItem,
   type OrderItem,
   type OrderSummary,
+  type SuggestionBlock,
   type SupplierOption,
 } from "@culinaire/shared/schemas/purchasing";
 import type { CreatePurchaseOrder, PurchaseOrderInput } from "@culinaire/shared/schemas/purchaseOrder";
@@ -74,6 +76,10 @@ export function createOrdersApi(client: ApiClient) {
     email(poId: string) {
       return client.request("POST", `${INV}/purchase-orders/${poId}/send-email`, { schema: OrderEmailReplySchema, timeoutMs: 60_000 });
     },
+    /** The order as the PDF the supplier gets. Rate-limited by the server, as emailing is. */
+    pdf(poId: string): Promise<Blob> {
+      return client.download(`${INV}/purchase-orders/${poId}/pdf`);
+    },
     /** A new draft from a finished order, at today's quantities below par. */
     clone(poId: string, storeLocationId: string) {
       return client.request("POST", `${INV}/purchase-orders/${poId}/clone`, { body: { storeLocationId }, schema: OrderWriteReplySchema });
@@ -81,6 +87,10 @@ export function createOrdersApi(client: ApiClient) {
 
     suppliers(): Promise<SupplierOption[]> {
       return client.request("GET", `${INV}/suppliers`, { schema: SupplierListSchema });
+    },
+    /** Items at or below par at this location, by preferred supplier. */
+    async suggestions(locationId: string): Promise<SuggestionBlock[]> {
+      return (await client.request("GET", `${INV}/auto-po-suggestions?storeLocationId=${locationId}`, { schema: SuggestionsReplySchema })).suppliers;
     },
     supplierItemIds(supplierId: string): Promise<string[]> {
       return client.request("GET", `${INV}/suppliers/${supplierId}/ingredient-ids`, { schema: IngredientIdListSchema });

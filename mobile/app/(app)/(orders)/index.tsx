@@ -53,6 +53,8 @@ export default function Orders() {
   const links = [
     rights.list && rights.approve ? { label: "Approvals", badge: count(pending), says: "waiting", href: "/approvals" as const } : null,
     rights.credit ? { label: "Credit notes", badge: count(toCredit), says: "to claim", href: "/credit-notes" as const } : null,
+    rights.suggestions ? { label: "Reorder suggestions", badge: null, says: "", href: "/suggestions" as const } : null,
+    rights.suppliers ? { label: "Suppliers", badge: null, says: "", href: "/suppliers" as const } : null,
   ].filter((l) => l !== null);
   const unfinished = !isEmpty(draftSnap.draft);
 

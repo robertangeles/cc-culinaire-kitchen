@@ -8,6 +8,7 @@ import { useAppLock } from "../../../src/lock/LockProvider";
 import { useSession } from "../../../src/runtime/appContext";
 import { DiscrepancyRows } from "../../../src/orders/DiscrepancyRows";
 import { WaitBadge } from "../../../src/orders/OrderRow";
+import { shareOrderPdf } from "../../../src/orders/orderPdf";
 import { useOrders } from "../../../src/orders/OrdersProvider";
 import { APPROVE_BLOCKED, calendarDay, dayLabel, itemCount, lineFacts, money, orderActions, receipt, statusLabel } from "../../../src/orders/orderView";
 import { useOrder } from "../../../src/orders/useOrder";
@@ -110,6 +111,11 @@ export default function Order() {
     act("email", "Emailing the supplier", async () => {
       const reply = await api.email(poId);
       return reply.emailed ? `Emailed to ${reply.to ?? supplier}.` : { text: reply.message ?? "The order was not emailed.", bad: true };
+    });
+  // Only the download needs the server: the share sheet is the person's own, and closing it is not a failure.
+  const sharePdf = () =>
+    act("pdf", "Sharing the PDF", async () => {
+      await shareOrderPdf(await api.pdf(poId), order.poNumber);
     });
   const confirmThen = (title: string, text: string, yes: string, run: () => unknown, destructive = false) =>
     Alert.alert(title, text, [
@@ -237,6 +243,7 @@ export default function Order() {
                 {can.reject ? <Button kind="ghost" label="Reject" disabled={busy !== null} onPress={() => setRejecting(true)} /> : null}
                 {can.receive ? <Button label="Receive delivery" disabled={busy !== null} onPress={() => router.push({ pathname: "/deliveries/[poId]", params: { poId } })} /> : null}
                 {can.email ? <Button kind="ghost" label={busy === "email" ? "Emailing…" : order.supplierEmailedAt ? "Email supplier again" : "Email to supplier"} disabled={busy !== null} onPress={() => void email()} /> : null}
+                {can.pdf ? <Button kind="ghost" label={busy === "pdf" ? "Preparing the PDF…" : "Share as PDF"} disabled={busy !== null} onPress={() => void sharePdf()} /> : null}
                 {can.reorder ? <Button kind="ghost" label={busy === "reorder" ? "Reordering…" : "Reorder"} disabled={busy !== null} onPress={() => void reorder()} /> : null}
                 {order.supplierPhone && (order.status === "SENT" || order.status === "RECEIVING") ? <Button kind="quiet" label={`Call ${supplier}`} onPress={() => void Linking.openURL(`tel:${order.supplierPhone}`)} /> : null}
                 {can.cancel ? <Button kind="danger" label="Cancel order" disabled={busy !== null} onPress={cancel} /> : null}

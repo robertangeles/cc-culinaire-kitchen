@@ -1,7 +1,7 @@
 /** What the order screens show and allow, as pure functions. The server stays the authority on every rule here. */
 
 import { SUPPLIER_EMAIL_WINDOW_MS } from "@culinaire/shared";
-import type { Discrepancy, OrderDetail, OrderLine, OrderSummary } from "@culinaire/shared/schemas/purchasing";
+import type { Discrepancy, OrderDetail, OrderLine, OrderSummary, SuggestionLine, SupplierOption } from "@culinaire/shared/schemas/purchasing";
 import { ApiError } from "../api/client";
 import type { AuthUser } from "../api/auth";
 import { formatMoney, formatQty } from "../receiving/receivingFlow";
@@ -45,6 +45,10 @@ export interface OrderRights {
   /** Reorder. Also what opens the order guides. */
   draft: boolean;
   credit: boolean;
+  /** The suppliers' list and contacts. */
+  suppliers: boolean;
+  /** Reorder suggestions: what is at or below par, by supplier. */
+  suggestions: boolean;
 }
 export function orderRights(user: AuthUser): OrderRights {
   const has = (...keys: string[]) => hasAnyPermission(user, keys);
@@ -57,6 +61,8 @@ export function orderRights(user: AuthUser): OrderRights {
     receive: has("purchasing:receive"),
     draft: has("purchasing:draft"),
     credit: has("purchasing:credit"),
+    suppliers: has("inventory:count"),
+    suggestions: has("inventory:manage"),
   };
 }
 
@@ -71,6 +77,8 @@ export interface OrderActions {
   receive: boolean;
   email: boolean;
   reorder: boolean;
+  /** Share the order as the supplier's PDF. */
+  pdf: boolean;
 }
 
 /** The buttons an order offers: the web's, by status, less the ones the person's permissions would be refused on. */
@@ -88,6 +96,8 @@ export function orderActions(order: OrderSummary, rights: OrderRights, now: numb
     // The ordering method is in the list only: unknown (opened from a notification) offers it, and the server answers for a supplier that does not take email.
     email: order.status === "SENT" && rights.submit && (order.supplierOrderingMethod === null || order.supplierOrderingMethod === "email") && !emailedJustNow(order.supplierEmailedAt, now),
     reorder: received && rights.draft,
+    // The web's: an order still open, not one received or cancelled. A status this version does not know offers nothing, as above.
+    pdf: ["DRAFT", "PENDING_APPROVAL", "SENT", "RECEIVING"].includes(order.status) && rights.submit,
   };
 }
 
@@ -204,3 +214,38 @@ export function creditAmount(entry: string, max: number): { ok: true; value: num
   if (n > max) return { ok: false, message: `The credit can't be more than ${formatMoney(max)}, what this is worth.` };
   return { ok: true, value: n };
 }
+
+/** The number as the dialler takes it (digits, a leading +, pauses), or null when there is none to call. */
+export function dialable(phone: string | null): string | null {
+  const n = (phone ?? "").replace(/[^\d+*#,;]/g, "");
+  return /\d/.test(n) ? n : null;
+}
+
+// The web's labels (SupplierManager.tsx); a key this version does not know is shown as the server wrote it.
+const ORDER_VIA: Record<string, string> = { email: "Email", phone: "Phone", portal: "Online portal", edi: "EDI", in_person: "In person" };
+const TERMS: Record<string, string> = { cod: "Cash on delivery", net_7: "Net 7 days", net_14: "Net 14 days", net_30: "Net 30 days", net_60: "Net 60 days", prepaid: "Prepaid" };
+const DAYS: Record<string, string> = { mon: "Mon", tue: "Tue", wed: "Wed", thu: "Thu", fri: "Fri", sat: "Sat", sun: "Sun" };
+
+/** A supplier's terms as short facts, in the web's order; what the supplier has not set is left out. */
+export function supplierFacts(s: SupplierOption): string[] {
+  const days = (s.deliveryDays ?? "").split(",").map((d) => d.trim()).filter(Boolean);
+  return [
+    days.length > 0 ? `Delivers ${days.map((d) => DAYS[d] ?? d).join(", ")}` : null,
+    s.leadTimeDays === null ? null : `${formatQty(s.leadTimeDays)} day${s.leadTimeDays === 1 ? "" : "s"} lead time`,
+    s.minimumOrderValue === null ? null : `${formatMoney(s.minimumOrderValue)} minimum order`,
+    s.orderingMethod ? `Order by ${(ORDER_VIA[s.orderingMethod] ?? s.orderingMethod).toLowerCase()}` : null,
+    s.paymentTerms ? TERMS[s.paymentTerms] ?? s.paymentTerms : null,
+  ].filter((f): f is string => f !== null);
+}
+
+/** What to order of an item below par: whole packages where it is bought in them (the web's "2 bag (25 kg)"), else the kitchen unit. */
+export function suggestedOrder(l: SuggestionLine): string | null {
+  if (l.suggestedPackages !== null && l.purchaseUnit) {
+    return `${formatQty(l.suggestedPackages)} ${l.purchaseUnit}${l.packQty ? ` (${formatQty(l.suggestedPackages * l.packQty)} ${l.baseUnit})` : ""}`;
+  }
+  return l.suggestedQty === null ? null : `${formatQty(l.suggestedQty)} ${l.baseUnit}`;
+}
+
+/** "On hand 4 kg, par 25 kg"; a figure the server left out is not shown. */
+export const stockAgainstPar = (l: SuggestionLine) =>
+  [l.currentQty === null ? null : `On hand ${formatQty(l.currentQty)} ${l.baseUnit}`, l.parLevel === null ? null : `par ${formatQty(l.parLevel)} ${l.baseUnit}`].filter(Boolean).join(", ");

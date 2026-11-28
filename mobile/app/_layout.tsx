@@ -12,6 +12,7 @@ import { appLock } from "../src/runtime/appLock";
 import { startLockedCache } from "../src/runtime/lockedCache";
 import { startOutbox } from "../src/runtime/appOutbox";
 import { startNotifications } from "../src/runtime/notifications";
+import { clearOrderPdfs } from "../src/orders/orderPdf";
 import { clearPickedPhotos } from "../src/photos/photoFiles";
 
 void SplashScreen.preventAutoHideAsync();
@@ -43,6 +44,8 @@ export default function RootLayout() {
     startLockedCache();
     // A photo left behind when the app was closed partway through a form.
     clearPickedPhotos();
+    // An order PDF shared before the app was closed (Android keeps it until then).
+    clearOrderPdfs();
     void session.restore();
   }, []);
 

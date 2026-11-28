@@ -58,6 +58,8 @@ export default function DocumentNew() {
     } catch (err) {
       setPhotoError({ text: uploadMessage(err) });
     } finally {
+      // Released with the buttons: a tap right after they enable must not be dropped while choose() is still unwinding.
+      busy.current = false;
       setUploading(false);
     }
   }

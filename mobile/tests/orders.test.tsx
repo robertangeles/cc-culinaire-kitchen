@@ -1,8 +1,9 @@
 // @vitest-environment jsdom
 import { describe, it, expect, vi, beforeEach } from "vitest";
-import { render, screen, fireEvent, waitFor, act } from "@testing-library/react";
-import { Alert } from "react-native";
+import { render, screen, fireEvent, waitFor, act, cleanup as cleanupRender } from "@testing-library/react";
+import { Alert, Linking } from "react-native";
 import { returnToScreen, routerMock, searchParams } from "../testing/mocks";
+import { SuggestionBlockSchema, SupplierSchema } from "@culinaire/shared/schemas/purchasing";
 import { ApiError } from "../src/api/client";
 import { COLUMN_WIDTH } from "../src/ui/Screen";
 import { admin, api, confirm, detail, discrepancy, main, memoryKv, order, ordersFor, person, resetApi } from "./ordersHarness";
@@ -12,12 +13,17 @@ vi.mock("../src/runtime/appContext", async () => {
   return { useSession: () => sessionState.current, client: {} };
 });
 vi.mock("../src/storage/kv", () => ({ sqliteKv: {} }));
+// The share sheet is native; what reaches it is orderPdf.test.ts's.
+const sharePdf = vi.hoisted(() => vi.fn(async (_pdf: Blob, _poNumber: string) => {}));
+vi.mock("../src/orders/orderPdf", () => ({ shareOrderPdf: sharePdf }));
 
 import Orders from "../app/(app)/(orders)/index";
 import Order from "../app/(app)/(orders)/order";
 import Approvals from "../app/(app)/(orders)/approvals";
 import CreditNotes from "../app/(app)/(orders)/credit-notes";
 import CreditNoteEntry from "../app/(app)/(orders)/credit-note-entry";
+import Suggestions from "../app/(app)/(orders)/suggestions";
+import Suppliers from "../app/(app)/(orders)/suppliers";
 
 const offline = () => new ApiError("network");
 const button = (name: string | RegExp) => screen.getByRole("button", { name });
@@ -35,6 +41,7 @@ function cappedColumn(from: HTMLElement): boolean {
 
 beforeEach(() => {
   resetApi();
+  sharePdf.mockClear();
   searchParams.current = { poId: "P1" };
 });
 
@@ -541,5 +548,148 @@ describe("credit notes", () => {
       fireEvent.click(await find("See order PO-100"));
       expect(routerMock.push).toHaveBeenCalledWith({ pathname: "/order", params: { poId: "P1" } });
     });
+  });
+});
+
+describe("sharing an order as a PDF", () => {
+  const pdf = new Blob(["%PDF"], { type: "application/pdf" });
+
+  it("downloads the supplier's PDF of an open order and hands it to the share sheet", async () => {
+    api.pdf.mockResolvedValue(pdf);
+    render(<Order />, ordersFor(admin));
+    fireEvent.click(await find("Share as PDF"));
+    await waitFor(() => expect(sharePdf).toHaveBeenCalledWith(pdf, "PO-100"));
+    expect(api.pdf).toHaveBeenCalledWith("P1");
+    expect(screen.queryByText(/went wrong|Can't reach/)).toBeNull();
+  });
+
+  it("with no signal says it needs a connection and opens no sheet", async () => {
+    api.pdf.mockRejectedValue(offline());
+    render(<Order />, ordersFor(admin));
+    fireEvent.click(await find("Share as PDF"));
+    expect(await screen.findByText("Can't reach the server. Sharing the PDF needs a connection.")).toBeTruthy();
+    expect(sharePdf).not.toHaveBeenCalled();
+  });
+
+  it("is offered on open orders to someone who may submit, as on the web, and not on received or cancelled ones", async () => {
+    render(<Order />, ordersFor(person(["inventory:count", "inventory:manage"])));
+    await find("Change order");
+    expect(screen.queryByRole("button", { name: "Share as PDF" })).toBeNull();
+    for (const status of ["RECEIVED", "CANCELLED"]) {
+      api.detail.mockResolvedValue(detail({ status }));
+      const view = render(<Order />, ordersFor(admin));
+      await screen.findByText(status === "RECEIVED" ? "Received" : "Cancelled");
+      expect(screen.queryByRole("button", { name: "Share as PDF" })).toBeNull();
+      view.unmount();
+    }
+  });
+});
+
+describe("suppliers", () => {
+  const supplier = (row: object) => SupplierSchema.parse(row);
+  const farms = supplier({ supplierId: "s1", supplierName: "Fresh Farms", contactName: "Sam Field", contactPhone: "+61 3 9000 1234", contactEmail: "orders@farms.test", deliveryDays: "mon,thu", leadTimeDays: 2, minimumOrderValue: "150.00", orderingMethod: "phone", paymentTerms: "net_30", notes: "Ring before 2 pm" });
+
+  it("lists each supplier with the contact and terms, and a number opens the dialler", async () => {
+    api.suppliers.mockResolvedValue([farms, supplier({ supplierId: "s2", supplierName: "Dairy Co" })]);
+    const open = vi.spyOn(Linking, "openURL").mockResolvedValue(undefined);
+    render(<Suppliers />, ordersFor(admin));
+    fireEvent.click(await find("Call Fresh Farms, +61 3 9000 1234"));
+    expect(open).toHaveBeenCalledWith("tel:+61390001234");
+    expect(screen.getByText("Sam Field")).toBeTruthy();
+    expect(screen.getByText("orders@farms.test")).toBeTruthy();
+    expect(screen.getByText("Delivers Mon, Thu · 2 days lead time · $150.00 minimum order · Order by phone · Net 30 days")).toBeTruthy();
+    expect(screen.getByText("Ring before 2 pm")).toBeTruthy();
+    expect(screen.getByText("No phone number")).toBeTruthy();
+  });
+
+  it("says so when the phone cannot call, and gives the number", async () => {
+    api.suppliers.mockResolvedValue([farms]);
+    vi.spyOn(Linking, "openURL").mockRejectedValue(new Error("no dialler"));
+    render(<Suppliers />, ordersFor(admin));
+    fireEvent.click(await find(/^Call Fresh Farms/));
+    expect(await screen.findByText("This phone can't make calls. Fresh Farms's number is +61 3 9000 1234.")).toBeTruthy();
+  });
+
+  it("with no signal shows the list last downloaded, so a supplier can still be called", async () => {
+    const kv = memoryKv();
+    api.suppliers.mockResolvedValue([farms]);
+    const first = render(<Suppliers />, ordersFor(admin, kv));
+    await find(/^Call Fresh Farms/);
+    first.unmount();
+    api.suppliers.mockRejectedValue(offline());
+    render(<Suppliers />, ordersFor(admin, kv));
+    expect(await screen.findByText(/This is the list from/)).toBeTruthy();
+    expect(button(/^Call Fresh Farms/)).toBeTruthy();
+  });
+
+  it("searches a long list", async () => {
+    api.suppliers.mockResolvedValue(Array.from({ length: 8 }, (_, i) => supplier({ supplierId: `s${i}`, supplierName: i === 3 ? "Dairy Co" : `Farm ${i}` })));
+    render(<Suppliers />, ordersFor(admin));
+    fireEvent.change(await screen.findByLabelText("Find a supplier"), { target: { value: "dai" } });
+    expect(screen.getByText("Dairy Co")).toBeTruthy();
+    expect(screen.queryByText("Farm 1")).toBeNull();
+  });
+
+  it("is offered from the orders list to the people the server shows suppliers to", async () => {
+    render(<Orders />, ordersFor(person(["purchasing:credit"])));
+    await find("Credit notes");
+    expect(screen.queryByRole("button", { name: "Suppliers" })).toBeNull();
+    expect(screen.queryByRole("button", { name: "Reorder suggestions" })).toBeNull();
+    cleanupRender();
+    render(<Orders />, ordersFor(person(["inventory:count", "purchasing:draft"])));
+    fireEvent.click(await find("Suppliers"));
+    expect(routerMock.push).toHaveBeenCalledWith("/suppliers");
+    expect(screen.queryByRole("button", { name: "Reorder suggestions" })).toBeNull();
+  });
+});
+
+describe("reorder suggestions", () => {
+  const block = (over: object = {}) => SuggestionBlockSchema.parse({
+    supplierId: "s1",
+    supplierName: "Fresh Farms",
+    estimatedTotal: 35,
+    lines: [{ ingredientId: "i1", ingredientName: "Flour", baseUnit: "kg", currentQty: 4, parLevel: 25, suggestedQty: 21, purchaseUnit: "bag", packQty: 12.5, suggestedPackages: 2, preferredUnitCost: 17.5, estimatedCost: 35 }],
+    ...over,
+  });
+
+  it("lists what is below par by supplier: on hand, par, whole packages to order and their cost, and calls the supplier", async () => {
+    api.suggestions.mockResolvedValue([block(), block({ supplierId: null, supplierName: "No preferred supplier", estimatedTotal: 0, lines: [{ ingredientId: "i2", ingredientName: "Gin", baseUnit: "bottle", currentQty: 1, parLevel: 6, suggestedQty: 5, purchaseUnit: null, packQty: null, suggestedPackages: null, preferredUnitCost: null, estimatedCost: null }] })]);
+    api.suppliers.mockResolvedValue([SupplierSchema.parse({ supplierId: "s1", supplierName: "Fresh Farms", contactPhone: "03 9000 1234" })]);
+    const open = vi.spyOn(Linking, "openURL").mockResolvedValue(undefined);
+    render(<Suggestions />, ordersFor(admin));
+    expect(await screen.findByText("2 items below par, about $35.00 to order")).toBeTruthy();
+    expect(api.suggestions).toHaveBeenCalledWith("L1");
+    expect(screen.getByText("Fresh Farms · 1 item")).toBeTruthy();
+    expect(screen.getByText("2 bag (25 kg)")).toBeTruthy();
+    expect(screen.getByText("On hand 4 kg, par 25 kg")).toBeTruthy();
+    expect(screen.getByText("5 bottle")).toBeTruthy();
+    fireEvent.click(await find("Call Fresh Farms"));
+    expect(open).toHaveBeenCalledWith("tel:0390001234");
+    // No number known for the items without a supplier.
+    expect(screen.queryByRole("button", { name: "Call No preferred supplier" })).toBeNull();
+  });
+
+  it("says when everything is stocked", async () => {
+    api.suggestions.mockResolvedValue([]);
+    render(<Suggestions />, ordersFor(admin));
+    expect(await screen.findByText("All stocked up")).toBeTruthy();
+  });
+
+  it("shows no stock or cost the server left out", async () => {
+    api.suggestions.mockResolvedValue([block({ estimatedTotal: null, lines: [{ ingredientId: "i1", ingredientName: "Flour", baseUnit: "kg", suggestedQty: 21 }] })]);
+    render(<Suggestions />, ordersFor(admin));
+    expect(await screen.findByText("21 kg")).toBeTruthy();
+    expect(screen.queryByText(/\$/)).toBeNull();
+    expect(screen.queryByText(/On hand/)).toBeNull();
+  });
+
+  it("is offered only to the people the server shows it to, and asks nothing of the server for anyone else", async () => {
+    render(<Orders />, ordersFor(person(["inventory:count", "inventory:manage"])));
+    fireEvent.click(await find("Reorder suggestions"));
+    expect(routerMock.push).toHaveBeenCalledWith("/suggestions");
+    cleanupRender();
+    render(<Suggestions />, ordersFor(person(["inventory:count", "purchasing:draft"])));
+    expect(await screen.findByText("You don't have permission to see reorder suggestions.")).toBeTruthy();
+    expect(api.suggestions).not.toHaveBeenCalled();
   });
 });

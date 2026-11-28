@@ -34,7 +34,7 @@ export const discrepancy = (over: object = {}) =>
 
 export const api = {
   list: vi.fn(), detail: vi.fn(), create: vi.fn(), update: vi.fn(), submit: vi.fn(), cancel: vi.fn(), approve: vi.fn(), reject: vi.fn(), email: vi.fn(), clone: vi.fn(),
-  suppliers: vi.fn(), supplierItemIds: vi.fn(), items: vi.fn(), guides: vi.fn(), guideItems: vi.fn(), discrepancies: vi.fn(), creditNotes: vi.fn(), credit: vi.fn(),
+  pdf: vi.fn(), suggestions: vi.fn(), suppliers: vi.fn(), supplierItemIds: vi.fn(), items: vi.fn(), guides: vi.fn(), guideItems: vi.fn(), discrepancies: vi.fn(), creditNotes: vi.fn(), credit: vi.fn(),
 } satisfies Record<keyof OrdersApi, ReturnType<typeof vi.fn>>;
 
 /** The app lock's answer to a guarded action (approve, reject, credit note): yes unless a test says otherwise. */
