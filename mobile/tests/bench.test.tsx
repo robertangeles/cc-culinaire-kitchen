@@ -403,6 +403,37 @@ describe("reporting and blocking", () => {
   });
 });
 
+describe("the word filter", () => {
+  // A made-up placeholder term only.
+  const refuse = async (event: string) => {
+    const { messageId } = sent.find(([e]) => e === event)![1] as { messageId: string };
+    await arrive("bench:error", { error: "This message can't be posted.", code: "POST_NOT_ALLOWED", messageId });
+  };
+
+  it.each([["a kitchen's channel", { channel: "org_5" }, "bench:message"], ["a direct message", { thread: "3" }, "bench:dm:send"]] as const)(
+    "in %s puts a refused post back in the composer with one plain sentence, never as sent or not sent",
+    async (_, params, event) => {
+      await room(params);
+      write("hello zorp");
+      press("Send");
+      await refuse(event);
+      expect((screen.getByLabelText("Your message") as HTMLInputElement).value).toBe("hello zorp");
+      expect(screen.getByText("This message can't be posted.")).toBeTruthy();
+      expect(screen.queryByText("Sending…")).toBeNull();
+      expect(screen.queryByText("Not sent.")).toBeNull();
+    },
+  );
+
+  it("keeps what was written meanwhile, after the refused post", async () => {
+    await room();
+    write("hello zorp");
+    press("Send");
+    write("and more");
+    await refuse("bench:message");
+    expect((screen.getByLabelText("Your message") as HTMLInputElement).value).toBe("hello zorp\nand more");
+  });
+});
+
 describe("blocked people and reports", () => {
   it("the list leads to the blocked people, and to the reports for moderators only", async () => {
     await show(<Bench />);

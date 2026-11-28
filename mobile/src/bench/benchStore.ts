@@ -6,6 +6,7 @@
  * after a join (made twice), and ten seconds after a post that has not come back. What happens on the live channel while a page is on its way is laid over it.
  */
 
+import { BENCH_POST_REFUSED } from "@culinaire/shared";
 import { BenchMessageSchema, PresenceSchema, ReactionListSchema, type BenchChannel, type BenchMessage, type BenchPerson, type DmThread } from "@culinaire/shared/schemas/bench";
 import { ApiError } from "../api/client";
 import { PAGE, type BenchApi, type Room } from "./benchApi";
@@ -34,6 +35,8 @@ export interface RoomState {
   error: string | null;
   /** Something that did not go through. */
   notice: string | null;
+  /** A post refused for a word the list does not allow: back in the composer to be changed, never shown as sent. */
+  returned: { id: string; body: string } | null;
   typing: { userId: number; userName: string }[];
 }
 
@@ -318,6 +321,11 @@ export function createBenchStore({ api, live, userId, now, newId }: { api: Bench
     else if (code === "DM_NOT_ALLOWED") {
       setRoom({ notice: DM_REFUSED });
       if (visit?.room.kind === "dm") setPendings(visit.room, pendings(visit.room).map((x) => ({ ...x, status: "failed" })));
+    } else if (code === "POST_NOT_ALLOWED") {
+      // An edit is refused the same way, with nothing to give back.
+      const post = visit ? pendings(visit.room).find((x) => x.id === obj(p).messageId) : undefined;
+      if (visit && post) setPendings(visit.room, pendings(visit.room).filter((x) => x !== post));
+      setRoom({ notice: BENCH_POST_REFUSED, ...(post ? { returned: { id: post.id, body: post.body } } : {}) });
     } else setRoom({ notice: "That didn't go through. Try again." });
   });
   const offConnect = live.onConnect(() => {
@@ -350,7 +358,7 @@ export function createBenchStore({ api, live, userId, now, newId }: { api: Bench
       const v: Visit = { room, channelId: null, otherUserId: null, reading: null, queued: null, replay: null, timers: new Set() };
       visit = v;
       const threadId = room.kind === "dm" ? room.threadId : null;
-      set({ fresh: snapshot.fresh.filter((id) => id !== threadId), room: { room, phase: "loading", messages: [], pending: [], hasOlder: false, loadingOlder: false, error: null, notice: null, typing: [] } });
+      set({ fresh: snapshot.fresh.filter((id) => id !== threadId), room: { room, phase: "loading", messages: [], pending: [], hasOlder: false, loadingOlder: false, error: null, notice: null, returned: null, typing: [] } });
       setPendings(room, pendings(room));
       const find = () => {
         v.channelId = room.kind === "channel" ? (snapshot.channels.find((c) => c.channelKey === room.key)?.channelId ?? null) : null;
@@ -399,6 +407,7 @@ export function createBenchStore({ api, live, userId, now, newId }: { api: Bench
       if (!v || !snapshot.room || !body || body.length > MAX_BODY) return false;
       const id = newId();
       const sent = emitPost(v, id, body);
+      if (snapshot.room.returned) setRoom({ returned: null, ...(snapshot.room.notice === BENCH_POST_REFUSED ? { notice: null } : {}) });
       setPendings(v.room, [...pendings(v.room), { id, body, status: sent ? "sending" : "failed", due: now() + CONFIRM_MS }]);
       if (sent) confirmLater(v, id);
       return true;

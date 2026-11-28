@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { Pressable, TextInput, View } from "react-native";
 import type { BenchPerson } from "@culinaire/shared/schemas/bench";
 import { fontFamily, fontSize, radius, size, space } from "../theme";
@@ -12,9 +12,13 @@ import { MAX_BODY } from "./benchStore";
 import { insertMention, mentionQuery, peopleMatching } from "./benchView";
 
 /** Where a post is written. An @ offers the people of this room; the name goes in as plain text, as on the web. */
-export function Composer({ placeholder, people, onTyping, onPost }: { placeholder: string; people: BenchPerson[]; onTyping: () => void; onPost: (text: string) => boolean }) {
+export function Composer({ placeholder, people, onTyping, onPost, returned }: { placeholder: string; people: BenchPerson[]; onTyping: () => void; onPost: (text: string) => boolean; returned?: { id: string; body: string } | null }) {
   const c = useColors();
   const [draft, setDraft] = useState("");
+  // A refused post comes back to be changed, before whatever was written since it was sent.
+  useEffect(() => {
+    if (returned) setDraft((now) => (now.trim() ? `${returned.body}\n${now}` : returned.body));
+  }, [returned]);
   const query = mentionQuery(draft);
   const offered = query === null ? [] : peopleMatching(people, query);
   const ready = draft.trim() !== "";

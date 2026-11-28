@@ -269,6 +269,7 @@ export function RoomView({ room, user, onBack, onOpen }: { room: Room; user: Aut
             people={room.kind === "dm" ? [] : people}
             onTyping={store.typing}
             onPost={store.post}
+            returned={state.returned}
           />}
         </View>
       ) : null}
