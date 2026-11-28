@@ -15,7 +15,7 @@ Run the screenshot walk (`device/README.md`, "The screenshot walk") after changi
 - The signed-in app opens on the first button of the person's bar (`homeHref`): Prep for a cook who preps, Waste for one who only logs waste, Ask for someone with no module. Never on a tab under More.
 - Nothing clipped or overlapping: lists scroll right up to the tab bar (each tab screen has a safe area of its own, `app/(app)/_layout.tsx`, so no paper strip is left above it), tab labels fully above the system navigation bar, long item names wrap, buttons fit their words.
 - At most five tab buttons; more modules go under More (`src/shell/tabs.ts`, `tabBar`), and Account is always reachable. The bar is quiet: fine grey line icons with a short Inter 12 label each, one line, never cut; the open tab (More for a screen under it) is the only one in copper, on a sunk-paper pill.
-- On a tablet the content sits in the centred 560 dp column (`Screen` or `Column`), with equal paper on both sides. The Bench is the one two-pane screen: its list (320 dp) beside the open room, whose messages keep the column.
+- On a tablet the content sits in the centred 560 dp column (`Screen` or `Column`), with equal paper on both sides. The Bench is the one two-pane screen: its list (320 dp) beside the open room, whose messages keep the column. The order form is the one wider form: from 768 dp it takes a 960 dp column, the supplier beside the delivery day and each line's fields in one row (`WIDE_FORM_FROM`, `WIDE_FORM_WIDTH` in `src/orders/OrderForm.tsx`).
 - A signed-in screen, the location choice and Terms and Privacy start at the top (`Screen` with `align="top"`); the account screens (details, kitchen profile, password, two-step, notifications) too; only sign-in, forgot password, check email, the two-step code, first run, update required and account deleted sit centred down the page.
 - The primary action is the copper gradient button; quiet actions are copper text; destructive ones outlined in ember. Offline is the saffron banner, waiting rows say "Waiting to send".
 - With the keyboard up, the field being typed in stays visible; a form's button may need a scroll but is never unreachable.
@@ -181,7 +181,7 @@ Differences from the web (`RecipeLabPage.tsx`, `RecipeForm.tsx`, `MyShelfPage.ts
 ## Tablet width
 
 Content sits in a centred column of at most 560 dp, `COLUMN_WIDTH` in `src/ui/Screen.tsx` (`Screen` does it for every screen built on it; the count, waste, prep, usage, move, receiving, transfers, stock, chat and recipe screens lay themselves out and use `src/ui/Column.tsx`, which reuses the same number).
-Phones fill the width. Padding goes outside `Column`, never inside it, or the content sits narrower than every other screen. jsdom does no layout, so the screen tests check only the column's constraints (full width, 560 dp cap, centred): `tests/waste.test.tsx`; `tests/prep.test.tsx` at 390, 820 and 1180 wide; `tests/usage.test.tsx`, `tests/moves.test.tsx`, `tests/chat.test.tsx` and `tests/recipes.test.tsx` at window sizes of an iPad in portrait (820 x 1180) and landscape (1180 x 820) and a phone (390 x 844). `tests/receiving.test.tsx` at an iPad's width. The look is for the device walk. Usage and Move use `Column` and have no second column definition. They have no two-column layout: a tablet gets the same column in the middle of the paper. `tests/transfers.test.tsx` and `tests/stock.test.tsx` at both iPad sizes and a phone.
+Phones fill the width. Padding goes outside `Column`, never inside it, or the content sits narrower than every other screen. jsdom does no layout, so the screen tests check only the column's constraints (full width, 560 dp cap, centred): `tests/waste.test.tsx`; `tests/prep.test.tsx` at 390, 820 and 1180 wide; `tests/usage.test.tsx`, `tests/moves.test.tsx`, `tests/chat.test.tsx` and `tests/recipes.test.tsx` at window sizes of an iPad in portrait (820 x 1180) and landscape (1180 x 820) and a phone (390 x 844). `tests/receiving.test.tsx` at an iPad's width. The look is for the device walk. Usage and Move use `Column` and have no second column definition. They have no two-column layout: a tablet gets the same column in the middle of the paper. `tests/transfers.test.tsx` and `tests/stock.test.tsx` at both iPad sizes and a phone. `tests/orderNew.test.tsx` checks the order form's wide layout at both iPad sizes and the column on a phone.
 
 ## Add Sign in with Apple (`app/link-apple.tsx`)
 
@@ -511,10 +511,10 @@ A delivery another phone already confirmed (`ALREADY_CONFIRMED`) or cancelled (`
 
 ## Orders (`src/orders`, `app/(app)/(orders)`)
 
-The Orders tab is the web's Purchasing page: the orders list, one order, a new order (and changing a draft), the approvals queue and credit notes. It is shown to anyone who holds
+The Orders tab is the web's Purchasing page: the orders list, one order, a new order (and changing a draft), the approvals queue, credit notes, reorder suggestions and suppliers. It is shown to anyone who holds
 `purchasing:draft`, `purchasing:submit`, `purchasing:approve` or `purchasing:credit`; someone with `purchasing:receive` alone has Receive, the only orders the server lists for them.
 Inside it every button follows the key its route asks for (`orderRights`, `orderActions` in `orderView.ts`): New order, Change and Cancel `inventory:manage`, Submit and Email
-`purchasing:submit`, Approve and Reject `purchasing:approve`, Reorder and guides `purchasing:draft`, Receive `purchasing:receive`, credit notes `purchasing:credit`.
+`purchasing:submit`, Approve and Reject `purchasing:approve`, Reorder and guides `purchasing:draft`, Receive `purchasing:receive`, credit notes `purchasing:credit`, Share as PDF `purchasing:submit`, Reorder suggestions `inventory:manage`, Suppliers `inventory:count`.
 
 **Online for every write.** Nothing here goes to the outbox: a write waits for the server, says it needs a connection when there is none, and the order is read again after it. A write whose
 reply was lost counts as done only when the order shows it (`useOrder`). Lists are kept on the phone (`cachedList`: first page per filter, person and location), so they open with no signal with a banner
@@ -530,6 +530,12 @@ turns the save into an edit of it. Save and submit that only failed to submit op
 approval at all (the spending limit, an unpriced line) is the server's answer to Submit. Approve and Reject ask the app lock first (below): someone who unlocked more than two minutes ago is asked again, and a prompt that does not go through sends nothing.
 
 **Credit notes** are raised from a discrepancy of a confirmed delivery, one per discrepancy, for no more than the server says it is worth; the form's id makes a repeat safe. One with no price is listed and explained, not opened.
+
+**Reorder suggestions** are the server's list of items at or below par at this location, by preferred supplier (`GET /auto-po-suggestions`): on hand, par, what to order (whole packages where the item is bought in them) and its cost where sent. Each supplier with a known number has Call. Nothing is ordered from it, as on the web.
+
+**Suppliers** lists the organisation's active suppliers with their contact and terms; a number opens the dialler (`tel:` with only the digits, `+` and pauses; a phone that cannot call says so and gives the number). Both lists are kept on the phone (`cachedList`), so a supplier can be called with no signal.
+
+**Share as PDF** (`orderPdf.ts`) downloads the server's PDF of the order, writes it to the app's cache (`purchase-orders/<order number>.pdf`) and opens the system share sheet (`expo-sharing`) on it. On iOS the file is deleted when the sheet closes. Android answers when its chooser closes, before the app picked (mail, Drive) has read the file, so there it is deleted before the next share and at every start (`app/_layout.tsx`). One PDF at most is ever left.
 
 **Links.** A sent order opens its delivery; a delivery (while receiving and once done) opens its order; a received order lists what can be claimed from it. An order opened from outside its tab (`from=link`) goes back to the list,
 because the tab may hold nothing else.
@@ -553,8 +559,11 @@ Differences from the web (`PurchaseOrderList.tsx`, `PurchaseOrderForm.tsx`, `App
 | Picking a guide replaces the items without asking | Asks first when there are items | |
 | Stock and Par beside each line of an existing order, and a guide row's stock on the form | On the form only (what is ordered, against par, is where it helps); not on an existing order | It needs the location's whole item list for each order opened. |
 | Expected delivery is a date picker | A week of days to tap, then Later days | No date picker on the phone, no new dependency. |
-| PDF download | Not on the phone | Needs a file share sheet (a new native dependency); emailing the supplier is there. Follow-up. |
-| Suggestions, Guides editor, Suppliers, Spend thresholds tabs | Not on the phone | Not in this wave's list; guides can be used, not edited. |
+| PDF download | Share as PDF, through the system share sheet | A phone shares a file rather than downloading it. |
+| Suggestions: a table, offered to everyone on the page (the route refuses all but `inventory:manage`) | Cards by supplier, only to `inventory:manage`, with Call where the number is known | |
+| Suppliers: a table with add, change and delete | Read only, with Call | Suppliers are set up on the web. |
+| Each line's order, unit, cost and line total always shown in a row | The same on a tablet; on a phone a row to tap open | A phone has no width for four fields. |
+| Guides editor, Spend thresholds tabs | Not on the phone | Guides can be used, not edited. |
 | Reorder (the server's `clonePO`) writes par less stock in each line's own unit, rounded up to whole units. A line whose unit cannot be converted keeps its last quantity, and the alert says which to check (`reorderCheckLine`) | The same server answer, opened as a draft to check and change before it is submitted; the check line is shown with the notice | Same behaviour. The bug that wrote 62.5 kg below par of an item bought in 12.5 kg bags as 62.5 bags is fixed on the server. |
 | Emailing is offered only in the list's row, where the ordering method is known | The same; an order opened from a notification offers it and the server answers for a supplier that does not take email | The detail route does not send the ordering method. |
 | Credit notes have no page | To claim and Raised | The routes had no screen anywhere. `GET /credit-notes` sends no item, supplier or order name, so Raised shows the reference, amount, date and notes. |

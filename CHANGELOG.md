@@ -28,6 +28,16 @@ Web, phone and shared. No server change, no migration, no new dependency.
 
 - **`CONTACT_EMAIL`** in `@culinaire/shared` is the one published contact address. The phone's sign-in, first-run and Account screens gain a "Contact us" link beside Terms and Privacy that opens a new mail to it (with no mail app, the screen shows the address to select). The website footer's "Contact" link, which pointed at a page that does not exist, now opens a new mail to it too. Store listing steps are in `mobile/RELEASE.md`.
 
+### Added (phone: reorder suggestions, suppliers, an order as a PDF, the order form on a tablet)
+
+Phone app and shared schemas; no server or web change, no migration, no new permission. One new native dependency, `expo-sharing` (the system share sheet): rebuild the development build before the next device walk.
+
+- **Reorder suggestions** (Orders, for `inventory:manage` holders, as the route asks): every item at or below par at this location, grouped by preferred supplier, with on hand, par, what to order in whole packages and its cost where the server sends one. A list to read and call from, as on the web; nothing is ordered from it.
+- **Suppliers** (Orders, for `inventory:count` holders): each supplier's contact, email, delivery days, lead time, minimum order, ordering method, payment terms and notes. A phone number opens the dialler. The list is kept on the phone, so a supplier can be called with no signal. Adding and changing suppliers stays on the web.
+- **Share as PDF** on an open order (draft, pending, sent, receiving), for `purchasing:submit` holders as on the web: the server's PDF opens in the system share sheet from a file in the app's cache. iOS deletes it when the sheet closes; Android deletes it before the next share and at the next start, because the app it was shared to may still be reading it.
+- **The order form on a tablet** (768 dp and wider) uses a 960 dp column: the supplier beside the expected delivery day, and every line's order, unit, price and line total in one row, as on the web. Phones are unchanged.
+- **Not included:** a receiving discrepancy photo and a barcode scan. They need server changes and come as a separate change for the web and the phone together.
+
 ### Added (phone: roster and documents open with no signal)
 
 Phone app only; no server or web change, no migration, no new permission, no new dependency (`expo-crypto` and `expo-secure-store` were already in the app).
