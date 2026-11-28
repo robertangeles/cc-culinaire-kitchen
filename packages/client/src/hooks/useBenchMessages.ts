@@ -35,9 +35,12 @@ export function useBenchMessages(channelKey: string) {
   const [hasMore, setHasMore] = useState(true);
   const joinedRef = useRef(false);
   const channelRef = useRef(channelKey);
+  // What arrived live since the latest page was last asked for: the answer may not hold it yet.
+  const liveRef = useRef<BenchMessage[]>([]);
 
   // Initial fetch via REST
   const fetchMessages = useCallback(async (before?: string) => {
+    if (!before) liveRef.current = [];
     try {
       const params = new URLSearchParams({ limit: "50" });
       if (before) params.set("before", before);
@@ -54,7 +57,7 @@ export function useBenchMessages(channelKey: string) {
         // Prepend older messages
         setMessages((prev) => [...msgs, ...prev]);
       } else {
-        setMessages(msgs);
+        setMessages([...msgs, ...liveRef.current.filter((l) => !msgs.some((m) => m.messageId === l.messageId))]);
       }
       setHasMore(msgs.length >= 50);
     } catch {
@@ -105,6 +108,7 @@ export function useBenchMessages(channelKey: string) {
     function onNewMessage(msg: BenchMessage & { channelKey: string }) {
       // Only add if it belongs to our channel (Everyone's also arrive while My Kitchen is open)
       if (msg.channelKey !== channelKey) return;
+      liveRef.current.push(msg);
       setMessages((prev) => {
         if (prev.some((m) => m.messageId === msg.messageId)) return prev;
         return [...prev, msg];
