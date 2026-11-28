@@ -10,6 +10,7 @@ const mocks = vi.hoisted(() => ({
   phase: { current: "signedOut" },
   user: { current: undefined as { userId: number; roles: string[]; permissions: string[] } | undefined },
   clearPickedPhotos: vi.fn(),
+  clearOrderPdfs: vi.fn(),
   groups: [] as { guard: boolean; redirectTo?: string; screens: string[] }[],
 }));
 vi.mock("../src/runtime/appContext", () => ({ session: { restore: vi.fn() }, useSession: () => ({ state: { phase: mocks.phase.current, ...(mocks.user.current && { user: mocks.user.current }) } }) }));
@@ -22,6 +23,7 @@ vi.mock("../src/runtime/appOutbox", () => ({ startOutbox: vi.fn() }));
 vi.mock("../src/runtime/notifications", () => ({ startNotifications: vi.fn() }));
 vi.mock("../src/runtime/lockedCache", () => ({ startLockedCache: vi.fn() }));
 vi.mock("../src/photos/photoFiles", () => ({ clearPickedPhotos: mocks.clearPickedPhotos }));
+vi.mock("../src/orders/orderPdf", () => ({ clearOrderPdfs: mocks.clearOrderPdfs }));
 vi.mock("expo-splash-screen", () => ({ preventAutoHideAsync: async () => {}, hideAsync: async () => {} }));
 vi.mock("expo-status-bar", () => ({ StatusBar: () => null }));
 vi.mock("@expo-google-fonts/fraunces", () => ({ useFonts: () => [true], Fraunces_400Regular: 1, Fraunces_600SemiBold: 1 }));
@@ -99,4 +101,10 @@ it("deletes any certificate photo left behind when the app was closed partway th
   mocks.clearPickedPhotos.mockClear();
   render(<RootLayout />);
   expect(mocks.clearPickedPhotos).toHaveBeenCalledTimes(1);
+});
+
+it("deletes any order PDF left from a share before the app was closed", () => {
+  mocks.clearOrderPdfs.mockClear();
+  render(<RootLayout />);
+  expect(mocks.clearOrderPdfs).toHaveBeenCalledTimes(1);
 });

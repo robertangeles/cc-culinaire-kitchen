@@ -1,5 +1,5 @@
 import { describe, it, expect, vi, beforeEach } from "vitest";
-import { OrderDetailSchema, OrderGuideItemSchema, OrderItemSchema } from "@culinaire/shared/schemas/purchasing";
+import { OrderDetailSchema, OrderGuideItemSchema, OrderItemSchema, SupplierSchema } from "@culinaire/shared/schemas/purchasing";
 import type { KvStore } from "../storage/kv";
 import { ApiError } from "../api/client";
 import { createDraftStore } from "./draftStore";
@@ -11,7 +11,7 @@ const memoryKv = (): KvStore & { data: Map<string, string> } => {
 };
 const flour = OrderItemSchema.parse({ ingredientId: "i1", ingredientName: "Flour", baseUnit: "kg", purchaseUnit: "bag", packQty: "12.5", orgUnitCost: "1.40" });
 const gin = OrderItemSchema.parse({ ingredientId: "i2", ingredientName: "Gin", baseUnit: "bottle" });
-const farms = { supplierId: "s1", supplierName: "Fresh Farms" };
+const farms = SupplierSchema.parse({ supplierId: "s1", supplierName: "Fresh Farms" });
 let ids = 0;
 beforeEach(() => void (ids = 0));
 /** A draft the server has, raised for another location. */

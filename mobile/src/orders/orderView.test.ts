@@ -2,7 +2,8 @@ import { describe, it, expect } from "vitest";
 import { DiscrepancySchema, OrderDetailSchema, OrderLineSchema, OrderSummarySchema, type Discrepancy, type OrderLine, type OrderSummary } from "@culinaire/shared/schemas/purchasing";
 import { ApiError } from "../api/client";
 import type { AuthUser } from "../api/auth";
-import { byWait, calendarDay, creditAmount, discrepancyText, FILTERS, lineFacts, money, orderActions, orderFailure, orderRights, receipt, statusLabel, waiting } from "./orderView";
+import { SuggestionLineSchema, SupplierSchema } from "@culinaire/shared/schemas/purchasing";
+import { byWait, calendarDay, creditAmount, dialable, discrepancyText, FILTERS, lineFacts, money, orderActions, orderFailure, orderRights, receipt, statusLabel, stockAgainstPar, suggestedOrder, supplierFacts, waiting } from "./orderView";
 
 const NOW = Date.parse("2026-11-25T12:00:00Z");
 const person = (permissions: string[], roles: string[] = []): AuthUser => ({ userId: 1, userName: "A", userEmail: "a@x.test", mfaEnabled: false, roles, permissions });
@@ -13,9 +14,10 @@ const all = orderRights(person([], ["Administrator"]));
 
 describe("what a person may do", () => {
   it("follows the key each server route asks for", () => {
-    expect(orderRights(person(["inventory:count", "purchasing:draft", "purchasing:receive"]))).toEqual({ list: true, create: false, submit: false, approve: false, receive: true, draft: true, credit: false });
+    expect(orderRights(person(["inventory:count", "purchasing:draft", "purchasing:receive"]))).toEqual({ list: true, create: false, submit: false, approve: false, receive: true, draft: true, credit: false, suppliers: true, suggestions: false });
     expect(orderRights(person(["inventory:count", "inventory:manage", "purchasing:submit"]))).toMatchObject({ create: true, submit: true, approve: false });
-    expect(orderRights(person(["purchasing:credit"]))).toMatchObject({ list: false, credit: true });
+    expect(orderRights(person(["purchasing:credit"]))).toMatchObject({ list: false, credit: true, suppliers: false });
+    expect(orderRights(person(["inventory:manage"]))).toMatchObject({ suggestions: true });
     expect(Object.values(all).every(Boolean)).toBe(true);
   });
 });
@@ -24,10 +26,10 @@ describe("the buttons an order offers", () => {
   const on = (o: OrderSummary, rights = all) => Object.entries(orderActions(o, rights, NOW)).filter(([, v]) => v).map(([k]) => k);
 
   it("are the web's, by status", () => {
-    expect(on(order())).toEqual(["edit", "submit", "cancel"]);
-    expect(on(order({ status: "PENDING_APPROVAL", canApprove: true }))).toEqual(["approve", "reject"]);
-    expect(on(order({ status: "SENT", supplierOrderingMethod: "email" }))).toEqual(["receive", "email"]);
-    expect(on(order({ status: "RECEIVING" }))).toEqual(["receive"]);
+    expect(on(order())).toEqual(["edit", "submit", "cancel", "pdf"]);
+    expect(on(order({ status: "PENDING_APPROVAL", canApprove: true }))).toEqual(["approve", "reject", "pdf"]);
+    expect(on(order({ status: "SENT", supplierOrderingMethod: "email" }))).toEqual(["receive", "email", "pdf"]);
+    expect(on(order({ status: "RECEIVING" }))).toEqual(["receive", "pdf"]);
     expect(on(order({ status: "RECEIVED" }))).toEqual(["reorder"]);
     expect(on(order({ status: "PARTIAL_RECEIVED" }))).toEqual(["reorder"]);
     expect(on(order({ status: "CANCELLED" }))).toEqual([]);
@@ -35,7 +37,7 @@ describe("the buttons an order offers", () => {
   });
 
   it("offer no Approve on an approver's own order while someone else can approve it, as the server says, but still Reject", () => {
-    expect(on(order({ status: "PENDING_APPROVAL", canApprove: false }))).toEqual(["approveBlocked", "reject"]);
+    expect(on(order({ status: "PENDING_APPROVAL", canApprove: false }))).toEqual(["approveBlocked", "reject", "pdf"]);
   });
 
   it("leave out what the person's permissions would be refused on", () => {
@@ -47,10 +49,34 @@ describe("the buttons an order offers", () => {
   });
 
   it("email only a supplier that takes email, and not again inside the server's window", () => {
-    expect(on(order({ status: "SENT", supplierOrderingMethod: "phone" }))).toEqual(["receive"]);
+    expect(on(order({ status: "SENT", supplierOrderingMethod: "phone" }))).toEqual(["receive", "pdf"]);
     expect(on(order({ status: "SENT", supplierOrderingMethod: null }))).toContain("email"); // opened from a notification: the server answers for it
-    expect(on(order({ status: "SENT", supplierOrderingMethod: "email", supplierEmailedAt: "2026-11-25T11:58:00Z" }))).toEqual(["receive"]);
+    expect(on(order({ status: "SENT", supplierOrderingMethod: "email", supplierEmailedAt: "2026-11-25T11:58:00Z" }))).toEqual(["receive", "pdf"]);
     expect(on(order({ status: "SENT", supplierOrderingMethod: "email", supplierEmailedAt: "2026-11-25T11:50:00Z" }))).toContain("email");
+  });
+});
+
+describe("suppliers and reorder suggestions", () => {
+  it("dial only what the dialler takes, and nothing for a number with no digits", () => {
+    expect(dialable("+61 (3) 9000-1234 ext. 2")).toBe("+613900012342");
+    expect(dialable("1300 FARMS")).toBe("1300");
+    expect(dialable("ask at the counter")).toBeNull();
+    expect(dialable(null)).toBeNull();
+  });
+
+  it("put a supplier's terms in the web's words, leaving out what is not set and showing a key this version does not know", () => {
+    expect(supplierFacts(SupplierSchema.parse({ supplierId: "s", supplierName: "A", deliveryDays: "tue, sat,xmas", leadTimeDays: 1, orderingMethod: "fax", paymentTerms: "net_90" }))).toEqual(["Delivers Tue, Sat, xmas", "1 day lead time", "Order by fax", "net_90"]);
+    expect(supplierFacts(SupplierSchema.parse({ supplierId: "s", supplierName: "A" }))).toEqual([]);
+  });
+
+  it("order whole packages where an item is bought in them, else the kitchen unit", () => {
+    const line = (over: object) => SuggestionLineSchema.parse({ ingredientId: "i", ingredientName: "Flour", baseUnit: "kg", suggestedQty: 21, ...over });
+    expect(suggestedOrder(line({ purchaseUnit: "bag", packQty: 12.5, suggestedPackages: 2 }))).toBe("2 bag (25 kg)");
+    expect(suggestedOrder(line({ purchaseUnit: "bag", suggestedPackages: 2 }))).toBe("2 bag");
+    expect(suggestedOrder(line({}))).toBe("21 kg");
+    expect(suggestedOrder(line({ suggestedQty: undefined }))).toBeNull();
+    expect(stockAgainstPar(line({ currentQty: 0, parLevel: "25" }))).toBe("On hand 0 kg, par 25 kg");
+    expect(stockAgainstPar(line({}))).toBe("");
   });
 });
 

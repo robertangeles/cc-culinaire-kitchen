@@ -77,7 +77,23 @@ export const OrderWriteReplySchema = z.object({
 export const OrderSubmitReplySchema = z.object({ poId: z.string(), status: z.string().catch("") });
 export const OrderEmailReplySchema = z.object({ emailed: z.boolean(), to: text, message: text });
 
-export const SupplierSchema = z.object({ supplierId: z.string(), supplierName: z.string().min(1) });
+/** A supplier as `GET /api/inventory/suppliers` lists it (active ones only): the order form needs the name, the suppliers screen the rest. */
+export const SupplierSchema = z.object({
+  supplierId: z.string(),
+  supplierName: z.string().min(1),
+  contactName: text,
+  contactPhone: text,
+  contactEmail: text,
+  /** "email", "phone", "portal", "edi", "in_person". */
+  orderingMethod: text,
+  /** "mon,wed,fri". */
+  deliveryDays: text,
+  leadTimeDays: figure,
+  minimumOrderValue: figure,
+  /** "cod", "net_30"... */
+  paymentTerms: text,
+  notes: text,
+});
 export type SupplierOption = z.infer<typeof SupplierSchema>;
 export const SupplierListSchema = rowsOf(SupplierSchema);
 
@@ -127,6 +143,34 @@ export const OrderGuideItemSchema = z.object({
 });
 export type OrderGuideItem = z.infer<typeof OrderGuideItemSchema>;
 export const OrderGuideItemListSchema = rowsOf(OrderGuideItemSchema);
+
+/** One item at or below par (`GET /api/inventory/auto-po-suggestions`). Quantities are in the kitchen unit. */
+export const SuggestionLineSchema = z.object({
+  ingredientId: z.string(),
+  ingredientName: z.string().min(1),
+  baseUnit: z.string().catch(""),
+  currentQty: figure,
+  parLevel: figure,
+  suggestedQty: figure,
+  purchaseUnit: text,
+  packQty: figure,
+  /** `suggestedQty` in whole purchase packages; null when it is ordered in the kitchen unit. */
+  suggestedPackages: figure,
+  preferredUnitCost: figure,
+  estimatedCost: figure,
+});
+export type SuggestionLine = z.infer<typeof SuggestionLineSchema>;
+
+/** The items one supplier is preferred for; `supplierId` null is the items with no preferred supplier. */
+export const SuggestionBlockSchema = z.object({
+  supplierId: z.string().nullable().catch(null),
+  supplierName: z.string().catch("No preferred supplier"),
+  lines: rowsOf(SuggestionLineSchema),
+  estimatedTotal: figure,
+});
+export type SuggestionBlock = z.infer<typeof SuggestionBlockSchema>;
+export const SuggestionBlockListSchema = rowsOf(SuggestionBlockSchema);
+export const SuggestionsReplySchema = z.object({ suppliers: SuggestionBlockListSchema });
 
 /** A discrepancy of a confirmed delivery with no credit note yet (`GET /api/inventory/credit-notes/unresolved-discrepancies`). */
 export const DiscrepancySchema = z.object({

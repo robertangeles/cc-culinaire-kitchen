@@ -1,6 +1,6 @@
 /** The orders module's data for one person at one location, without React: the screens get it through `OrdersProvider`. */
 
-import { CreditNoteListSchema, DiscrepancyListSchema, OrderListSchema, type CreditNote, type Discrepancy, type OrderSummary } from "@culinaire/shared/schemas/purchasing";
+import { CreditNoteListSchema, DiscrepancyListSchema, OrderListSchema, SuggestionBlockListSchema, SupplierListSchema, type CreditNote, type Discrepancy, type OrderSummary, type SuggestionBlock, type SupplierOption } from "@culinaire/shared/schemas/purchasing";
 import type { AuthUser } from "../api/auth";
 import type { KvStore } from "../storage/kv";
 import { newUuid } from "../outbox/uuid";
@@ -17,6 +17,9 @@ export interface OrdersCtx {
   approvals: CachedList<OrderSummary>;
   discrepancies: CachedList<Discrepancy>;
   credits: CachedList<CreditNote>;
+  /** Kept on the phone, so a supplier can be called with no signal. */
+  suppliers: CachedList<SupplierOption>;
+  suggestions: CachedList<SuggestionBlock>;
   draft: DraftStore;
   /** A saved draft opened to change it. Not kept on the phone: the server has it, and someone else may change it meanwhile. */
   editDraft(poId: string): DraftStore;
@@ -42,6 +45,8 @@ export function createOrders({ api, kv, user, locationId, now }: { api: OrdersAp
     // Credit notes are the organisation's, whatever the location.
     discrepancies: createCachedList<Discrepancy>({ kv, key: `orders.${user.userId}.discrepancies`, fetch: (offset) => api.discrepancies(offset), schema: DiscrepancyListSchema, id: (d) => d.discrepancyId, pageSize: PAGE, message: loadMessage, now }),
     credits: createCachedList<CreditNote>({ kv, key: `orders.${user.userId}.credits`, fetch: () => api.creditNotes(), schema: CreditNoteListSchema, id: (n) => n.creditNoteId, pageSize: Infinity, message: loadMessage, now }),
+    suppliers: createCachedList<SupplierOption>({ kv, key: `orders.${user.userId}.suppliers`, fetch: () => api.suppliers(), schema: SupplierListSchema, id: (s) => s.supplierId, pageSize: Infinity, message: loadMessage, now }),
+    suggestions: createCachedList<SuggestionBlock>({ kv, key: `orders.${user.userId}.${locationId}.suggestions`, fetch: () => api.suggestions(locationId), schema: SuggestionBlockListSchema, id: (b) => b.supplierId ?? "", pageSize: Infinity, message: loadMessage, now }),
     draft: createDraftStore({ api, kv, key: `orders.draft.${user.userId}.${locationId}`, locationId, newId: newUuid, guidesAllowed: rights.draft }),
     editDraft: (poId) => createDraftStore({ api, kv, key: "", locationId, newId: newUuid, guidesAllowed: rights.draft, editing: poId }),
     known(poId) {
