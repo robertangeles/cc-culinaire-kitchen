@@ -64,6 +64,12 @@ async function type(label: string, text: string) {
   await hideKeyboard();
 }
 
+/** An order line: a phone opens it by tapping its row ("Plain flour, 2 bag, ..."); a tablet shows every line's fields already. */
+async function openLine(name: string) {
+  const row = await waitFor(new RegExp(`^${name}(, |$)`, "i"), 30_000);
+  if (row.desc.startsWith(`${name}, `)) await press(new RegExp(`^${name}, `));
+}
+
 async function launch() {
   forceStop();
   await openApp(METRO);
@@ -159,9 +165,9 @@ describe.skipIf(!process.env.SCREENS_OUT)("purchasing walk", { timeout: 600_000 
     await waitFor("Start from a guide", 30_000);
     await shot("o02-new-order");
     await press(/^Use the guide Weekly dry store/);
-    await waitFor(/^Plain flour, 2 bag/, 30_000);
+    await waitFor(/^Plain flour(, 2 bag|$)/, 30_000);
     await shot("o03-new-order-guide");
-    await press(/^Plain flour, 2 bag/);
+    await openLine("Plain flour");
     await waitFor("Price per bag");
     await shot("o04-new-order-line");
     await type("Order", "3");
@@ -174,7 +180,7 @@ describe.skipIf(!process.env.SCREENS_OUT)("purchasing walk", { timeout: 600_000 
     await shot("o06-order-draft");
     await press("Change order");
     await waitFor("Change order", 30_000);
-    await waitFor(/^Plain flour, 3 bag/, 30_000);
+    await waitFor(/^Plain flour(, 3 bag|$)/, 30_000);
     await shot("o07-change-order");
     await press("Save changes");
     await waitFor("Submit order", 30_000);
@@ -306,6 +312,44 @@ describe.skipIf(!process.env.SCREENS_OUT)("purchasing walk", { timeout: 600_000 
     await back();
   });
 
+  it("reorder suggestions, suppliers with their numbers, and an order shared as a PDF", async () => {
+    await m.client.request("PATCH", `${API}/suppliers/${ids.farms}`, {
+      body: { contactName: "Sam Field", contactEmail: "orders@freshfarms.test", deliveryDays: "mon,thu", leadTimeDays: 2, minimumOrderValue: "150", paymentTerms: "net_30", notes: "Ring before 2 pm for next-day delivery" },
+    });
+    for (const item of ["flour", "oil"]) await m.client.request("POST", `${API}/ingredients/${ids[item]}/suppliers`, { body: { supplierId: ids.farms, preferredInd: true } });
+    await make("farms", [["flour", "2", "bag", "17.50"]]);
+    await ordersHome();
+    await scroll(true);
+    await press("Reorder suggestions");
+    await waitFor(/below par/, 30_000);
+    await shot("o70-suggestions");
+    await scroll();
+    await shot("o71-suggestions-foot");
+    await back();
+    await press("Suppliers");
+    await waitFor(/^Call Fresh Farms/, 30_000);
+    await shot("o72-suppliers");
+    await press(/^Call Fresh Farms/);
+    await sleep(2500);
+    await shot("o73-dialler");
+    // Back from the dialler to the app, then to the list.
+    for (let i = 0; i < 3 && !(await has(/^Call Fresh Farms/)); i++) await back();
+    await back();
+    await press("Draft");
+    await sleep(1500);
+    await press(/^Fresh Farms, order/);
+    await waitFor("Share as PDF", 30_000);
+    await shot("o74-order-share-pdf");
+    await press("Share as PDF");
+    await sleep(4000);
+    await shot("o75-share-sheet");
+    // The PDF the sheet was given, in the app's own cache (a debug build lets the shell look).
+    const cached = adb(["shell", "run-as", "com.culinairekitchen.chef", "ls", "cache/purchase-orders"]);
+    if (!/^PO-[\w.-]+\.pdf$/m.test(cached)) throw new Error(`no order PDF in the cache: ${cached}`);
+    await back();
+    await waitFor("Share as PDF", 30_000);
+  });
+
   it("the questions, the item search, the keyboard up, a reorder, and the way in from More and the Inbox", async () => {
     await ordersHome();
     await scroll(true);
@@ -317,7 +361,7 @@ describe.skipIf(!process.env.SCREENS_OUT)("purchasing walk", { timeout: 600_000 
     await shot("o60-item-search");
     await hideKeyboard();
     await press(/^Use Extra virgin/);
-    await waitFor(/^Extra virgin olive oil.*, 1 tin/, 30_000);
+    await waitFor(/^Extra virgin olive oil.*(, 1 tin|unfiltered$)/, 30_000);
     await typeInto("Order", "0");
     await shot("o61-line-keyboard-up");
     await hideKeyboard();
@@ -396,8 +440,7 @@ describe.skipIf(!process.env.SCREENS_OUT)("purchasing walk", { timeout: 600_000 
     await press("New order");
     await waitFor("Start from a guide", 30_000);
     await press(/^Use the guide/);
-    await waitFor(/^Plain flour, /, 30_000);
-    await press(/^Plain flour, /);
+    await openLine("Plain flour");
     await sleep(800);
     await shot("o51-new-order-landscape");
     await back();
