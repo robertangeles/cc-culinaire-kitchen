@@ -3,15 +3,17 @@ import { createApiClient, type Tokens } from "../src/api/client";
 import { createAuthApi } from "../src/api/auth";
 import { createSession, type Snapshot } from "../src/auth/session";
 import { newUuid } from "../src/outbox/uuid";
+import { SalesCsvPreviewSchema, UnitsImportSchema } from "@culinaire/shared/schemas/menu";
 import { createMenuApi } from "../src/menu/menuApi";
 import { blankLine, checkDraft, draftCosts, draftOf, emptyDraft, pickInto, saveMenuItem, saveSession, type CheckedDraft, type MenuDraft } from "../src/menu/menuEditor";
 import { createMenuStore } from "../src/menu/menuStore";
-import { costsOf } from "../src/menu/menuView";
+import { costsOf, dashboardOf, plateOf } from "../src/menu/menuView";
 
 /**
  * The menu against a real server, with the phone's own code and no UI: build an item linked to a catalogue ingredient (a create whose reply is
  * lost is found, not repeated), see the server store what the preview showed, change one line and the price, record a sale whose reply is lost
- * and send it again (one sale, stock taken once), void it, set a category target, and be refused deleting an item with sales history.
+ * and send it again (one sale, stock taken once), void it, set a category target, and be refused deleting an item with sales history; then
+ * recalculate, read the waste, plate cost and yield variance, and import a sales CSV whose commit reply is lost (each row recorded once).
  * Needs the server on E2E_API_URL (default http://localhost:3009) and the seeded E2E user (an Administrator). Skipped locally without
  * credentials; fails in CI without them.
  */
@@ -40,7 +42,17 @@ describe.skipIf(!process.env.CI && (!email || !password || !totpSecret))("the me
   const authApi = createAuthApi(client, tokenStore);
   let snapshot: Snapshot | null = null;
   const session = createSession({ api: authApi, hasTokens: async () => tokens !== null, snapshots: { load: async () => snapshot, save: async (s) => void (snapshot = s) } });
-  const api = createMenuApi(client);
+  // The phone's multipart part (`bytes()`) is Expo's fetch's own; Node's fetch takes a Blob, so only the uploads are built here as Node can.
+  const nodeForm = (csv: { name: string; bytes: Uint8Array }) => {
+    const form = new FormData();
+    form.append("file", new Blob([Uint8Array.from(csv.bytes)], { type: "text/csv" }), csv.name);
+    return form;
+  };
+  const api = {
+    ...createMenuApi(client),
+    previewSales: (csv: { name: string; bytes: Uint8Array }) => client.request("POST", "/api/menu/sales/import/preview", { body: nodeForm(csv), schema: SalesCsvPreviewSchema }),
+    importUnits: (csv: { name: string; bytes: Uint8Array }) => client.request("POST", "/api/menu/import-sales", { body: nodeForm(csv), schema: UnitsImportSchema }),
+  };
   const kvMap = new Map<string, string>();
   const kv = { get: async (k: string) => kvMap.get(k) ?? null, set: async (k: string, v: string) => void kvMap.set(k, v), delete: async (k: string) => void kvMap.delete(k) };
   let store: ReturnType<typeof createMenuStore>;
@@ -132,6 +144,45 @@ describe.skipIf(!process.env.CI && (!email || !password || !totpSecret))("the me
     expect((await api.targets())[`${tag}Breads`]).toBe(28.5);
     await expect(store.remove(itemId)).rejects.toMatchObject({ status: 409, serverCode: "CONFLICT" });
     expect((await api.items()).some((i) => i.menuItemId === itemId)).toBe(true);
+  });
+
+  it("recalculates, and reads the dashboard, the waste, the plate cost and the yield variance as a cost holder sees them", async () => {
+    await store.recalculate();
+    const wasteLogId = newUuid();
+    await client.request("POST", "/api/waste", { body: { wasteLogId, storeLocationId: here, ingredientName: `${tag}flour`, quantity: 1, unit: "kg", reason: "Spoilage", estimatedCost: 12, loggedAt: new Date().toISOString() } });
+    cleanups.push(() => client.request("DELETE", `/api/waste/${wasteLogId}`));
+    await store.refresh();
+    const snap = store.getSnapshot();
+    expect(snap.waste[itemId]).toBe(12);
+    expect(dashboardOf(snap.items)).toMatchObject({ costs: expect.objectContaining({ avgFoodCostPct: expect.any(Number) }) });
+
+    await store.loadFigures(itemId);
+    const figures = store.getSnapshot().figures[itemId];
+    expect(figures).toMatchObject({ variance: { status: "no-period" }, error: undefined });
+    // 600 g of flour at $2/kg makes 2 servings, 10% Q factor: $0.66 a serving at the location's cost, as the web editor's preview had it.
+    expect(figures.plateCost).toBeCloseTo(0.66, 2);
+    expect(plateOf(snap.items.find((i) => i.menuItemId === itemId)!, figures.plateCost!).margin).toBeCloseTo(9.5 - 0.66, 2);
+  });
+
+  it("imports a sales CSV: matches first, records each row once when the reply is lost and it is sent again, then sets units sold", async () => {
+    const csv = { name: "sales.csv", bytes: new TextEncoder().encode(`item,quantity\n${tag}focaccia,2\n${tag}nothing,1\n`) };
+    const preview = await store.previewSales(csv);
+    expect(preview.matched).toEqual([expect.objectContaining({ menuItemId: itemId, qtySold: 2 })]);
+    expect(preview.unmatched).toEqual([expect.objectContaining({ name: `${tag}nothing`, reason: "no matching menu item" })]);
+    loseReplyTo = /\/sales\/import\/commit$/;
+    await expect(store.commitSales(preview.matched)).rejects.toMatchObject({ code: "network" });
+    await expect(store.commitSales(preview.matched)).resolves.toMatchObject({ succeeded: [], alreadyExists: [expect.anything()], failed: [] });
+    const imported = (await store.sales()).filter((s) => s.menuItemName === `${tag}focaccia` && !s.voidedAt);
+    expect(imported).toEqual([expect.objectContaining({ qtySold: 2 })]);
+    await store.voidSale(imported[0].saleId);
+
+    const set = await store.importUnits({ name: "units.csv", bytes: new TextEncoder().encode(`name,units sold\n${tag}focaccia,7\n${tag}nothing,1\n`) });
+    expect(set).toEqual({ updated: 1, notFound: [`${tag}nothing`] });
+    expect(store.getSnapshot().items.find((i) => i.menuItemId === itemId)?.unitsSold).toBe(7);
+  });
+
+  it("asks for a replacement's Recipe Lab request without a model call", async () => {
+    await expect(store.replacement(itemId)).resolves.toContain(`${tag}focaccia`);
   });
 
   it("deletes an item nobody has sold, and counts one already gone as deleted", async () => {
