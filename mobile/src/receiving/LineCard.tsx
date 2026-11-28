@@ -137,7 +137,7 @@ export function LineCard({ line, orderUnitCost, open, saving, receivedAt, error,
           </View>
           <TextField label="Lot number" value={lot} onChangeText={setLot} maxLength={RECEIVING_TEXT_MAX} autoCapitalize="characters" autoCorrect={false} />
           {hint ? <Text variant="error" accessibilityLiveRegion="polite">{hint}</Text> : null}
-          <Button label={saving ? "Saving…" : "Save expiry and lot"} disabled={saving} onPress={() => submitChecked(detailsInput(expiry, lot, receivedAt))} />
+          <Button label={saving ? "Saving…" : "Save expiry and lot"} disabled={saving} onPress={() => submitChecked(detailsInput(expiry, lot, receivedAt, line.status))} />
           <Button kind="quiet" label="Back" onPress={close} />
         </View>
       ) : null}

@@ -330,6 +330,38 @@ describe.skipIf(!RUN)("receiving rules for the phone (real DB)", () => {
       expect(out.body.line).toMatchObject({ status: "SHORT", expiryDate: today, lotNumber: "L-1" });
     });
 
+    it("records an expiry before the delivery day on a rejected line, the evidence of why it was rejected", async () => {
+      const s = await sentPO([{ ingredientId: fx.flourId, qty: "5", unit: "kg" }]);
+      const sent = await lineCall(s, { status: "REJECTED", rejectionReason: "expired", expiryDate: "2001-01-01" });
+      expect(sent.status).toBe(200);
+      expect(sent.body.line).toMatchObject({ status: "REJECTED", expiryDate: "2001-01-01" });
+
+      const later = await lineCall(s, { expiryDate: "2002-02-02" });
+      expect(later.status).toBe(200);
+      expect(later.body.line).toMatchObject({ status: "REJECTED", expiryDate: "2002-02-02" });
+
+      const typo = await lineCall(s, { expiryDate: "2999-01-01" });
+      expect(typo.status).toBe(400);
+      expect(typo.body.code).toBe("EXPIRY_DATE_OUT_OF_RANGE");
+    });
+
+    it("refuses to take a rejected line back in while it holds an expiry before the delivery day", async () => {
+      const s = await sentPO([{ ingredientId: fx.flourId, qty: "5", unit: "kg" }]);
+      await lineCall(s, { status: "REJECTED", rejectionReason: "expired", expiryDate: "2001-01-01" });
+
+      const back = await lineCall(s, { status: "RECEIVED" });
+      expect(back.status).toBe(400);
+      expect(back.body.code).toBe("EXPIRY_DATE_OUT_OF_RANGE");
+      const [held] = await db
+        .select({ status: receivingLine.status, expiryDate: receivingLine.expiryDate })
+        .from(receivingLine)
+        .where(eq(receivingLine.receivingLineId, s.line(fx.flourId).receivingLineId));
+      expect(held).toEqual({ status: "REJECTED", expiryDate: "2001-01-01" });
+
+      const cleared = await lineCall(s, { status: "RECEIVED", expiryDate: null });
+      expect(cleared.status).toBe(200);
+    });
+
     it("clears them when sent blank or null", async () => {
       const s = await sentPO([{ ingredientId: fx.flourId, qty: "5", unit: "kg" }]);
       await lineCall(s, { expiryDate: today, lotNumber: "L-1" });

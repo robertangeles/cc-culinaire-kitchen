@@ -89,8 +89,9 @@ export default function ReceivingChecklist({ po, onBack }: Props) {
 
   const handleSaveDetails = useCallback(async () => {
     if (!activeLineId || !sessionData) return;
+    const status = sessionData.lines.find((l) => l.receivingLineId === activeLineId)?.status ?? "RECEIVED";
     const problem =
-      (expiryValue ? expiryDateProblem(expiryValue, sessionData.session.startedAt) : null) ?? receivingTextProblem("lot", lotValue);
+      (expiryValue ? expiryDateProblem(expiryValue, sessionData.session.startedAt, status) : null) ?? receivingTextProblem("lot", lotValue);
     if (problem) {
       setDetailsError(problem.message);
       return;

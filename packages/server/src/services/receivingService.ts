@@ -121,15 +121,16 @@ export interface ConfirmReceiptInput {
   docketNumber?: string | null;
 }
 
-/** The expiry and lot columns to write for this input, after the shared checks (the web and the phone run the same ones). */
-function lineExtras(input: ActionLineInput, receivedAt: Date) {
+/**
+ * The expiry and lot columns to write for this input, after the shared checks (the web and the phone run the same ones).
+ * The expiry the line will hold (sent, or the stored one when a status change leaves it out) is checked against the status it will have.
+ */
+function lineExtras(input: ActionLineInput, line: { status: string; expiryDate: string | null }, receivedAt: Date) {
   const extras: { expiryDate?: string | null; lotNumber?: string | null } = {};
-  if (input.expiryDate !== undefined) {
-    const expiry = input.expiryDate?.trim() || null;
-    const problem = expiry === null ? null : expiryDateProblem(expiry, receivedAt);
-    if (problem) throw new AppError(400, problem.code, problem.message);
-    extras.expiryDate = expiry;
-  }
+  if (input.expiryDate !== undefined) extras.expiryDate = input.expiryDate?.trim() || null;
+  const expiry = extras.expiryDate !== undefined ? extras.expiryDate : line.expiryDate;
+  const expiryProblem = expiry ? expiryDateProblem(expiry, receivedAt, input.status ?? line.status) : null;
+  if (expiryProblem) throw new AppError(400, expiryProblem.code, expiryProblem.message);
   if (input.lotNumber !== undefined) {
     const problem = receivingTextProblem("lot", input.lotNumber ?? "");
     if (problem) throw new AppError(400, problem.code, problem.message);
@@ -402,7 +403,7 @@ export async function actionLine(
 
     if (!line) throw new Error("Receiving line not found");
 
-    const extras = lineExtras(input, session.startedAt);
+    const extras = lineExtras(input, line, session.startedAt);
     if (input.status === undefined) {
       const [updatedLine] = await tx
         .update(receivingLine)

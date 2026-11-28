@@ -133,13 +133,13 @@ export function priceInput(entry: string): Checked<LineInput> {
 }
 
 /** The expiry as typed on the number pad (DD/MM/YYYY, blank for none) and the lot, checked by the server's own rules. */
-export function detailsInput(typedExpiry: string, lot: string, receivedAt: string): Checked<DetailsInput> {
+export function detailsInput(typedExpiry: string, lot: string, receivedAt: string, lineStatus: string): Checked<DetailsInput> {
   let expiryDate: string | null = null;
   if (typedExpiry.trim() !== "") {
     expiryDate = parseTypedDate(typedExpiry);
     if (!expiryDate) return { ok: false, message: "Enter the expiry date as DD/MM/YYYY." };
   }
-  const problem = (expiryDate ? expiryDateProblem(expiryDate, receivedAt) : null) ?? receivingTextProblem("lot", lot);
+  const problem = (expiryDate ? expiryDateProblem(expiryDate, receivedAt, lineStatus) : null) ?? receivingTextProblem("lot", lot);
   if (problem) return { ok: false, message: problem.message };
   return { ok: true, value: { expiryDate, lotNumber: receivingText(lot) } };
 }

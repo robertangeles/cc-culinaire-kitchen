@@ -234,6 +234,16 @@ describe("receiving a delivery", () => {
     expect(await screen.findByText("Rejected: 5 kg, use by 05/12/2026, lot L-42")).toBeTruthy();
   });
 
+  it("records a past expiry on a rejected line: the printed date is the evidence", async () => {
+    api.startSession.mockResolvedValue(started({ lines: [line("r1", "Flour", { status: "REJECTED", receivedQty: "0" })] }));
+    render(<ReceiveDelivery />);
+    await open("Flour");
+    key("Expiry and lot");
+    fireEvent.change(screen.getByLabelText("Expiry date"), { target: { value: "01112026" } });
+    fireEvent.click(screen.getByRole("button", { name: "Save expiry and lot" }));
+    await waitFor(() => expect(api.actionLine).toHaveBeenCalledWith("S1", "r1", { expiryDate: "2026-11-01", lotNumber: null }));
+  });
+
   it("refuses an expiry before the delivery day on the phone, sending nothing", async () => {
     render(<ReceiveDelivery />);
     await open("Flour");

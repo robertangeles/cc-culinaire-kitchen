@@ -4,7 +4,7 @@ import { render, screen, fireEvent, waitFor } from "@testing-library/react";
 /**
  * Expiry date, lot number and docket number on the web receiving checklist. What matters: the expiry and lot
  * are saved without a status (so a rejected line stays rejected), a day before the delivery is refused before
- * anything is sent, and the docket number goes with the confirm.
+ * anything is sent unless the line is rejected, and the docket number goes with the confirm.
  */
 
 const { default: ReceivingChecklist } = await import("./ReceivingChecklist.js");
@@ -12,7 +12,7 @@ const { default: ReceivingChecklist } = await import("./ReceivingChecklist.js");
 const startedAt = "2026-11-28T03:00:00.000Z";
 const line = {
   receivingLineId: "rl-1", sessionId: "s-1", poLineId: "pl-1", ingredientId: "i-1",
-  orderedQty: "5", orderedUnit: "kg", receivedQty: "0", actualUnitCost: "2", status: "REJECTED",
+  orderedQty: "5", orderedUnit: "kg", receivedQty: "0", actualUnitCost: "2", status: "RECEIVED",
   expiryDate: null, lotNumber: null,
   ingredientName: "Flour", ingredientCategory: "dry_goods", baseUnit: "kg", parLevel: null, stockOnHand: null,
 };
@@ -22,6 +22,7 @@ const calls: Array<{ url: string; body: unknown }> = [];
 
 beforeEach(() => {
   calls.length = 0;
+  line.status = "RECEIVED";
   vi.stubGlobal("fetch", vi.fn(async (url: string, init?: RequestInit) => {
     const body = init?.body ? JSON.parse(String(init.body)) : undefined;
     calls.push({ url, body });
@@ -51,7 +52,17 @@ describe("ReceivingChecklist expiry, lot and docket", () => {
     expect(calls.find((c) => c.url.includes("/lines/"))?.body).toEqual({ expiryDate: "2026-12-05", lotNumber: "L-42" });
   });
 
-  it("refuses an expiry before the delivery day and sends nothing", async () => {
+  it("saves an expiry before the delivery day on a rejected line", async () => {
+    line.status = "REJECTED";
+    await openDetails();
+    fireEvent.change(screen.getByLabelText("Expiry date"), { target: { value: "2026-11-01" } });
+    fireEvent.click(screen.getByRole("button", { name: "Save Expiry & Lot" }));
+
+    await screen.findByText("· Use by 1 November 2026");
+    expect(calls.find((c) => c.url.includes("/lines/"))?.body).toEqual({ expiryDate: "2026-11-01", lotNumber: null });
+  });
+
+  it("refuses an expiry before the delivery day on a received line and sends nothing", async () => {
     await openDetails();
     fireEvent.change(screen.getByLabelText("Expiry date"), { target: { value: "2026-11-01" } });
     fireEvent.click(screen.getByRole("button", { name: "Save Expiry & Lot" }));
