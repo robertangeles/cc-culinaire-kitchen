@@ -5,7 +5,7 @@ import { SafeAreaView } from "react-native-safe-area-context";
 import { useSession } from "../../../src/runtime/appContext";
 import { hasAnyPermission } from "../../../src/shell/tabs";
 import { useMenu } from "../../../src/menu/MenuProvider";
-import { CLASS_FILTERS, categoriesOf, classInfo, costsOf, filterItems, money, overTarget, pct } from "../../../src/menu/menuView";
+import { CLASS_FILTERS, categoriesOf, classInfo, costsOf, filterItems, money, overTarget, pct, wasteLabel } from "../../../src/menu/menuView";
 import { dayAndTime } from "../../../src/transfers/transferView";
 import { OfflineBanner } from "../../../src/ui/Banner";
 import { Button } from "../../../src/ui/Button";
@@ -43,6 +43,7 @@ export default function MenuHome() {
   );
   if (state.phase !== "ready") return null;
   const canManage = hasAnyPermission(state.user, ["menu:manage"]);
+  const canSeeCost = hasAnyPermission(state.user, ["inventory:cost"]);
   const categories = categoriesOf(snap.items);
   // A category whose last item is gone has no chip to switch it off with.
   const inCategory = category && categories.includes(category) ? category : null;
@@ -78,6 +79,8 @@ export default function MenuHome() {
           <Button label="Record a sale" onPress={() => router.push("/menu-sale")} />
           {canManage ? <Button kind="ghost" label="Add a menu item" onPress={() => router.push("/menu-edit")} /> : null}
           <View style={{ flexDirection: "row", flexWrap: "wrap", justifyContent: "space-around", columnGap: space.xl }}>
+            <Button kind="quiet" label="Dashboard" onPress={() => router.push("/menu-dashboard")} />
+            {canSeeCost ? <Button kind="quiet" label="Engineering matrix" onPress={() => router.push("/menu-matrix")} /> : null}
             <Button kind="quiet" label="Recent sales" onPress={() => router.push("/menu-sales")} />
             <Button kind="quiet" label="Category targets" onPress={() => router.push("/menu-categories")} />
           </View>
@@ -101,11 +104,12 @@ export default function MenuHome() {
                       const costs = costsOf(item);
                       const over = overTarget(item, snap.targets);
                       const label = classInfo(item.classification).label;
+                      const waste = wasteLabel(item, snap.waste[item.menuItemId]);
                       return (
                         <Pressable
                           key={item.menuItemId}
                           accessibilityRole="button"
-                          accessibilityLabel={`${item.name}, ${item.category}, ${money(item.sellingPrice)}${costs ? `, food cost ${money(costs.foodCost)}, ${pct(costs.foodCostPct)}, margin ${money(costs.margin)}` : ""}${over !== null ? `, over the ${over}% target` : ""}, ${label}`}
+                          accessibilityLabel={`${item.name}, ${item.category}, ${money(item.sellingPrice)}${costs ? `, food cost ${money(costs.foodCost)}, ${pct(costs.foodCostPct)}, margin ${money(costs.margin)}` : ""}${over !== null ? `, over the ${over}% target` : ""}, ${label}${waste ? `, ${waste}` : ""}`}
                           onPress={() => router.push({ pathname: "/menu-item/[menuItemId]", params: { menuItemId: item.menuItemId } })}
                           style={[{ minHeight: size.tap, paddingVertical: space.md, paddingHorizontal: space.lg, gap: space.xs }, rowDivider(index, c.border)]}
                         >
@@ -121,6 +125,7 @@ export default function MenuHome() {
                             <Chip label={label} />
                             {costs ? <Text style={{ fontFamily: fontFamily.uiStrong, color: over !== null ? c.danger : c.text }}>{over !== null ? `${pct(costs.foodCostPct)}, over ${over}%` : pct(costs.foodCostPct)}</Text> : null}
                           </View>
+                          {waste ? <Text variant="meta" style={{ color: c.danger }}>{waste}</Text> : null}
                         </Pressable>
                       );
                     })}

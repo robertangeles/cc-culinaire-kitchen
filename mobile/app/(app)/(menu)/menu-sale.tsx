@@ -143,6 +143,7 @@ export default function MenuSale() {
           }}
         />
         <Text variant="meta">{`Stock comes off at ${state.location.locationName}.`}</Text>
+        <Button kind="quiet" label="Import sales from a CSV" disabled={sending} onPress={() => router.push({ pathname: "/menu-import", params: { kind: "sales" } })} />
       </>
     );
   };
