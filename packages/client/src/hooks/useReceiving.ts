@@ -253,7 +253,8 @@ export function useReceiving() {
       if (result.discrepancy) {
         setSessionData((prev) => {
           if (!prev) return prev;
-          const discrepancies = prev.discrepancies.filter(
+          // The start-session response carries no discrepancies array.
+          const discrepancies = (prev.discrepancies ?? []).filter(
             (d) => d.receivingLineId !== receivingLineId,
           );
           discrepancies.push(result.discrepancy);
