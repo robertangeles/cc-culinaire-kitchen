@@ -23,6 +23,7 @@ export interface ReceivingSession {
   startedAt: string;
   completedAt: string | null;
   notes: string | null;
+  docketNumber: string | null;
 }
 
 export interface ReceivingLine {
@@ -35,6 +36,9 @@ export interface ReceivingLine {
   receivedQty: string;
   actualUnitCost: string | null;
   status: string;
+  /** "YYYY-MM-DD" */
+  expiryDate: string | null;
+  lotNumber: string | null;
   ingredientName: string | null;
   ingredientCategory: string | null;
   baseUnit: string | null;
@@ -68,6 +72,12 @@ export type LineAction = {
   substitutedIngredientId?: string;
 };
 
+/** Blank (null) clears the field. */
+export interface LineDetails {
+  expiryDate: string | null;
+  lotNumber: string | null;
+}
+
 export interface ReceivingSessionData {
   session: ReceivingSession;
   lines: ReceivingLine[];
@@ -82,6 +92,7 @@ export interface ConfirmResult {
   linesProcessed: number;
   discrepancyCount: number;
   isPerfectDelivery: boolean;
+  docketNumber: string | null;
 }
 
 // ── Local storage helpers ────────────────────────────────────────────
@@ -245,9 +256,36 @@ export function useReceiving() {
   }, [sessionData]);
 
   /**
+   * Record a line's expiry date and lot number. Not optimistic: the line shows what the server saved,
+   * and a refusal (a bad date) is thrown with the server's words for the form to show.
+   */
+  const saveLineDetails = useCallback(async (receivingLineId: string, details: LineDetails) => {
+    if (!sessionData) throw new Error("No active session");
+    const sessionId = sessionData.session.sessionId;
+    const res = await fetch(
+      `${API}/receiving/sessions/${sessionId}/lines/${receivingLineId}`,
+      { ...jsonOpts, method: "POST", body: JSON.stringify(details) },
+    );
+    if (!res.ok) {
+      const err = await res.json().catch(() => ({}));
+      throw new Error(err.error || "Failed to save the expiry and lot");
+    }
+    const { line } = await res.json() as { line: Pick<ReceivingLine, "expiryDate" | "lotNumber"> };
+    setSessionData((prev) => {
+      if (!prev) return prev;
+      const lines = prev.lines.map((l) =>
+        l.receivingLineId === receivingLineId ? { ...l, expiryDate: line.expiryDate, lotNumber: line.lotNumber } : l,
+      );
+      const updated = { ...prev, lines };
+      saveToLocal(sessionId, updated);
+      return updated;
+    });
+  }, [sessionData]);
+
+  /**
    * Confirm receipt — sync all changes to server.
    */
-  const confirmReceipt = useCallback(async (): Promise<ConfirmResult> => {
+  const confirmReceipt = useCallback(async (docketNumber: string | null): Promise<ConfirmResult> => {
     if (!sessionData) throw new Error("No active session");
 
     const sessionId = sessionData.session.sessionId;
@@ -256,7 +294,7 @@ export function useReceiving() {
 
     try {
       const res = await fetch(`${API}/receiving/sessions/${sessionId}/confirm`, {
-        ...jsonOpts, method: "POST",
+        ...jsonOpts, method: "POST", body: JSON.stringify({ docketNumber }),
       });
 
       if (!res.ok) {
@@ -317,6 +355,7 @@ export function useReceiving() {
     startSession,
     loadSession,
     actionLine,
+    saveLineDetails,
     confirmReceipt,
     cancelSession,
   };

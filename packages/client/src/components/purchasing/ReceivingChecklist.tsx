@@ -12,6 +12,7 @@
 import { useState, useCallback, useEffect } from "react";
 import { useReceiving, type LineAction } from "../../hooks/useReceiving.js";
 import { type PurchaseOrder } from "../../hooks/useInventory.js";
+import { RECEIVING_TEXT_MAX, expiryDateProblem, formatAuDate, receivingText, receivingTextProblem } from "@culinaire/shared";
 import {
   ArrowLeft,
   Check,
@@ -20,6 +21,7 @@ import {
   XCircle,
   DollarSign,
   ArrowRightLeft,
+  CalendarClock,
   Loader2,
   WifiOff,
   PartyPopper,
@@ -52,11 +54,17 @@ export default function ReceivingChecklist({ po, onBack }: Props) {
   const {
     sessionData, isLoading, isSyncing, isOffline, error,
     discrepancyCount,
-    startSession, actionLine, confirmReceipt, cancelSession,
+    startSession, actionLine, saveLineDetails, confirmReceipt, cancelSession,
   } = useReceiving();
 
   const [activeLineId, setActiveLineId] = useState<string | null>(null);
-  const [actionType, setActionType] = useState<LineAction["status"] | null>(null);
+  // DETAILS is the expiry and lot form: it changes no status.
+  const [actionType, setActionType] = useState<LineAction["status"] | "DETAILS" | null>(null);
+  const [expiryValue, setExpiryValue] = useState("");
+  const [lotValue, setLotValue] = useState("");
+  const [detailsError, setDetailsError] = useState<string | null>(null);
+  const [savingDetails, setSavingDetails] = useState(false);
+  const [docket, setDocket] = useState("");
   const [shortQty, setShortQty] = useState("");
   const [priceValue, setPriceValue] = useState("");
   const [rejectionReason, setRejectionReason] = useState("quality");
@@ -70,6 +78,34 @@ export default function ReceivingChecklist({ po, onBack }: Props) {
       startSession(po.poId, po.storeLocationId).catch(() => {});
     }
   }, [po.poId, po.storeLocationId, sessionData, startSession]);
+
+  const handleOpenDetails = useCallback((lineId: string, expiryDate: string | null, lotNumber: string | null) => {
+    setActiveLineId(lineId);
+    setActionType("DETAILS");
+    setExpiryValue(expiryDate ?? "");
+    setLotValue(lotNumber ?? "");
+    setDetailsError(null);
+  }, []);
+
+  const handleSaveDetails = useCallback(async () => {
+    if (!activeLineId || !sessionData) return;
+    const problem =
+      (expiryValue ? expiryDateProblem(expiryValue, sessionData.session.startedAt) : null) ?? receivingTextProblem("lot", lotValue);
+    if (problem) {
+      setDetailsError(problem.message);
+      return;
+    }
+    setSavingDetails(true);
+    try {
+      await saveLineDetails(activeLineId, { expiryDate: expiryValue || null, lotNumber: receivingText(lotValue) });
+      setActiveLineId(null);
+      setActionType(null);
+    } catch (err) {
+      setDetailsError(err instanceof Error ? err.message : "Failed to save the expiry and lot");
+    } finally {
+      setSavingDetails(false);
+    }
+  }, [activeLineId, sessionData, expiryValue, lotValue, saveLineDetails]);
 
   const handleActionSelect = useCallback((lineId: string, action: LineAction["status"]) => {
     if (action === "RECEIVED") {
@@ -88,7 +124,7 @@ export default function ReceivingChecklist({ po, onBack }: Props) {
   }, [actionLine]);
 
   const handleSubmitAction = useCallback(async () => {
-    if (!activeLineId || !actionType) return;
+    if (!activeLineId || !actionType || actionType === "DETAILS") return;
 
     const input: LineAction = { status: actionType };
 
@@ -110,7 +146,7 @@ export default function ReceivingChecklist({ po, onBack }: Props) {
 
   const handleConfirm = useCallback(async () => {
     try {
-      const result = await confirmReceipt();
+      const result = await confirmReceipt(receivingText(docket));
       if (result.isPerfectDelivery) {
         setSuccessSupplier(po.supplierName ?? "Supplier");
         setShowSuccess(true);
@@ -124,7 +160,7 @@ export default function ReceivingChecklist({ po, onBack }: Props) {
     } catch {
       // Error handled by hook
     }
-  }, [confirmReceipt, po.supplierName, onBack]);
+  }, [confirmReceipt, docket, po.supplierName, onBack]);
 
   const handleCancelSession = useCallback(async () => {
     if (!confirm("Cancel receiving? Changes will be lost.")) return;
@@ -180,6 +216,7 @@ export default function ReceivingChecklist({ po, onBack }: Props) {
   }
 
   const lines = sessionData.lines;
+  const docketProblem = receivingTextProblem("docket", docket);
 
   return (
     <div className="flex flex-col h-full animate-[fadeInUp_200ms_ease-out]">
@@ -270,6 +307,12 @@ export default function ReceivingChecklist({ po, onBack }: Props) {
                       · {config.label}: {Number(line.receivedQty).toFixed(1)}
                     </span>
                   )}
+                  {line.expiryDate && (
+                    <span className="text-xs text-gold">· Use by {formatAuDate(line.expiryDate)}</span>
+                  )}
+                  {line.lotNumber && (
+                    <span className="text-xs text-gold">· Lot {line.lotNumber}</span>
+                  )}
                 </div>
 
                 {/* Actions — always visible; icon-only below sm, labeled above it */}
@@ -305,6 +348,14 @@ export default function ReceivingChecklist({ po, onBack }: Props) {
                       bg-blue-500/15 text-blue-400 hover:bg-blue-500/25 transition-all"
                   >
                     <DollarSign className="size-4" /> <span className="hidden sm:inline">Price Change</span>
+                  </button>
+                  <button
+                    onClick={() => handleOpenDetails(line.receivingLineId, line.expiryDate, line.lotNumber)}
+                    title="Expiry & Lot" aria-label="Expiry & Lot"
+                    className="flex items-center gap-1.5 px-2.5 py-2 rounded-lg text-xs font-medium
+                      bg-gold/15 text-gold hover:bg-gold/25 transition-all"
+                  >
+                    <CalendarClock className="size-4" /> <span className="hidden sm:inline">Expiry & Lot</span>
                   </button>
                 </div>
               </div>
@@ -376,6 +427,47 @@ export default function ReceivingChecklist({ po, onBack }: Props) {
                     </div>
                   )}
 
+                  {/* Expiry date and lot number: no status change */}
+                  {actionType === "DETAILS" && (
+                    <div className="space-y-3">
+                      <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                        <label className="block text-xs text-dark-600">
+                          Expiry date
+                          <input
+                            type="date"
+                            value={expiryValue}
+                            onChange={(e) => setExpiryValue(e.target.value)}
+                            className="mt-1 w-full rounded-lg bg-dark border border-dark-200 text-white px-3 py-2.5 text-sm
+                              focus:outline-none focus:border-gold/50"
+                            autoFocus
+                          />
+                        </label>
+                        <label className="block text-xs text-dark-600">
+                          Lot number
+                          <input
+                            value={lotValue}
+                            onChange={(e) => setLotValue(e.target.value)}
+                            maxLength={RECEIVING_TEXT_MAX}
+                            placeholder="As printed on the pack"
+                            className="mt-1 w-full rounded-lg bg-dark border border-dark-200 text-white px-3 py-2.5 text-sm
+                              focus:outline-none focus:border-gold/50 placeholder:text-dark-500"
+                          />
+                        </label>
+                      </div>
+                      {detailsError && <p className="text-xs text-red-400" role="alert">{detailsError}</p>}
+                      <div className="flex gap-2">
+                        <button onClick={() => setActionType(null)}
+                          className="flex-1 py-2 rounded-lg text-xs text-dark-600 bg-[#1A1A1A]">Back</button>
+                        <button onClick={handleSaveDetails}
+                          disabled={savingDetails}
+                          className="flex-1 py-2 rounded-lg text-xs font-medium bg-gold/15 text-gold
+                            disabled:opacity-40 disabled:cursor-not-allowed">
+                          {savingDetails ? "Saving..." : "Save Expiry & Lot"}
+                        </button>
+                      </div>
+                    </div>
+                  )}
+
                   {/* PRICE_VARIANCE input */}
                   {actionType === "PRICE_VARIANCE" && (
                     <div className="space-y-3">
@@ -412,10 +504,22 @@ export default function ReceivingChecklist({ po, onBack }: Props) {
       </div>
 
       {/* Confirm Receipt — pinned at bottom */}
-      <div className="sticky bottom-0 z-10 p-4 bg-dark/95 backdrop-blur-sm border-t border-dark-200">
+      <div className="sticky bottom-0 z-10 p-4 bg-dark/95 backdrop-blur-sm border-t border-dark-200 space-y-3">
+        <label className="block text-xs text-dark-600">
+          Supplier docket number
+          <input
+            value={docket}
+            onChange={(e) => setDocket(e.target.value)}
+            maxLength={RECEIVING_TEXT_MAX}
+            placeholder="Optional"
+            className="mt-1 w-full rounded-lg bg-dark border border-dark-200 text-white px-3 py-2 text-sm
+              focus:outline-none focus:border-gold/50 placeholder:text-dark-500"
+          />
+        </label>
+        {docketProblem && <p className="text-xs text-red-400" role="alert">{docketProblem.message}</p>}
         <button
           onClick={handleConfirm}
-          disabled={isSyncing}
+          disabled={isSyncing || docketProblem !== null}
           className="w-full flex items-center justify-center gap-2 py-3.5 rounded-xl text-sm font-semibold
             bg-gradient-to-r from-gold to-gold-hover text-dark
             hover:shadow-[0_0_20px_rgba(212,165,116,0.3)] transition-all
