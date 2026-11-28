@@ -491,7 +491,7 @@ Differences from the web, found while comparing:
 - A published contact address for the app (the store listing and the app), as App Store 1.2 asks.
 - A filter on what can be posted: App Store 1.2 also asks for "a method for filtering objectionable material from being posted". Today there is reporting, a moderator's Hide and blocking, and no filter on words.
 - The owner adds to the Privacy Policy and Terms of Service (Settings > Pages, the web and the mobile copy of each) that reported Bench messages (the message, its sender and time) are read by platform moderators and administrators, and nothing else from the conversation.
-- Review notes for the reviewers: two test accounts in one kitchen, one of them holding `bench:moderate`, and where Report, Block, Blocked people and Reports to review are.
+- Review notes for the reviewers: done in `mobile/RELEASE.md` ("The reviewer demo account"): two test accounts in one kitchen, neither holding `bench:moderate` (a moderator account on request), and where Report, Block and Blocked people are.
 - Migration 0009 applied to production before the server that reads it (see the CHANGELOG), and the one-time store build with `EXPO_PUBLIC_BENCH=on`.
 
 With the Bench on, it is open to everyone, so a person with one module of their own has more than five tabs: their first four stay where they were, and the Bench and Account are under More. With it off, every tab bar is as it was before the Bench.

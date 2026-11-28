@@ -64,7 +64,7 @@ Run commands from the repository root. `eas` is the Expo build service; use it t
 2. `pnpm --dir mobile exec eas build --profile production --platform ios`, then `pnpm --dir mobile exec eas submit --platform ios` (asks for your Apple login). It appears in TestFlight after Apple's processing.
 3. Add internal testers (your iPhone and iPad) in TestFlight. iPad is supported, so the store listing needs iPad screenshots.
 4. Before submitting for review: privacy nutrition labels, age rating, the privacy policy URL (the existing web Privacy URL), the terms URL (the existing web Terms URL), support URL, and the reviewer notes below, with the demo account.
-5. Check `EXPO_PUBLIC_BENCH` in the production profile of `eas.json`: it stays `off` until the owner decides (App Store 1.2; see "Still needed for a store build" in `mobile/README.md`).
+5. The build the reviewers get must have the Bench switched on (`EXPO_PUBLIC_BENCH=on`; the reviewer notes below walk them through the Bench's report and block); otherwise it stays off (App Store 1.2; see "Still needed for a store build" in `mobile/README.md`).
 6. Apple rule 3.1.3(b): the day the website starts selling paid plans, an app that unlocks those features must either also sell them in the app or qualify for an exemption. Billing in the app is deferred, so nothing in the app mentions plans. Revisit before the web billing launch.
 
 ## Owner chores that are not code (with the long lead times first)
@@ -77,25 +77,30 @@ Run commands from the repository root. `eas` is the Expo build service; use it t
 
 ## The reviewer demo account
 
-Apple and Google reviewers must sign in without you. The script makes (or finds) one verified account with no second step, in its own organisation "CulinAIre Demo Kitchen" with one location, three storage areas of eleven items (butter is in two, so the shared-item marker shows) and a stock take open by area. It is safe to run again; if a reviewer deletes the account (Apple tests this), run it again to restore it.
+Apple and Google reviewers must sign in without you. The script makes (or finds) two verified accounts with no second step, both admins of their own organisation "CulinAIre Demo Kitchen" with one location, three storage areas of eleven items (butter is in two, so the shared-item marker shows) and a stock take open by area. Both are in the kitchen's Bench room, where each has short made-up messages (the first account "App Review" one, the second "Demo Cook" three), so whichever account the reviewer signs in with has a message to report and a person to block. Neither account is a Bench moderator. It is safe to run again: it adds no second room, account or message; if a reviewer deletes either account (Apple tests this), run it again to restore it in the same kitchen.
 
 ```bash
 # Local first, to see it work (a local database needs no confirmation):
 REVIEWER_DEMO_EMAIL=reviewer@<your domain> REVIEWER_DEMO_PASSWORD='<12+ characters>' \
+REVIEWER_DEMO_EMAIL_2=reviewer2@<your domain> REVIEWER_DEMO_PASSWORD_2='<12+ characters>' \
   pnpm --filter @culinaire/server exec tsx src/scripts/seedReviewerDemo.ts
 
 # Production, when you are ready. It refuses unless you name the database host, so it is never an accident:
-APP_ENV=prod REVIEWER_DEMO_EMAIL=... REVIEWER_DEMO_PASSWORD=... \
+APP_ENV=prod REVIEWER_DEMO_EMAIL=... REVIEWER_DEMO_PASSWORD=... REVIEWER_DEMO_EMAIL_2=... REVIEWER_DEMO_PASSWORD_2=... \
   pnpm --filter @culinaire/server exec tsx src/scripts/seedReviewerDemo.ts --confirm-host <the database host it names>
 ```
 
-The script prints the host before it writes anything and never prints the password. Use a mailbox you control for the email, and keep the password in your password manager.
+The script prints the host before it writes anything and never prints the passwords. Use two different mailboxes you control for the emails, and keep both passwords in your password manager. The Bench part of the notes needs a build with the Bench on (step 5 under "TestFlight and the App Store").
 
 ### Reviewer notes (paste into App Store Connect "App Review Information" and the Play Console "App access")
 
 > CulinAIre Kitchen is a tool for restaurant and café kitchen teams. Sign in with the demo account below (email and password; no code is needed). A stock count is already in progress at "Demo Kitchen": open the Count tab (under More on a small screen if it is not on the bar), open an area, enter a quantity for each item with the on-screen keypad, and send the area for review. Counts are saved on the phone first and sent when there is a connection, so it also works with no signal.
 >
 > Demo account: <email> / <password>
+>
+> Second demo account, in the same kitchen: <second email> / <second password>
+>
+> The Bench (team chat): open the Bench (a tab, or under More) and the room "CulinAIre Demo Kitchen". Either demo account can be used. To report a message, tap one of the other account's messages (Demo Cook's if you are App Review, App Review's if you are Demo Cook), then Report, choose a reason and send. To block a person, tap one of their messages and choose Block, or open a direct message with them (Message in the same menu) and use Block at the top. Blocked people, on the Bench's first screen, lists the people you blocked and lets you unblock them. A moderator account is available on request.
 >
 > Account deletion: Account (a tab, or under More), "Delete my account" (asks for the password). The demo account may be deleted during review; if it is, please contact us and we will restore it.
 >
