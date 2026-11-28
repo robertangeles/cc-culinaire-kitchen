@@ -86,6 +86,11 @@ export const SERVER_ERROR_CODES = [
   "DM_NOT_ALLOWED",
   // The Bench: a post or an edit with a word the owner's list does not allow (422). The text never says which; the draft stays to be changed.
   "POST_NOT_ALLOWED",
+  // Receiving extras: an expiry date that is not a real day or is out of range, a lot or docket number that is too long. 400; the delivery stays open.
+  "EXPIRY_DATE_INVALID",
+  "EXPIRY_DATE_OUT_OF_RANGE",
+  "LOT_NUMBER_TOO_LONG",
+  "DOCKET_NUMBER_TOO_LONG",
 ] as const;
 export type ServerErrorCode = (typeof SERVER_ERROR_CODES)[number];
 

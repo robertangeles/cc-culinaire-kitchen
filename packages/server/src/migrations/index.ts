@@ -14,5 +14,6 @@ import { migration as m0006 } from "./0006_menu_item_organisation.js";
 import { migration as m0007 } from "./0007_foh_restocks.js";
 import { migration as m0008 } from "./0008_credit_note_one_per_discrepancy.js";
 import { migration as m0009 } from "./0009_bench_safety.js";
+import { migration as m0010 } from "./0010_receiving_extras.js";
 
-export const migrations: Migration[] = [m0001, m0002, m0003, m0004, m0005, m0006, m0007, m0008, m0009];
+export const migrations: Migration[] = [m0001, m0002, m0003, m0004, m0005, m0006, m0007, m0008, m0009, m0010];

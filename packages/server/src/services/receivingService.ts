@@ -35,7 +35,7 @@ import * as auditService from "./auditService.js";
 import type { DbOrTx } from "./auditService.js";
 import * as wacService from "./wacService.js";
 import { resolveToBase } from "./unitConversionService.js";
-import { IncompatibleUnitsError } from "@culinaire/shared";
+import { IncompatibleUnitsError, expiryDateProblem, receivingText, receivingTextProblem } from "@culinaire/shared";
 import { validateTransition, RECEIVING_SESSION_TRANSITIONS } from "../utils/stateTransition.js";
 import { AppError } from "../utils/appError.js";
 import pino from "pino";
@@ -66,6 +66,8 @@ async function selectLinesWithIngredient(sessionId: string, dbOrTx: DbOrTx) {
       receivedQty: receivingLine.receivedQty,
       actualUnitCost: receivingLine.actualUnitCost,
       status: receivingLine.status,
+      expiryDate: receivingLine.expiryDate,
+      lotNumber: receivingLine.lotNumber,
       ingredientName: ingredient.ingredientName,
       ingredientCategory: ingredient.ingredientCategory,
       baseUnit: ingredient.baseUnit,
@@ -98,13 +100,42 @@ async function selectLinesWithIngredient(sessionId: string, dbOrTx: DbOrTx) {
 export type LineActionType = "RECEIVED" | "SHORT" | "REJECTED" | "PRICE_VARIANCE" | "SUBSTITUTED";
 export type RejectionReason = "quality" | "damaged" | "temperature" | "expired" | "other";
 
+/**
+ * With a status, the line's status changes as before. Without one, only the expiry date and lot number change
+ * (the discrepancy is left alone). Either way an extra that is left out keeps its stored value; null or "" clears it.
+ */
 export interface ActionLineInput {
-  status: LineActionType;
+  status?: LineActionType;
   receivedQty?: string;
   actualUnitCost?: string;
   rejectionReason?: RejectionReason;
   rejectionNote?: string;
   substitutedIngredientId?: string;
+  /** "YYYY-MM-DD" */
+  expiryDate?: string | null;
+  lotNumber?: string | null;
+}
+
+export interface ConfirmReceiptInput {
+  /** The supplier's docket number. Left out keeps what the session holds; null or "" clears it. */
+  docketNumber?: string | null;
+}
+
+/** The expiry and lot columns to write for this input, after the shared checks (the web and the phone run the same ones). */
+function lineExtras(input: ActionLineInput, receivedAt: Date) {
+  const extras: { expiryDate?: string | null; lotNumber?: string | null } = {};
+  if (input.expiryDate !== undefined) {
+    const expiry = input.expiryDate?.trim() || null;
+    const problem = expiry === null ? null : expiryDateProblem(expiry, receivedAt);
+    if (problem) throw new AppError(400, problem.code, problem.message);
+    extras.expiryDate = expiry;
+  }
+  if (input.lotNumber !== undefined) {
+    const problem = receivingTextProblem("lot", input.lotNumber ?? "");
+    if (problem) throw new AppError(400, problem.code, problem.message);
+    extras.lotNumber = receivingText(input.lotNumber ?? "");
+  }
+  return extras;
 }
 
 /** The substitute must be one of the caller's own ingredients: it is client-supplied and becomes stock. */
@@ -371,6 +402,34 @@ export async function actionLine(
 
     if (!line) throw new Error("Receiving line not found");
 
+    const extras = lineExtras(input, session.startedAt);
+    if (input.status === undefined) {
+      const [updatedLine] = await tx
+        .update(receivingLine)
+        .set({ ...extras, updatedDttm: new Date() })
+        .where(eq(receivingLine.receivingLineId, receivingLineId))
+        .returning();
+      const [discrepancy] = await tx
+        .select()
+        .from(receivingDiscrepancy)
+        .where(eq(receivingDiscrepancy.receivingLineId, receivingLineId));
+      await auditService.log(
+        {
+          entityType: "receiving_line",
+          entityId: receivingLineId,
+          action: "update",
+          actorUserId,
+          organisationId: po.organisationId,
+          beforeValue: { expiryDate: line.expiryDate, lotNumber: line.lotNumber },
+          afterValue: { expiryDate: updatedLine.expiryDate, lotNumber: updatedLine.lotNumber },
+          metadata: { sessionId, discrepancyType: null },
+        },
+        tx,
+      );
+      logger.info({ receivingLineId, sessionId }, "Receiving line expiry or lot recorded");
+      return { line: updatedLine, discrepancy: discrepancy ?? null };
+    }
+
     // Get PO line for cost reference
     const [poLine] = await tx
       .select()
@@ -399,6 +458,7 @@ export async function actionLine(
     // Update the line
     const updateData: Record<string, unknown> = {
       status: input.status,
+      ...extras,
       updatedDttm: new Date(),
     };
 
@@ -491,8 +551,8 @@ export async function actionLine(
         action: "update",
         actorUserId,
         organisationId: po.organisationId,
-        beforeValue: { status: line.status, receivedQty: line.receivedQty, actualUnitCost: line.actualUnitCost },
-        afterValue: { status: updatedLine.status, receivedQty: updatedLine.receivedQty, actualUnitCost: updatedLine.actualUnitCost },
+        beforeValue: { status: line.status, receivedQty: line.receivedQty, actualUnitCost: line.actualUnitCost, expiryDate: line.expiryDate, lotNumber: line.lotNumber },
+        afterValue: { status: updatedLine.status, receivedQty: updatedLine.receivedQty, actualUnitCost: updatedLine.actualUnitCost, expiryDate: updatedLine.expiryDate, lotNumber: updatedLine.lotNumber },
         metadata: { sessionId, discrepancyType: input.status !== "RECEIVED" ? input.status : null },
       },
       tx,
@@ -513,7 +573,7 @@ export async function actionLine(
  * Confirm receipt of all items. ALL-OR-NOTHING transaction:
  * - Creates FIFO batches for received/short items
  * - Updates stock levels via optimistic locking
- * - Marks session as COMPLETED
+ * - Marks session as COMPLETED, with the supplier's docket number when one is given
  * - Updates PO status to RECEIVED / PARTIAL_RECEIVED
  * - Writes a `complete` audit row scoped to the session
  *
@@ -521,7 +581,9 @@ export async function actionLine(
  * discrepancies. Notification failure is logged but does NOT roll back the
  * receipt — a failed email shouldn't undo a successful delivery.
  */
-export async function confirmReceipt(sessionId: string, orgId: number, actorUserId: number) {
+export async function confirmReceipt(sessionId: string, orgId: number, actorUserId: number, input: ConfirmReceiptInput = {}) {
+  const docketProblem = receivingTextProblem("docket", input.docketNumber ?? "");
+  if (docketProblem) throw new AppError(400, docketProblem.code, docketProblem.message);
   // Wrap all DB writes in a single transaction so rollback is automatic on
   // any error (FIFO batch insert, stock update conflict, PO update, etc.).
   const result = await db.transaction(async (tx) => {
@@ -634,6 +696,9 @@ export async function confirmReceipt(sessionId: string, orgId: number, actorUser
             quantity: baseQty,
             unitCost: baseUnitCost,
             sourcePoLineId: line.poLineId,
+            // The line holds a calendar day; the batch a moment, so the day is stored as its UTC midnight.
+            expiryDate: line.expiryDate ? new Date(`${line.expiryDate}T00:00:00Z`) : null,
+            lotNumber: line.lotNumber,
           },
           tx,
         );
@@ -670,9 +735,10 @@ export async function confirmReceipt(sessionId: string, orgId: number, actorUser
     }
 
     // Mark session as COMPLETED
+    const docketNumber = input.docketNumber === undefined ? session.docketNumber : receivingText(input.docketNumber ?? "");
     await tx
       .update(receivingSession)
-      .set({ status: "COMPLETED", completedAt: new Date(), updatedDttm: new Date() })
+      .set({ status: "COMPLETED", completedAt: new Date(), docketNumber, updatedDttm: new Date() })
       .where(eq(receivingSession.sessionId, sessionId));
 
     // Update PO status.
@@ -722,7 +788,7 @@ export async function confirmReceipt(sessionId: string, orgId: number, actorUser
         actorUserId,
         organisationId: po.organisationId,
         beforeValue: { status: session.status, completedAt: session.completedAt },
-        afterValue: { status: "COMPLETED", completedAt: new Date().toISOString() },
+        afterValue: { status: "COMPLETED", completedAt: new Date().toISOString(), docketNumber },
         metadata: {
           poId: po.poId,
           poNumber: po.poNumber,
@@ -755,6 +821,7 @@ export async function confirmReceipt(sessionId: string, orgId: number, actorUser
       linesProcessed: processedLines.length,
       discrepancies,
       isPerfectDelivery: discrepancies.length === 0,
+      docketNumber,
     };
   });
 
@@ -813,6 +880,7 @@ export async function confirmReceipt(sessionId: string, orgId: number, actorUser
     linesProcessed: result.linesProcessed,
     discrepancyCount: result.discrepancies.length,
     isPerfectDelivery: result.isPerfectDelivery,
+    docketNumber: result.docketNumber,
   };
 }
 

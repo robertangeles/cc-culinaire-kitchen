@@ -304,6 +304,91 @@ describe.skipIf(!RUN)("receiving rules for the phone (real DB)", () => {
     });
   });
 
+  describe("expiry date, lot number and docket number", () => {
+    const today = new Date().toISOString().slice(0, 10);
+    const lineCall = (s: { sessionId: string; line: (id: string) => { receivingLineId: string } }, body: object) =>
+      call(handleActionLine, { params: { sessionId: s.sessionId, lineId: s.line(fx.flourId).receivingLineId }, body });
+
+    it("records them on their own, leaving the status and its discrepancy as they were", async () => {
+      const s = await sentPO([{ ingredientId: fx.flourId, qty: "5", unit: "kg" }]);
+      await lineCall(s, { status: "REJECTED", rejectionReason: "damaged" });
+
+      const out = await lineCall(s, { expiryDate: today, lotNumber: "  L-42 " });
+      expect(out.status).toBe(200);
+      expect(out.body.line).toMatchObject({ status: "REJECTED", expiryDate: today, lotNumber: "L-42" });
+      expect(out.body.discrepancy).toMatchObject({ type: "REJECTED", rejectionReason: "damaged" });
+
+      // Another phone resuming the delivery reads them back.
+      const again = await receivingService.startSession(s.poId, fx.locId, fx.userB, fx.orgId);
+      expect(again.lines[0]).toMatchObject({ expiryDate: today, lotNumber: "L-42" });
+    });
+
+    it("keeps them through a status change that does not send them (installed apps never do)", async () => {
+      const s = await sentPO([{ ingredientId: fx.flourId, qty: "5", unit: "kg" }]);
+      await lineCall(s, { expiryDate: today, lotNumber: "L-1" });
+      const out = await lineCall(s, { status: "SHORT", receivedQty: "3" });
+      expect(out.body.line).toMatchObject({ status: "SHORT", expiryDate: today, lotNumber: "L-1" });
+    });
+
+    it("clears them when sent blank or null", async () => {
+      const s = await sentPO([{ ingredientId: fx.flourId, qty: "5", unit: "kg" }]);
+      await lineCall(s, { expiryDate: today, lotNumber: "L-1" });
+      const out = await lineCall(s, { expiryDate: null, lotNumber: "  " });
+      expect(out.body.line).toMatchObject({ expiryDate: null, lotNumber: null });
+    });
+
+    it.each([
+      [{ expiryDate: "2026-02-30" }, "EXPIRY_DATE_INVALID"],
+      [{ expiryDate: "2001-01-01" }, "EXPIRY_DATE_OUT_OF_RANGE"],
+      [{ expiryDate: "2999-01-01" }, "EXPIRY_DATE_OUT_OF_RANGE"],
+      [{ lotNumber: "L".repeat(51) }, "LOT_NUMBER_TOO_LONG"],
+      [{ status: "RECEIVED", expiryDate: "tomorrow" }, "EXPIRY_DATE_INVALID"],
+      [{}, "VALIDATION"],
+      [{ expiryDate: 20261201 }, "VALIDATION"],
+    ])("refuses %o with 400 %s and changes nothing", async (body, code) => {
+      const s = await sentPO([{ ingredientId: fx.flourId, qty: "5", unit: "kg" }]);
+      const out = await lineCall(s, body);
+      expect(out.status).toBe(400);
+      expect(out.body.code).toBe(code);
+      const after = await receivingService.getSession(s.sessionId, fx.orgId);
+      expect(after!.lines[0]).toMatchObject({ status: "RECEIVED", expiryDate: null, lotNumber: null });
+    });
+
+    it("confirm stores the docket number and carries expiry and lot into the stock batch", async () => {
+      const s = await sentPO([{ ingredientId: fx.flourId, qty: "5", unit: "kg" }]);
+      await lineCall(s, { expiryDate: today, lotNumber: "L-77" });
+
+      const out = await call(handleConfirmReceipt, { params: { sessionId: s.sessionId }, body: { docketNumber: " D-900 " } });
+      expect(out.status).toBe(200);
+      expect(out.body.docketNumber).toBe("D-900");
+
+      const after = await receivingService.getSession(s.sessionId, fx.orgId);
+      expect(after!.session.docketNumber).toBe("D-900");
+      const [batch] = await db
+        .select({ expiryDate: fifoBatch.expiryDate, lotNumber: fifoBatch.lotNumber })
+        .from(fifoBatch)
+        .where(eq(fifoBatch.sourcePoLineId, s.line(fx.flourId).poLineId));
+      expect(batch.lotNumber).toBe("L-77");
+      expect(batch.expiryDate?.toISOString()).toBe(`${today}T00:00:00.000Z`);
+    });
+
+    it("confirm with no body, as installed apps send it, still works and records no docket", async () => {
+      const s = await sentPO([{ ingredientId: fx.flourId, qty: "5", unit: "kg" }]);
+      const out = await call(handleConfirmReceipt, { params: { sessionId: s.sessionId } });
+      expect(out.status).toBe(200);
+      expect(out.body.docketNumber).toBeNull();
+    });
+
+    it("confirm refuses a docket number that is too long, and the delivery stays open", async () => {
+      const s = await sentPO([{ ingredientId: fx.flourId, qty: "5", unit: "kg" }]);
+      const out = await call(handleConfirmReceipt, { params: { sessionId: s.sessionId }, body: { docketNumber: "D".repeat(51) } });
+      expect(out.status).toBe(400);
+      expect(out.body.code).toBe("DOCKET_NUMBER_TOO_LONG");
+      const after = await receivingService.getSession(s.sessionId, fx.orgId);
+      expect(after!.session.status).toBe("ACTIVE");
+    });
+  });
+
   describe("a delivery belongs to the order's own location", () => {
     it("refuses to start it at another location, and leaves the order waiting", async () => {
       const [po] = await db
