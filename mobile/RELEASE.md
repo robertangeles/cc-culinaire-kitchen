@@ -64,11 +64,7 @@ Run commands from the repository root. `eas` is the Expo build service; use it t
 2. `pnpm --dir mobile exec eas build --profile production --platform ios`, then `pnpm --dir mobile exec eas submit --platform ios` (asks for your Apple login). It appears in TestFlight after Apple's processing.
 3. Add internal testers (your iPhone and iPad) in TestFlight. iPad is supported, so the store listing needs iPad screenshots.
 4. Before submitting for review: privacy nutrition labels, age rating, the privacy policy URL (the existing web Privacy URL), the terms URL (the existing web Terms URL), support URL, and the reviewer notes below, with the demo account.
-5. Check `EXPO_PUBLIC_BENCH` in the production profile of `eas.json`. The build the reviewers get needs it `on` (the reviewer notes below walk them through the Bench's report and block); turn it on only once these four are in production, and until then it stays `off` (App Store 1.2; see "Still needed for a store build" in `mobile/README.md`):
-   - the policy text about reported Bench messages in the Privacy Policy and Terms of Service: done
-   - the published contact address: in progress
-   - the posting filter's word list: inserted by the owner
-   - migration 0009: applied
+5. The build the reviewers get must have the Bench switched on (`EXPO_PUBLIC_BENCH=on`; the reviewer notes below walk them through the Bench's report and block); otherwise it stays off (App Store 1.2; see "Still needed for a store build" in `mobile/README.md`).
 6. Apple rule 3.1.3(b): the day the website starts selling paid plans, an app that unlocks those features must either also sell them in the app or qualify for an exemption. Billing in the app is deferred, so nothing in the app mentions plans. Revisit before the web billing launch.
 
 ## Owner chores that are not code (with the long lead times first)
