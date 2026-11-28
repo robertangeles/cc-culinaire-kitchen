@@ -367,7 +367,8 @@ describe("reporting and blocking", () => {
     expect(alert.mock.calls[0][0]).toBe("Block Bo Li?");
     await waitFor(() => expect(screen.queryByText("Message 1")).toBeNull());
     expect(api.block).toHaveBeenCalledWith(8);
-    expect(screen.getByText("You blocked Bo Li. Unblock them under Blocked people.")).toBeTruthy();
+    // The messages go with the block itself; the notice is drawn once it has answered, a render later.
+    expect(await screen.findByText("You blocked Bo Li. Unblock them under Blocked people.")).toBeTruthy();
   });
 
   it("offers both on the people in a kitchen's room, not on oneself", async () => {
@@ -431,11 +432,11 @@ describe("blocked people and reports", () => {
     expect(screen.getByText("“Message 1”")).toBeTruthy();
     expect(screen.getByText("Reported by Cy")).toBeTruthy();
     const alert = vi.spyOn(Alert, "alert").mockImplementation((_t, _m, buttons) => void buttons?.find((b) => b.text === "Hide")?.onPress?.());
-    press("Hide message");
+    // Inside act, so Dismiss is enabled again before it is pressed: react-native-web hands it that in an effect.
+    await act(async () => press("Hide message"));
     expect(alert).toHaveBeenCalled();
     await waitFor(() => expect(api.act).toHaveBeenCalledWith("r1", "hide"));
     await waitFor(() => expect(api.reports).toHaveBeenCalledTimes(2));
-    await settle();
     press("Dismiss");
     await waitFor(() => expect(api.act).toHaveBeenLastCalledWith("r1", "dismiss"));
     expect(api.reports.mock.calls.length).toBeGreaterThanOrEqual(3);
