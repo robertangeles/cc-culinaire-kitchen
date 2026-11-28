@@ -49,6 +49,17 @@ describe("useBenchMessages", () => {
     expect(kitchen.ids()).toEqual(["k1", "k2"]);
   });
 
+  it("does not bring back a live message deleted before the latest page lands", async () => {
+    const kitchen = await open("org_5");
+    let answer!: (rows: unknown[]) => void;
+    lists.org_5 = new Promise((resolve) => (answer = resolve));
+    act(() => socket.arrive("connect", undefined));
+    arrive({ ...message("k2"), channelKey: "org_5" });
+    act(() => socket.arrive("bench:message:deleted", { messageId: "k2" }));
+    await act(async () => answer([message("k1")]));
+    expect(kitchen.ids()).toEqual(["k1"]);
+  });
+
   it("adds a new message to its own channel only, once", async () => {
     const kitchen = await open("org_5");
     arrive({ ...message("e2"), channelKey: "everyone" });
