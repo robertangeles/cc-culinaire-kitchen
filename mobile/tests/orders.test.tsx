@@ -22,6 +22,9 @@ import CreditNoteEntry from "../app/(app)/(orders)/credit-note-entry";
 const offline = () => new ApiError("network");
 const button = (name: string | RegExp) => screen.getByRole("button", { name });
 const find = (name: string | RegExp) => screen.findByRole("button", { name });
+/** Presses and lets what it sets off (the server's answer, the button enabled again) be drawn inside act. Drawn outside it,
+ * react-native-web hands the button its new onPress and disabled in a later effect, and a press before that is dropped. */
+const press = (el: HTMLElement) => act(async () => void fireEvent.click(el));
 /** Answers the next confirmation by pressing the button with this label. */
 const answer = (label: string) =>
   vi.spyOn(Alert, "alert").mockImplementationOnce((_t, _m, buttons) => buttons?.find((b) => b.text === label)?.onPress?.());
@@ -261,7 +264,7 @@ describe("one order", () => {
   it("is emailed to the supplier, with the server's reason when it is not", async () => {
     api.detail.mockResolvedValue(detail({ status: "SENT" }));
     render(<Order />, ordersFor(admin));
-    fireEvent.click(await find("Email to supplier"));
+    await press(await find("Email to supplier"));
     expect(await screen.findByText("Emailed to orders@farms.test.")).toBeTruthy();
     api.email.mockResolvedValue({ emailed: false, to: null, message: "This supplier has no contact email on file." });
     fireEvent.click(button("Email to supplier"));
@@ -284,11 +287,11 @@ describe("one order", () => {
   it("is ordered again into a new draft", async () => {
     api.detail.mockResolvedValue(detail({ status: "RECEIVED" }));
     render(<Order />, ordersFor(admin));
-    fireEvent.click(await find("Reorder"));
+    await press(await find("Reorder"));
     await waitFor(() => expect(routerMock.push).toHaveBeenCalledWith({ pathname: "/order", params: { poId: "P9" } }));
     expect(api.clone).toHaveBeenCalledWith("P1", "L1");
     api.clone.mockResolvedValue({ poId: "P9", poNumber: "PO-900", skippedItems: ["Salt"], quantityWarnings: [] });
-    fireEvent.click(button("Reorder"));
+    await press(button("Reorder"));
     await waitFor(() => expect(routerMock.push).toHaveBeenLastCalledWith({ pathname: "/order", params: { poId: "P9", info: "1 item left out: already at or above par." } }));
     api.clone.mockResolvedValue({ poId: "P9", poNumber: "PO-900", skippedItems: [], quantityWarnings: [{ ingredientName: "Rye" }] });
     fireEvent.click(button("Reorder"));
@@ -491,7 +494,7 @@ describe("credit notes", () => {
     it("tries again with the same id after a lost reply, and says that is safe", async () => {
       api.credit.mockRejectedValueOnce(offline());
       render(<CreditNoteEntry />, ordersFor(admin));
-      fireEvent.click(await find("Raise credit note"));
+      await press(await find("Raise credit note"));
       expect(await screen.findByText(/Raising a credit note needs a connection\. It is safe to try again/)).toBeTruthy();
       fireEvent.click(button("Raise credit note"));
       await screen.findByText("Credit note raised");
@@ -502,7 +505,7 @@ describe("credit notes", () => {
     it("says so when someone else already raised it, and shows the server's other refusals", async () => {
       api.credit.mockRejectedValueOnce(new ApiError("bad_request", "The credit cannot be more than 6.00, what this discrepancy is worth", 400, undefined, "CREDIT_EXCEEDS_DISCREPANCY"));
       render(<CreditNoteEntry />, ordersFor(admin));
-      fireEvent.click(await find("Raise credit note"));
+      await press(await find("Raise credit note"));
       expect(await screen.findByText("The credit cannot be more than 6.00, what this discrepancy is worth")).toBeTruthy();
       api.credit.mockRejectedValueOnce(new ApiError("conflict", "x", 409, undefined, "ALREADY_CREDITED"));
       fireEvent.click(button("Raise credit note"));
