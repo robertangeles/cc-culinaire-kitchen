@@ -165,8 +165,8 @@ describe.skipIf(!RUN)("bench posts with a client-made id", () => {
     await a.send("bench:message", { channelKey: keyA, body: "mine", messageId, messageType: "recipe_share", recipeId: randomUUID() });
     await a.send("bench:dm:send", { recipientId: amir, body: "mine", messageId });
     await b.send("bench:message", { channelKey: keyA, body: "mine", messageId });
-    expect(a.of("bench:error")).toEqual(Array(4).fill({ error: expect.any(String), code: "CONFLICT" }));
-    expect(b.of("bench:error")).toEqual([{ error: expect.any(String), code: "CONFLICT" }]);
+    expect(a.of("bench:error")).toEqual(Array(4).fill({ error: expect.any(String), code: "CONFLICT", messageId }));
+    expect(b.of("bench:error")).toEqual([{ error: expect.any(String), code: "CONFLICT", messageId }]);
     expect([...a.of("bench:message:new"), ...b.of("bench:message:new"), ...b.of("bench:dm:new")]).toEqual([]);
     expect(await stored(messageId)).toMatchObject([{ messageBody: "mine", userId: anna, recipeId: null }]);
   });

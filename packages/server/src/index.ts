@@ -185,6 +185,7 @@ import { getRecipe as getRecipeForSeo } from "./services/recipePersistenceServic
 import { getRatingsSummary } from "./services/ratingService.js";
 import { injectRecipeSeo } from "./utils/recipeSeoHtml.js";
 import { initBenchSocket } from "./services/benchSocketService.js";
+import { blockedTerms } from "./services/benchFilterService.js";
 import { benchRouter } from "./routes/bench.js";
 import { menuIntelligenceRouter } from "./routes/menuIntelligence.js";
 import { wasteRouter } from "./routes/waste.js";
@@ -383,6 +384,11 @@ hydrateEnvFromCredentials().then(() => {
       // Idempotent seed for the two reserved site_page slugs (terms + privacy).
       ensureSeededPages().catch((err) => {
         log.warn({ err }, "site_page seed failed (non-fatal)");
+      });
+
+      // Read once now, so an empty Bench word list is warned about at startup and not at the first post.
+      blockedTerms().catch((err) => {
+        log.warn({ err }, "Bench blocked-terms read failed (non-fatal)");
       });
 
       const stopScheduler = startScheduler(log);

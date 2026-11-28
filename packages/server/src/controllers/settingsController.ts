@@ -16,6 +16,7 @@ import {
   upsertSettings,
   validateSettingsUpdate,
 } from "../services/settingsService.js";
+import { BLOCKED_TERMS_KEY } from "../services/benchFilterService.js";
 
 const log = pino({ transport: { target: "pino-pretty" } });
 
@@ -33,7 +34,8 @@ export async function handleGetSettings(
   next: NextFunction
 ): Promise<void> {
   try {
-    const settings = await getAllSettings();
+    // Anyone may read this route; the Bench word list must stay private.
+    const { [BLOCKED_TERMS_KEY]: _private, ...settings } = await getAllSettings();
     res.json({ settings });
   } catch (err) {
     log.error(err, "Failed to get settings");
