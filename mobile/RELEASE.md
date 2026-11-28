@@ -107,7 +107,7 @@ The script prints the host before it writes anything and never prints the passwo
 >
 > App lock: this account can approve orders, so the app asks for Face ID, Touch ID or the device passcode when it opens. The review device needs a passcode set (Settings, Face ID & Passcode); without one the app asks for one and shows nothing else.
 >
-> Sign in with Google and Sign in with Apple are available on the sign-in screen. There are no in-app purchases and no paid features in this app. The Terms of Service and Privacy Policy are linked from the sign-in screen and the Account screen. Support: <support email>.
+> Sign in with Google and Sign in with Apple are available on the sign-in screen. There are no in-app purchases and no paid features in this app. The Terms of Service and Privacy Policy are linked from the sign-in screen and the Account screen. Support: <`CONTACT_EMAIL`>.
 
 ## Checks to do on real devices before each release
 
@@ -117,5 +117,5 @@ The script prints the host before it writes anything and never prints the passwo
 - Delete a test account from the Account screen (a tab, or under More); confirm the phone returns to sign-in with nothing left on it.
 - App lock, signed in as someone who approves orders: cold start shows the lock screen; Unlock works with Face ID or a fingerprint, and with the passcode after biometrics fail; cancel it and fail it five times (still locked, still signed in); lock the phone or switch apps for over a minute (locked) and for a few seconds (not locked); the app switcher shows a blank page; wait two minutes and approve an order (asked again; cancel sends nothing). On a spare device with no passcode: the app asks for one.
 - App lock, signed in as someone with no approval, roster or compliance permission (not even `roster:read-own`): no lock anywhere. A cook with their own shifts and documents is locked.
-- Open Terms and Privacy from sign-in (signed out) and from the Account screen.
+- Open Terms and Privacy from sign-in (signed out) and from the Account screen; "Contact us" next to them opens a new mail to the contact address.
 - Set `mobile_min_app_version` above the installed version on a test server: the update screen appears with no link, then (after setting the store link) with the right store's button.
