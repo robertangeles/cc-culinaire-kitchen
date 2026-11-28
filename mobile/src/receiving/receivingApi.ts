@@ -1,5 +1,5 @@
 import type { ApiClient } from "../api/client";
-import type { ConfirmResult, LineInput, QueueItem, ReceivingLine } from "./receivingFlow";
+import type { ConfirmResult, DetailsInput, LineInput, QueueItem, ReceivingLine } from "./receivingFlow";
 
 export interface ReceivingSession {
   sessionId: string;
@@ -7,6 +7,8 @@ export interface ReceivingSession {
   storeLocationId: string;
   receivedByUserId: number;
   status: "ACTIVE" | "COMPLETED" | "CANCELLED";
+  /** When receiving started: an expiry may not be before this day. */
+  startedAt: string;
 }
 
 /** `startedBy` is whoever opened the session; when `resumed` and not you, another phone has it. */
@@ -51,12 +53,13 @@ export function createReceivingApi(client: ApiClient) {
     },
 
     /** The server's saved line is the truth: the screen shows what comes back, never what it hoped to send. */
-    async actionLine(sessionId: string, lineId: string, input: LineInput): Promise<ReceivingLine> {
+    async actionLine(sessionId: string, lineId: string, input: LineInput | DetailsInput): Promise<ReceivingLine> {
       return (await client.request<{ line: ReceivingLine }>("POST", `${INVENTORY}/receiving/sessions/${sessionId}/lines/${lineId}`, { body: input })).line;
     },
 
-    confirm(sessionId: string): Promise<ConfirmResult> {
-      return client.request<ConfirmResult>("POST", `${INVENTORY}/receiving/sessions/${sessionId}/confirm`);
+    /** `docketNumber` is the supplier's, trimmed; null when none was typed. */
+    confirm(sessionId: string, docketNumber: string | null = null): Promise<ConfirmResult> {
+      return client.request<ConfirmResult>("POST", `${INVENTORY}/receiving/sessions/${sessionId}/confirm`, { body: { docketNumber } });
     },
 
     async cancel(sessionId: string): Promise<void> {

@@ -31,11 +31,17 @@ describe("receiving api", () => {
     expect(request).toHaveBeenCalledWith("POST", "/api/inventory/receiving/sessions/S1/lines/r1", { body: { status: "SHORT", receivedQty: "2" } });
   });
 
+  it("sends the expiry and lot with no status, so the line keeps its own", async () => {
+    const { api, request } = make({ line: { receivingLineId: "r1", status: "REJECTED", lotNumber: "L-1" }, discrepancy: {} });
+    await api.actionLine("S1", "r1", { expiryDate: "2026-12-05", lotNumber: "L-1" });
+    expect(request).toHaveBeenCalledWith("POST", "/api/inventory/receiving/sessions/S1/lines/r1", { body: { expiryDate: "2026-12-05", lotNumber: "L-1" } });
+  });
+
   it("confirms and cancels by session", async () => {
     const { api, request } = make({ poStatus: "RECEIVED" });
-    await api.confirm("S1");
+    await api.confirm("S1", "D-9");
     await api.cancel("S1");
-    expect(request).toHaveBeenCalledWith("POST", "/api/inventory/receiving/sessions/S1/confirm");
+    expect(request).toHaveBeenCalledWith("POST", "/api/inventory/receiving/sessions/S1/confirm", { body: { docketNumber: "D-9" } });
     expect(request).toHaveBeenCalledWith("POST", "/api/inventory/receiving/sessions/S1/cancel");
   });
 });

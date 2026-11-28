@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 import type { PurchaseOrderDetail, ReceivingApi, ReceivingSession } from "./receivingApi";
-import { failureMessage, finishedElsewhere, type ConfirmResult, type LineInput, type ReceivingLine } from "./receivingFlow";
+import { failureMessage, finishedElsewhere, type ConfirmResult, type DetailsInput, type LineInput, type ReceivingLine } from "./receivingFlow";
 
 export type Phase =
   | { kind: "loading" }
@@ -57,7 +57,7 @@ export function useReceivingSession(api: ReceivingApi, poId: string, currentUser
 
   /** Returns true when the server accepted the change (the screen closes the line's panel on true). */
   const act = useCallback(
-    async (lineId: string, input: LineInput): Promise<boolean> => {
+    async (lineId: string, input: LineInput | DetailsInput): Promise<boolean> => {
       if (!session) return false;
       mark(lineId, true);
       setLineErrors(({ [lineId]: _drop, ...rest }) => rest);
@@ -75,12 +75,12 @@ export function useReceivingSession(api: ReceivingApi, poId: string, currentUser
     [api, session],
   );
 
-  const confirm = useCallback(async () => {
+  const confirm = useCallback(async (docketNumber: string | null) => {
     if (!session || saving.size > 0 || confirming) return;
     setConfirming(true);
     setConfirmError(null);
     try {
-      const result = await api.confirm(session.sessionId);
+      const result = await api.confirm(session.sessionId, docketNumber);
       if (alive.current) setPhase({ kind: "done", result });
     } catch (err) {
       if (!alive.current) return;
@@ -107,5 +107,5 @@ export function useReceivingSession(api: ReceivingApi, poId: string, currentUser
     }
   }, [api, session]);
 
-  return { phase, po, lines, otherStarter, saving, lineErrors, confirming, confirmError, act, confirm, cancel, reload: load };
+  return { phase, po, session, lines, otherStarter, saving, lineErrors, confirming, confirmError, act, confirm, cancel, reload: load };
 }

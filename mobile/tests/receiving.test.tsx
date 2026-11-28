@@ -37,7 +37,7 @@ const line = (id: string, name: string, over: object = {}) => ({
 /** The order's own line: `unitCost` is the price the kitchen ordered at. */
 const poLine = (id: string, name: string) => ({ lineId: `pl-${id}`, ingredientName: name, orderedQty: "5.0000", orderedUnit: "kg", unitCost: "2.0000" });
 const started = (over: object = {}) => ({
-  session: { sessionId: "S1", poId: "P1", storeLocationId: "L1", receivedByUserId: 1, status: "ACTIVE" },
+  session: { sessionId: "S1", poId: "P1", storeLocationId: "L1", receivedByUserId: 1, status: "ACTIVE", startedAt: "2026-11-28T03:00:00.000Z" },
   lines: [line("r1", "Flour"), line("r2", "Tomatoes")],
   resumed: false,
   startedBy: { userId: 1, userName: "Chef" },
@@ -159,7 +159,7 @@ describe("receiving a delivery", () => {
     expect(api.startSession).toHaveBeenCalledWith("P1", "L1");
     fireEvent.click(screen.getByRole("button", { name: "Confirm delivery" }));
     expect(await screen.findByText("Delivery received")).toBeTruthy();
-    expect(api.confirm).toHaveBeenCalledWith("S1");
+    expect(api.confirm).toHaveBeenCalledWith("S1", null);
     expect(api.actionLine).not.toHaveBeenCalled();
   });
 
@@ -218,6 +218,37 @@ describe("receiving a delivery", () => {
     fireEvent.click(screen.getByRole("radio", { name: "Damaged packaging" }));
     fireEvent.click(screen.getByRole("button", { name: "Reject item" }));
     await waitFor(() => expect(api.actionLine).toHaveBeenCalledWith("S1", "r1", { status: "REJECTED", rejectionReason: "damaged" }));
+  });
+
+  it("records an expiry date and lot number without changing the line's status", async () => {
+    api.startSession.mockResolvedValue(started({ lines: [line("r1", "Flour", { status: "REJECTED", receivedQty: "0" })] }));
+    api.actionLine.mockResolvedValueOnce({ receivingLineId: "r1", status: "REJECTED", receivedQty: "0", expiryDate: "2026-12-05", lotNumber: "L-42" });
+    render(<ReceiveDelivery />);
+    await open("Flour");
+    key("Expiry and lot");
+    fireEvent.change(screen.getByLabelText("Expiry date"), { target: { value: "05122026" } });
+    expect(screen.getByText("5 December 2026")).toBeTruthy();
+    fireEvent.change(screen.getByLabelText("Lot number"), { target: { value: " L-42 " } });
+    fireEvent.click(screen.getByRole("button", { name: "Save expiry and lot" }));
+    await waitFor(() => expect(api.actionLine).toHaveBeenCalledWith("S1", "r1", { expiryDate: "2026-12-05", lotNumber: "L-42" }));
+    expect(await screen.findByText("Rejected: 5 kg, use by 05/12/2026, lot L-42")).toBeTruthy();
+  });
+
+  it("refuses an expiry before the delivery day on the phone, sending nothing", async () => {
+    render(<ReceiveDelivery />);
+    await open("Flour");
+    key("Expiry and lot");
+    fireEvent.change(screen.getByLabelText("Expiry date"), { target: { value: "01112026" } });
+    fireEvent.click(screen.getByRole("button", { name: "Save expiry and lot" }));
+    expect(await screen.findByText("The expiry date can't be before the delivery day.")).toBeTruthy();
+    expect(api.actionLine).not.toHaveBeenCalled();
+  });
+
+  it("confirms with the supplier's docket number, trimmed", async () => {
+    render(<ReceiveDelivery />);
+    fireEvent.change(await screen.findByLabelText("Supplier docket number"), { target: { value: " D-900 " } });
+    fireEvent.click(screen.getByRole("button", { name: "Confirm delivery" }));
+    await waitFor(() => expect(api.confirm).toHaveBeenCalledWith("S1", "D-900"));
   });
 
   it("All good on a short line sends the status alone and shows the quantity the server put back", async () => {
@@ -322,7 +353,7 @@ describe("receiving a delivery", () => {
     await act(async () => finish({ receivingLineId: "r1", status: "RECEIVED", receivedQty: "5.0000", actualUnitCost: "2.0000" }));
     await waitFor(() => expect(confirm().getAttribute("aria-disabled")).not.toBe("true"));
     fireEvent.click(confirm());
-    await waitFor(() => expect(api.confirm).toHaveBeenCalledWith("S1"));
+    await waitFor(() => expect(api.confirm).toHaveBeenCalledWith("S1", null));
   });
 
   it("the price keypad's zero is a plain digit, and Short keeps its \"none here\" key", async () => {
