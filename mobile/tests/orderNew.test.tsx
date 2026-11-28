@@ -4,6 +4,7 @@ import { render, screen, fireEvent, waitFor } from "@testing-library/react";
 import { Alert } from "react-native";
 import { routerMock, searchParams } from "../testing/mocks";
 import { ApiError } from "../src/api/client";
+import { WIDE_FORM_WIDTH } from "../src/orders/OrderForm";
 import { COLUMN_WIDTH } from "../src/ui/Screen";
 import { admin, api, detail, memoryKv, ordersFor, person, resetApi } from "./ordersHarness";
 
@@ -30,7 +31,22 @@ async function addFlour() {
   await find(/^Flour, 1 bag/);
 }
 
-beforeEach(resetApi);
+/** The window react-native-web measures (jsdom lays nothing out and reports 0, a phone). */
+const windowOf = (width: number, height: number) => {
+  Object.defineProperty(document.documentElement, "clientWidth", { configurable: true, value: width });
+  Object.defineProperty(document.documentElement, "clientHeight", { configurable: true, value: height });
+  window.dispatchEvent(new Event("resize"));
+};
+const columnOf = (from: HTMLElement) => {
+  let el: HTMLElement | null = from;
+  while (el && !el.style.maxWidth) el = el.parentElement;
+  return el;
+};
+
+beforeEach(() => {
+  resetApi();
+  windowOf(0, 0);
+});
 
 describe("writing an order", () => {
   it("by hand: supplier, item, quantity, then saved as a draft and opened", async () => {
@@ -167,13 +183,38 @@ describe("writing an order", () => {
     expect(await find("Order from Supplier 8")).toBeTruthy();
   });
 
-  it("keeps to the column on an iPad", async () => {
+  it.each([
+    ["portrait", 820, 1180],
+    ["landscape", 1180, 820],
+  ])("on an iPad in %s uses the width: supplier beside the day, each line's order, unit, price and total in one row", async (_name, width, height) => {
+    windowOf(width, height);
+    render(<OrderNew />, ordersFor(admin));
+    fireEvent.click(await find("Order from Fresh Farms"));
+    type("Add an item", "fl");
+    fireEvent.click(await find("Use Flour"));
+    // No row to open: the fields are there at once.
+    const qty = await screen.findByLabelText("Order");
+    expect(screen.queryByRole("button", { name: /^Flour, 1 bag/ })).toBeNull();
+    expect(columnOf(qty)?.style.maxWidth).toBe(`${WIDE_FORM_WIDTH}px`);
+    const cells = (label: string) => (screen.getAllByText(label)[0].closest("[style*='flex: 1']") as HTMLElement).parentElement;
+    expect(cells("Line total")).toBe(cells("Unit"));
+    expect(screen.getByLabelText("Price per bag")).toBeTruthy();
+    type("Order", "2");
+    expect(screen.getAllByText("$35.00").length).toBeGreaterThan(0);
+    // Supplier and the expected day side by side.
+    const supplier = button("Supplier, Fresh Farms. Change").closest("[style*='flex: 2']") as HTMLElement;
+    expect(supplier.parentElement?.textContent).toContain("Expected delivery (optional)");
+    fireEvent.click(button("Save as draft"));
+    await waitFor(() => expect(api.create).toHaveBeenCalledWith(expect.objectContaining({ lines: [{ ingredientId: "i1", orderedQty: "2", orderedUnit: "bag", unitCost: "17.5" }] })));
+  });
+
+  it("on a phone keeps to the column, one line to tap open", async () => {
+    windowOf(390, 844);
     render(<OrderNew />, ordersFor(admin));
     await addFlour();
-    let el: HTMLElement | null = button(/^Flour, 1 bag/);
-    while (el && el.style.maxWidth !== `${COLUMN_WIDTH}px`) el = el.parentElement;
-    expect(el).not.toBeNull();
+    expect(columnOf(button(/^Flour, 1 bag/))?.style.maxWidth).toBe(`${COLUMN_WIDTH}px`);
   });
+
 });
 
 describe("changing a saved draft", () => {
