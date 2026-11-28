@@ -250,7 +250,7 @@ describe("receiving a delivery", () => {
     key("Expiry and lot");
     fireEvent.change(screen.getByLabelText("Expiry date"), { target: { value: "01112026" } });
     fireEvent.click(screen.getByRole("button", { name: "Save expiry and lot" }));
-    expect(await screen.findByText("The expiry date can't be before the delivery day.")).toBeTruthy();
+    expect(await screen.findByText("The expiry date has passed. Clear it to accept this line, or keep the line rejected.")).toBeTruthy();
     expect(api.actionLine).not.toHaveBeenCalled();
   });
 

@@ -41,7 +41,7 @@ export function expiryDateProblem(value: string, receivedAt: Date | string, line
   const received = new Date(receivedAt);
   const earliest = new Date(Date.UTC(received.getUTCFullYear(), received.getUTCMonth(), received.getUTCDate() - 1));
   const latest = new Date(Date.UTC(received.getUTCFullYear() + EXPIRY_YEARS_AHEAD, received.getUTCMonth(), received.getUTCDate()));
-  if (day < earliest && lineStatus !== "REJECTED") return { code: "EXPIRY_DATE_OUT_OF_RANGE", message: "The expiry date can't be before the delivery day." };
+  if (day < earliest && lineStatus !== "REJECTED") return { code: "EXPIRY_DATE_OUT_OF_RANGE", message: "The expiry date has passed. Clear it to accept this line, or keep the line rejected." };
   if (day > latest) {
     return { code: "EXPIRY_DATE_OUT_OF_RANGE", message: `The expiry date must be within ${EXPIRY_YEARS_AHEAD} years of the delivery.` };
   }

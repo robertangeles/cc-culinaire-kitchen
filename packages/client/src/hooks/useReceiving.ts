@@ -201,6 +201,8 @@ export function useReceiving() {
     if (!sessionData) throw new Error("No active session");
 
     const sessionId = sessionData.session.sessionId;
+    const before = sessionData.lines.find((l) => l.receivingLineId === receivingLineId);
+    setError(null);
 
     // Update local state immediately (optimistic)
     setSessionData((prev) => {
@@ -227,8 +229,23 @@ export function useReceiving() {
         { ...jsonOpts, method: "POST", body: JSON.stringify(action) },
       );
       if (!res.ok) {
-        const err = await res.json();
-        throw new Error(err.error || "Failed to action line");
+        // The server answered and refused: the line stays as it holds it, so show that, not the offline banner.
+        const err = await res.json().catch(() => ({}));
+        setSessionData((prev) => {
+          if (!prev || !before) return prev;
+          const reverted = {
+            ...prev,
+            lines: prev.lines.map((l) =>
+              l.receivingLineId === receivingLineId
+                ? { ...l, status: before.status, receivedQty: before.receivedQty, actualUnitCost: before.actualUnitCost }
+                : l,
+            ),
+          };
+          saveToLocal(sessionId, reverted);
+          return reverted;
+        });
+        setError(err.error || "Failed to action line");
+        return null;
       }
       const result = await res.json();
 
