@@ -279,8 +279,9 @@ export function createBenchStore({ api, live, userId, now, newId }: { api: Bench
     const open = visit?.room.kind === "dm" && visit.room.threadId === threadId;
     const known = snapshot.threads.find((t) => t.dmThreadId === threadId);
     if (!open && m.userId !== userId && !snapshot.fresh.includes(threadId)) set({ fresh: [...snapshot.fresh, threadId] });
-    if (known) set({ threads: [{ ...known, lastMessage: m.messageBody, lastMessageAt: m.createdDttm }, ...snapshot.threads.filter((t) => t !== known)] });
-    else void refreshLists();
+    // A message sent again can be answered with one older than the preview: the preview stays.
+    if (known && m.createdDttm >= known.lastMessageAt) set({ threads: [{ ...known, lastMessage: m.messageBody, lastMessageAt: m.createdDttm }, ...snapshot.threads.filter((t) => t !== known)] });
+    else if (!known) void refreshLists();
     arrived(m);
   });
   live.on("bench:message:deleted", (p) => {
