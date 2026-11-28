@@ -5,6 +5,14 @@ Format: [Keep a Changelog](https://keepachangelog.com/en/1.0.0/).
 
 ## [Unreleased]
 
+### Added (the Bench refuses a message that contains a listed term)
+
+Server, web, phone and shared. No migration, no new permission, no new dependency. Older app versions keep working: an unknown error code shows their generic failure.
+
+- **A Bench message or edit is refused** before it is stored or shown to anyone, on channel messages and direct messages, over the socket and over REST, when it contains a term from the list. Matching ignores case, accents, look-alike characters and repeated letters, and only whole words or phrases count. The check is one function in `@culinaire/shared`.
+- **The list lives in the `site_setting` table** under `bench.blocked_terms` (one term per line), read with a cache of at most 60 seconds. An empty or missing list filters nothing and logs a warning. The list is not in the repository; the server never logs message text or the matched term.
+- **The sender sees "This message can't be posted."** (a new machine-readable code in `ApiErrorBody` and the socket error event). The web and the phone keep the draft in the composer for editing and never mark it sent.
+
 ### Added (a published contact address on the phone and the website)
 
 Web, phone and shared. No server change, no migration, no new dependency.
