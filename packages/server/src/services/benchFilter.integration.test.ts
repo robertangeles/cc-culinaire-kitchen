@@ -16,7 +16,7 @@ import { eq, inArray } from "drizzle-orm";
 import { db } from "../db/index.js";
 import { benchChannel, benchDmThread, benchMessage, organisation, siteSetting, user, userOrganisation } from "../db/schema.js";
 import { initBenchSocket } from "./benchSocketService.js";
-import { getOrCreateOrgChannel } from "./benchService.js";
+import { getOrCreateOrgChannel, updateChannelBanner } from "./benchService.js";
 import { BLOCKED_TERMS_KEY, __test } from "./benchFilterService.js";
 
 /** The word filter over real sockets and a real DB: a refused post or edit is neither stored nor told to anyone. Made-up terms only. */
@@ -149,5 +149,12 @@ describe.skipIf(!RUN)("bench word filter", () => {
     expect(a.of("bench:error")).toEqual([{ ...REFUSED, messageId }]);
     expect(b.of("bench:message:edited")).toEqual([]);
     expect(await stored(messageId)).toMatchObject([{ messageBody: "fish is in", editedInd: false }]);
+  });
+
+  it("refuses a channel banner with a listed word and leaves the stored banner as it was", async () => {
+    await updateChannelBanner(key, "menu tasting Friday");
+    await expect(updateChannelBanner(key, "all hands, zorp")).rejects.toMatchObject({ statusCode: 422, code: "POST_NOT_ALLOWED", message: REFUSED.error });
+    const [channel] = await db.select().from(benchChannel).where(eq(benchChannel.channelKey, key));
+    expect(channel.channelBanner).toBe("menu tasting Friday");
   });
 });

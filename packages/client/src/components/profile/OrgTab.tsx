@@ -8,6 +8,7 @@ import {
   MapPin,
   RefreshCw,
 } from "lucide-react";
+import { parseApiErrorBody } from "@culinaire/shared";
 import { useAuth } from "../../context/AuthContext.js";
 import { MyKitchenTab } from "./MyKitchenTab.js";
 import { PillTabs } from "../ui/PillTabs.js";
@@ -22,6 +23,7 @@ function OrgBenchBanner({ orgId }: { orgId: number }) {
   const [loaded, setLoaded] = useState(false);
   const [saving, setSaving] = useState(false);
   const [saved, setSaved] = useState(false);
+  const [refusal, setRefusal] = useState<string | null>(null);
 
   const channelKey = `org_${orgId}`;
   const API = import.meta.env.VITE_API_URL ?? "";
@@ -46,13 +48,18 @@ function OrgBenchBanner({ orgId }: { orgId: number }) {
   async function handleSave() {
     setSaving(true);
     setSaved(false);
+    setRefusal(null);
     try {
-      await fetch(`${API}/api/bench/channels/${channelKey}/banner`, {
+      const res = await fetch(`${API}/api/bench/channels/${channelKey}/banner`, {
         method: "PATCH",
         headers: { "Content-Type": "application/json" },
         credentials: "include",
         body: JSON.stringify({ banner }),
       });
+      if (!res.ok) {
+        setRefusal(parseApiErrorBody(await res.json().catch(() => null)).error ?? "Couldn't save the banner. Try again.");
+        return;
+      }
       setSaved(true);
       setTimeout(() => setSaved(false), 3000);
     } catch {
@@ -85,6 +92,7 @@ function OrgBenchBanner({ orgId }: { orgId: number }) {
           {banner.length}/500
         </span>
         <div className="flex items-center gap-2">
+          {refusal && <span role="alert" className="text-xs text-red-400">{refusal}</span>}
           {saved && <span className="text-xs text-emerald-400">Saved</span>}
           <button
             type="button"

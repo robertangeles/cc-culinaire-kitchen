@@ -79,6 +79,8 @@ export function useBenchMessages(channelKey: string) {
   // Load initial messages and join socket room
   useEffect(() => {
     channelRef.current = channelKey;
+    sentRef.current = null;
+    setRefused(null);
     setMessages([]);
     setLoading(true);
     setHasMore(true);
@@ -117,6 +119,7 @@ export function useBenchMessages(channelKey: string) {
     function onNewMessage(msg: BenchMessage & { channelKey: string }) {
       // Only add if it belongs to our channel (Everyone's also arrive while My Kitchen is open)
       if (msg.channelKey !== channelKey) return;
+      if (msg.messageId === sentRef.current?.messageId) sentRef.current = null;
       liveRef.current.add(msg.messageId);
       setMessages((prev) => {
         if (prev.some((m) => m.messageId === msg.messageId)) return prev;
@@ -191,8 +194,14 @@ export function useBenchMessages(channelKey: string) {
     fetchMessages(oldest.createdDttm);
   }, [messages, hasMore, fetchMessages]);
 
+  /** The composer has taken the refused post back. */
+  const clearRefused = useCallback(() => {
+    sentRef.current = null;
+    setRefused(null);
+  }, []);
+
   // Refetch the latest page (after an unblock brings someone's messages back)
   const reload = useCallback(() => fetchMessages(), [fetchMessages]);
 
-  return { messages, loading, hasMore, loadMore, sendMessage, deleteMessage, editMessage, reload, refused };
+  return { messages, loading, hasMore, loadMore, sendMessage, deleteMessage, editMessage, reload, refused, clearRefused };
 }

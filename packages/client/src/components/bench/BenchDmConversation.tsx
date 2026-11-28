@@ -22,6 +22,7 @@ interface BenchDmConversationProps {
   onReport?: (target: ReportTarget) => void;
   onBlock?: (person: BenchPerson) => void;
   returned?: RefusedPost | null;
+  onReturned?: () => void;
 }
 
 /** Convert DmMessage to BenchMessage shape for BenchMessageItem */
@@ -42,7 +43,7 @@ function toBenchMessage(msg: DmMessage): BenchMessage {
   };
 }
 
-export function BenchDmConversation({ thread, messages, loading, onSend, onBack, onReport, onBlock, returned }: BenchDmConversationProps) {
+export function BenchDmConversation({ thread, messages, loading, onSend, onBack, onReport, onBlock, returned, onReturned }: BenchDmConversationProps) {
   const { socket } = useBenchSocket();
   const bottomRef = useRef<HTMLDivElement>(null);
 
@@ -74,7 +75,7 @@ export function BenchDmConversation({ thread, messages, loading, onSend, onBack,
     <div className="flex-1 flex flex-col overflow-hidden">
       {/* Header */}
       <div className="flex items-center gap-3 px-4 py-3 border-b border-dark-200 bg-dark-50">
-        <button onClick={onBack} className="p-1 rounded hover:bg-dark-200 text-dark-600">
+        <button onClick={onBack} aria-label="Back" className="p-1 rounded hover:bg-dark-200 text-dark-600">
           <ArrowLeft className="size-5" />
         </button>
         {thread.otherUserPhotoPath ? (
@@ -135,6 +136,7 @@ export function BenchDmConversation({ thread, messages, loading, onSend, onBack,
         onTyping={() => {}}
         placeholder={`Message ${thread.otherUserName}...`}
         returned={returned}
+        onReturned={onReturned}
       />
     </div>
   );

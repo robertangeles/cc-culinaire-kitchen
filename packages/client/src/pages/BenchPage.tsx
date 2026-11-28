@@ -64,7 +64,7 @@ function BenchContent() {
   }, []);
 
   const isReadOnly = !user || isGuest;
-  const { messages, loading, hasMore, loadMore, sendMessage, deleteMessage, editMessage, reload: reloadMessages, refused } = useBenchMessages(channelKey);
+  const { messages, loading, hasMore, loadMore, sendMessage, deleteMessage, editMessage, reload: reloadMessages, refused, clearRefused } = useBenchMessages(channelKey);
   const { onlineUsers } = useBenchPresence(channelKey);
   const { typingUsers, emitTyping } = useBenchTyping(channelKey);
   const dm = useBenchDm();
@@ -285,6 +285,7 @@ function BenchContent() {
             onReport={setReportTarget}
             onBlock={handleBlock}
             returned={dm.refused}
+            onReturned={dm.clearRefused}
           />
         ) : (
           <div className="flex-1 overflow-y-auto bg-dark">
@@ -360,6 +361,7 @@ function BenchContent() {
           placeholder={tab === "my-kitchen" ? "Message your kitchen team..." : "Message everyone... Use @ to mention someone"}
           onlineUsers={shownOnline}
           returned={refused}
+          onReturned={clearRefused}
         />
       )}
       </>

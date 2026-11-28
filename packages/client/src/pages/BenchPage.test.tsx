@@ -188,6 +188,49 @@ describe("BenchPage word filter", () => {
     expect(screen.getByRole("alert")).toHaveTextContent(POST_REFUSED);
   });
 
+  it("puts a refused post back once: a composer that mounts later starts empty", async () => {
+    render(<MemoryRouter><BenchPage /></MemoryRouter>);
+    await screen.findByText("first from Sam");
+    const input = await sendRefused("bench:message", /Message everyone/);
+    expect(input.value).toBe(DRAFT);
+
+    fireEvent.click(screen.getByRole("button", { name: "Messages" }));
+    fireEvent.click(await screen.findByText("hello from Sam"));
+    await screen.findByText("Start the conversation");
+    expect((screen.getByPlaceholderText(/Message Sam/) as HTMLInputElement).value).toBe("");
+
+    fireEvent.click(screen.getByRole("button", { name: "Everyone" }));
+    expect((await screen.findByPlaceholderText(/Message everyone/) as HTMLInputElement).value).toBe("");
+  });
+
+  it("does not hand a direct message's refused draft to the next conversation", async () => {
+    render(<MemoryRouter><BenchPage /></MemoryRouter>);
+    fireEvent.click(screen.getByRole("button", { name: "Messages" }));
+    fireEvent.click(await screen.findByText("hello from Sam"));
+    await screen.findByText("Start the conversation");
+    const input = await sendRefused("bench:dm:send", /Message Sam/);
+    expect(input.value).toBe(DRAFT);
+
+    fireEvent.click(screen.getByRole("button", { name: "Back" }));
+    fireEvent.click(await screen.findByText("hello from Sam"));
+    await screen.findByText("Start the conversation");
+    expect((screen.getByPlaceholderText(/Message Sam/) as HTMLInputElement).value).toBe("");
+  });
+
+  it("does not treat a refused edit of an accepted post as a refused post", async () => {
+    render(<MemoryRouter><BenchPage /></MemoryRouter>);
+    await screen.findByText("first from Sam");
+    const input = screen.getByPlaceholderText(/Message everyone/) as HTMLInputElement;
+    fireEvent.change(input, { target: { value: "fish is in" } });
+    fireEvent.submit(input.closest("form")!);
+    const { messageId } = socket.sent.find((s) => s.event === "bench:message")!.payload;
+    act(() => socket.arrive("bench:message:new", { ...message(messageId, sam, "fish is in"), channelKey: "everyone" }));
+    await screen.findByText("fish is in");
+
+    act(() => socket.arrive("bench:error", { error: POST_REFUSED, code: "POST_NOT_ALLOWED", messageId }));
+    expect(input.value).toBe("");
+  });
+
   it("leaves the composer alone for a refusal of another post", async () => {
     render(<MemoryRouter><BenchPage /></MemoryRouter>);
     await screen.findByText("first from Sam");

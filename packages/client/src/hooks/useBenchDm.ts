@@ -83,6 +83,8 @@ export function useBenchDm() {
 
   // Close conversation (back to thread list)
   const closeThread = useCallback(() => {
+    sentRef.current = null;
+    setRefused(null);
     setStartError(null);
     setError(null);
     setActiveThreadId(null);
@@ -92,6 +94,8 @@ export function useBenchDm() {
 
   // Open a thread
   const openThread = useCallback((threadId: number, threadInfo?: DmThread) => {
+    sentRef.current = null;
+    setRefused(null);
     setStartError(null);
     setActiveThreadId(threadId);
     setError(null);
@@ -149,11 +153,18 @@ export function useBenchDm() {
     socket.emit("bench:dm:send", { recipientId, body, messageId });
   }, [socket]);
 
+  /** The composer has taken the refused post back. */
+  const clearRefused = useCallback(() => {
+    sentRef.current = null;
+    setRefused(null);
+  }, []);
+
   // Listen for incoming DMs
   useEffect(() => {
     if (!socket) return;
 
     function onDmNew(msg: DmMessage) {
+      if (msg.messageId === sentRef.current?.messageId) sentRef.current = null;
       // If viewing this thread, append message
       if (msg.dmThreadId === activeThreadId) {
         setMessages((prev) => {
@@ -226,5 +237,6 @@ export function useBenchDm() {
     fetchThreads,
     error,
     refused,
+    clearRefused,
   };
 }

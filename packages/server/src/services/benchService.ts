@@ -130,6 +130,7 @@ export async function sharesOrganisation(userIdA: number, userIdB: number): Prom
 // ---------------------------------------------------------------------------
 
 export async function updateChannelBanner(channelKey: string, banner: string) {
+  await refuseBlockedTerms(banner);
   await db
     .update(benchChannel)
     .set({ channelBanner: banner })
