@@ -1127,7 +1127,7 @@ describe.skipIf(!process.env.SCREENS_OUT)(`screens on ${FORM}`, { timeout: 600_0
     }
   });
 
-  it("bench: list, a kitchen's channel, a message open, mention, people, pins, search, edit, everyone, a direct message, not sent, everyone without pins", async () => {
+  it("bench: list, a kitchen's channel, a message open, mention, people, pins, search, edit, everyone, a direct message, not sent, refused by the word filter, everyone without pins", async () => {
     const ctx = await m.client.request<{ organisationId: number }>("GET", "/api/users/location-context");
     const { organisation } = await m.client.request<{ organisation: { joinKey: string } }>("GET", "/api/organisations/mine");
     const me = Number((await m.client.request<{ userId?: number; user?: { userId: number } }>("GET", "/api/auth/me").then((r) => r.userId ?? r.user!.userId)));
@@ -1149,6 +1149,9 @@ describe.skipIf(!process.env.SCREENS_OUT)(`screens on ${FORM}`, { timeout: 600_0
     line(key, me, "Thanks. I will call them.", "1 day 1 hour");
     line(key, bo, "Walk-in is at 6 degrees, the compressor has been told off.", "40 minutes");
     line("everyone", bo, "Anyone in Melbourne with a spare dough divider for Saturday?", "3 hours");
+    // A made-up term on the word list. The server reads the list again a minute after its last read at most.
+    sql(`insert into site_setting (setting_key, setting_value) values ('bench.blocked_terms', 'zorp') on conflict (setting_key) do update set setting_value = excluded.setting_value`);
+    const listed = Date.now();
     let socket: Socket | null = null;
     try {
       socket = io(API_URL, { transports: ["websocket"], auth: { token: login.tokens.accessToken } });
@@ -1216,6 +1219,12 @@ describe.skipIf(!process.env.SCREENS_OUT)(`screens on ${FORM}`, { timeout: 600_0
       }
       await waitGone(/^Not connected/, 90_000);
       await tapNow("Discard");
+      await sleep(Math.max(0, listed + 61_000 - Date.now()));
+      await type("Your message", "Is the zorp in yet?");
+      await hideKeyboard();
+      await tapNow("Send");
+      await waitFor("This message can't be posted.", 20_000);
+      await shot("c8b-refused");
       if (await has("Back to the Bench")) await tapNow("Back to the Bench");
       await tap(/^Everyone/);
       await waitFor(/dough divider/, 30_000);

@@ -26,6 +26,12 @@ export interface BenchMessage {
   reactions: { emoji: string; count: number; userIds: number[] }[];
 }
 
+/** A post the server refused for a listed word: it goes back into the composer to be changed. */
+export interface RefusedPost {
+  messageId: string;
+  body: string;
+}
+
 const API = import.meta.env.VITE_API_URL ?? "";
 
 export function useBenchMessages(channelKey: string) {
@@ -37,6 +43,8 @@ export function useBenchMessages(channelKey: string) {
   const channelRef = useRef(channelKey);
   // What arrived live since the latest page was last asked for: the answer may not hold it yet.
   const liveRef = useRef(new Set<string>());
+  const sentRef = useRef<RefusedPost | null>(null);
+  const [refused, setRefused] = useState<RefusedPost | null>(null);
 
   // Initial fetch via REST
   const fetchMessages = useCallback(async (before?: string) => {
@@ -71,6 +79,8 @@ export function useBenchMessages(channelKey: string) {
   // Load initial messages and join socket room
   useEffect(() => {
     channelRef.current = channelKey;
+    sentRef.current = null;
+    setRefused(null);
     setMessages([]);
     setLoading(true);
     setHasMore(true);
@@ -109,6 +119,7 @@ export function useBenchMessages(channelKey: string) {
     function onNewMessage(msg: BenchMessage & { channelKey: string }) {
       // Only add if it belongs to our channel (Everyone's also arrive while My Kitchen is open)
       if (msg.channelKey !== channelKey) return;
+      if (msg.messageId === sentRef.current?.messageId) sentRef.current = null;
       liveRef.current.add(msg.messageId);
       setMessages((prev) => {
         if (prev.some((m) => m.messageId === msg.messageId)) return prev;
@@ -132,23 +143,31 @@ export function useBenchMessages(channelKey: string) {
       );
     }
 
+    function onError({ code, messageId }: { code?: string; messageId?: string }) {
+      if (code === "POST_NOT_ALLOWED" && messageId && messageId === sentRef.current?.messageId) setRefused(sentRef.current);
+    }
+
     socket.on("bench:message:new", onNewMessage);
     socket.on("bench:message:deleted", onDeletedMessage);
     socket.on("bench:reaction:updated", onReactionUpdated);
     socket.on("bench:message:edited", onEditedMessage);
+    socket.on("bench:error", onError);
 
     return () => {
       socket.off("bench:message:new", onNewMessage);
       socket.off("bench:message:deleted", onDeletedMessage);
       socket.off("bench:reaction:updated", onReactionUpdated);
       socket.off("bench:message:edited", onEditedMessage);
+      socket.off("bench:error", onError);
     };
   }, [socket, channelKey]);
 
   const sendMessage = useCallback(
     (body: string, messageType?: string, recipeId?: string) => {
       if (!socket?.connected) return;
-      socket.emit("bench:message", { channelKey, body, messageType, recipeId });
+      const messageId = crypto.randomUUID();
+      sentRef.current = { messageId, body };
+      socket.emit("bench:message", { channelKey, body, messageType, recipeId, messageId });
     },
     [socket, channelKey],
   );
@@ -175,8 +194,14 @@ export function useBenchMessages(channelKey: string) {
     fetchMessages(oldest.createdDttm);
   }, [messages, hasMore, fetchMessages]);
 
+  /** The composer has taken the refused post back. */
+  const clearRefused = useCallback(() => {
+    sentRef.current = null;
+    setRefused(null);
+  }, []);
+
   // Refetch the latest page (after an unblock brings someone's messages back)
   const reload = useCallback(() => fetchMessages(), [fetchMessages]);
 
-  return { messages, loading, hasMore, loadMore, sendMessage, deleteMessage, editMessage, reload };
+  return { messages, loading, hasMore, loadMore, sendMessage, deleteMessage, editMessage, reload, refused, clearRefused };
 }

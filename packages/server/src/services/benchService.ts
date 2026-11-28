@@ -23,6 +23,7 @@ import { eq, and, desc, sql, lt, inArray, notInArray } from "drizzle-orm";
 import { AppError } from "../utils/appError.js";
 import { insertOnce } from "../utils/retrySafe.js";
 import { blockedBy } from "./benchBlockService.js";
+import { refuseBlockedTerms } from "./benchFilterService.js";
 
 const logger = pino({ name: "benchService" });
 
@@ -129,6 +130,7 @@ export async function sharesOrganisation(userIdA: number, userIdB: number): Prom
 // ---------------------------------------------------------------------------
 
 export async function updateChannelBanner(channelKey: string, banner: string) {
+  await refuseBlockedTerms(banner);
   await db
     .update(benchChannel)
     .set({ channelBanner: banner })
@@ -162,6 +164,7 @@ export interface BenchMessageWithUser {
  * edited or deleted since) finds its own row and is a `replay`; any other post under that id is a 409 CONFLICT.
  */
 export async function insertPost(post: typeof benchMessage.$inferInsert) {
+  await refuseBlockedTerms(post.messageBody);
   const { row, replay } = await insertOnce(
     post.userId,
     () => db.insert(benchMessage).values(post).onConflictDoNothing({ target: benchMessage.messageId }).returning(),
@@ -321,6 +324,7 @@ export async function getMessages(
 }
 
 export async function editMessage(messageId: string, userId: number, newBody: string): Promise<boolean> {
+  await refuseBlockedTerms(newBody);
   const result = await db
     .update(benchMessage)
     .set({ messageBody: newBody, editedInd: true, updatedDttm: new Date() })

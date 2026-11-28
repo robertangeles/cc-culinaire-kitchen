@@ -5,8 +5,8 @@ vi.mock("../services/settingsService.js", async () => {
   const actual = await vi.importActual<typeof import("../services/settingsService.js")>("../services/settingsService.js");
   return { ...actual, getAllSettings: vi.fn(), upsertSettings: vi.fn(async () => {}) };
 });
-import { handleUpdateSettings } from "./settingsController.js";
-import { upsertSettings } from "../services/settingsService.js";
+import { handleGetSettings, handleUpdateSettings } from "./settingsController.js";
+import { getAllSettings, upsertSettings } from "../services/settingsService.js";
 
 async function put(body: unknown) {
   const json = vi.fn().mockReturnThis();
@@ -34,5 +34,14 @@ describe("PUT /api/settings: minimum phone app version", () => {
     vi.mocked(upsertSettings).mockClear();
     await put({ page_title: "Hi" });
     expect(upsertSettings).toHaveBeenCalledWith({ page_title: "Hi" });
+  });
+});
+
+describe("GET /api/settings", () => {
+  it("leaves out the Bench word list, which anyone could otherwise read", async () => {
+    vi.mocked(getAllSettings).mockResolvedValueOnce({ page_title: "Hi", "bench.blocked_terms": "zorp" });
+    const json = vi.fn();
+    await handleGetSettings({} as Request, { json } as unknown as Response, vi.fn());
+    expect(json).toHaveBeenCalledWith({ settings: { page_title: "Hi" } });
   });
 });

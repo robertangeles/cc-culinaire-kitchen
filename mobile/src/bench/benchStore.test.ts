@@ -508,6 +508,41 @@ describe("reacting, editing, deleting", () => {
   });
 });
 
+describe("the word filter", () => {
+  // A made-up placeholder term only.
+  const REFUSED = { error: "This message can't be posted.", code: "POST_NOT_ALLOWED" };
+
+  it.each([["a channel", KITCHEN], ["a direct message", DM]] as const)("a refused post in %s goes back to be changed, with one sentence, and is never shown as sent", async (_, room) => {
+    const t = setup();
+    await t.store.open(room);
+    t.store.post("hello zorp");
+    t.store.post("next one");
+    t.arrive("bench:error", { ...REFUSED, messageId: "p1" });
+    expect(t.room()).toMatchObject({ notice: "This message can't be posted.", returned: { id: "p1", body: "hello zorp" } });
+    expect(t.pending()).toEqual([["next one", "sending"]]);
+    await t.tick(10_000);
+    expect(t.pending().map(([body]) => body)).not.toContain("hello zorp");
+  });
+
+  it("posting again takes the sentence and the returned draft away", async () => {
+    const t = setup();
+    await t.store.open(KITCHEN);
+    t.store.post("hello zorp");
+    t.arrive("bench:error", { ...REFUSED, messageId: "p1" });
+    t.store.post("hello there");
+    expect(t.room()).toMatchObject({ notice: null, returned: null });
+  });
+
+  it("a refused edit says so and gives nothing back", async () => {
+    const t = setup();
+    await t.store.open(KITCHEN);
+    t.store.edit("m1", "text zorp");
+    t.arrive("bench:error", { ...REFUSED, messageId: "m1" });
+    expect(t.room()).toMatchObject({ notice: "This message can't be posted.", returned: null });
+    expect(t.room().messages[0].messageBody).toBe("text 1");
+  });
+});
+
 describe("the lists", () => {
   it("loads the channels and the threads", async () => {
     const t = setup();

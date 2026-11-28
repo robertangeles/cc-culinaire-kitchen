@@ -448,7 +448,7 @@ The Bench tab is the web's The Bench page (`BenchPage.tsx`), for everyone signed
 
 **The tab is hidden in production builds by `EXPO_PUBLIC_BENCH`**: it shows only when that is `on` (`eas.json`: `on` for the development and preview profiles, `off` for production; a build without the variable hides it, as does every list the tab bar and More are built from). People can now report a message or a person and block a person, and moderators have a queue (below); the tab stays off in production until the owner decides, and a store build still needs what is listed under "Still needed for a store build".
 
-Nothing of the Bench is kept on the phone (messages are private: memory only) and nothing is ever queued: a post either goes out now or says "Not sent" with Try again and Discard.
+Nothing of the Bench is kept on the phone (messages are private: memory only) and nothing is ever queued: a post either goes out now, or says "Not sent" with Try again and Discard, or is refused by the word filter and comes back to the composer.
 
 - **Connected** only while the tab is in view and the app is in front. Background disconnects; coming back connects and reads what was missed. `inactive` (the app switcher, the lock's prompt) is left alone. A token the server refuses is renewed by one ordinary request, then it connects again.
 - **The open room is kept right by reading its latest page again** (`benchStore.ts`), since the server acknowledges neither a join nor a post: after every connect, a moment later once more, and ten seconds after a post that has not come back.
@@ -463,6 +463,7 @@ Nothing of the Bench is kept on the phone (messages are private: memory only) an
   Report takes a reason from a fixed list (`BENCH_REPORT_REASONS` in `@culinaire/shared`) and an optional note (500 characters); the server keeps the message's words as they were, takes 20 reports a day from one person (`RATE_LIMITED`) and never shows the reported person who reported them.
   Block asks first; the server then keeps that person's messages, reactions, typing and presence from this person, in history and live, and refuses a direct message between the two either way with `DM_NOT_ALLOWED` (the same refusal whoever blocked). The phone takes the person's messages, thread and presence off the screen at once; the blocked person is not told.
   Blocked people (`bench-blocked`, from the Bench list) lists them with Unblock, which reads the lists and the open room again.
+- **A word filter.** The server refuses a post, an edit and a channel banner that contains a term from the owner's list (`bench.blocked_terms`, one term per line; the check is `@culinaire/shared`'s `benchFilter`) with `POST_NOT_ALLOWED`, before it is stored or shown to anyone. The phone puts a refused post back in the composer, ahead of anything written since, and says "This message can't be posted." (`BENCH_POST_REFUSED`); it is never shown as sent. The `bench:error` event carries the post's `messageId`, which is how the phone finds it.
 - **Reports to review** (`bench-reports`, from the Bench list, for holders of `bench:moderate`; an Administrator holds every permission): the open reports with the reported words, where and by whom; Hide message (kept on record, gone for everyone, every open report about it closed) after asking, or Dismiss. Resolving with a note and the closed reports are on the web.
 - **Pictures**: only the site's own uploads and Cloudinary are loaded (`whole` in `benchApi.ts`), as the web's content policy allows; a person with any other address shows their initial.
 
@@ -488,7 +489,7 @@ Differences from the web, found while comparing:
 
 **Still needed for a store build** (the tab stays off in production until the owner decides):
 
-- A filter on what can be posted: App Store 1.2 also asks for "a method for filtering objectionable material from being posted". Today there is reporting, a moderator's Hide and blocking, and no filter on words.
+- The owner adds the words to the filter: App Store 1.2 also asks for "a method for filtering objectionable material from being posted". The filter is built (see "A word filter" above) but the list, `bench.blocked_terms` in `site_setting`, is empty until the owner fills it, and while it is empty nothing is refused.
 - The owner adds to the Privacy Policy and Terms of Service (Settings > Pages, the web and the mobile copy of each) that reported Bench messages (the message, its sender and time) are read by platform moderators and administrators, and nothing else from the conversation.
 - Review notes for the reviewers: done in `mobile/RELEASE.md` ("The reviewer demo account"): two test accounts in one kitchen, neither holding `bench:moderate` (a moderator account on request), and where Report, Block and Blocked people are.
 - Migration 0009 applied to production before the server that reads it (see the CHANGELOG), and the one-time store build with `EXPO_PUBLIC_BENCH=on`.

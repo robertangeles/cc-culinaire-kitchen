@@ -13,6 +13,7 @@
 import { useState, useEffect, useCallback, useRef } from "react";
 import { Users, Building2, LogIn, MessageCircle, UserX, X } from "lucide-react";
 import { Link } from "react-router";
+import { BENCH_POST_REFUSED } from "@culinaire/shared";
 import { useAuth } from "../context/AuthContext.js";
 import { BenchSocketProvider, useBenchSocket } from "../context/BenchSocketContext.js";
 import { useBenchMessages } from "../hooks/useBenchMessages.js";
@@ -63,7 +64,7 @@ function BenchContent() {
   }, []);
 
   const isReadOnly = !user || isGuest;
-  const { messages, loading, hasMore, loadMore, sendMessage, deleteMessage, editMessage, reload: reloadMessages } = useBenchMessages(channelKey);
+  const { messages, loading, hasMore, loadMore, sendMessage, deleteMessage, editMessage, reload: reloadMessages, refused, clearRefused } = useBenchMessages(channelKey);
   const { onlineUsers } = useBenchPresence(channelKey);
   const { typingUsers, emitTyping } = useBenchTyping(channelKey);
   const dm = useBenchDm();
@@ -121,6 +122,16 @@ function BenchContent() {
     socket.on("bench:dm:new", onDmNotify);
     return () => { socket.off("bench:dm:new", onDmNotify); };
   }, [socket, user?.userId, dm]);
+
+  // A post or edit with a word the list does not allow: one sentence that never says which, the draft back in the composer
+  useEffect(() => {
+    if (!socket) return;
+    function onError({ code }: { code?: string }) {
+      if (code === "POST_NOT_ALLOWED") setNotice(BENCH_POST_REFUSED);
+    }
+    socket.on("bench:error", onError);
+    return () => { socket.off("bench:error", onError); };
+  }, [socket]);
 
   const dismissNotification = useCallback((id: string) => {
     setNotifications((prev) => prev.filter((n) => n.id !== id));
@@ -269,10 +280,12 @@ function BenchContent() {
             thread={dm.activeThread}
             messages={dm.messages}
             loading={dm.loadingMessages}
-            onSend={dm.sendDm}
+            onSend={(recipientId, body) => { setNotice(null); dm.sendDm(recipientId, body); }}
             onBack={dm.closeThread}
             onReport={setReportTarget}
             onBlock={handleBlock}
+            returned={dm.refused}
+            onReturned={dm.clearRefused}
           />
         ) : (
           <div className="flex-1 overflow-y-auto bg-dark">
@@ -342,11 +355,13 @@ function BenchContent() {
         </div>
       ) : (
         <BenchMessageInput
-          onSend={sendMessage}
+          onSend={(body) => { setNotice(null); sendMessage(body); }}
           onTyping={emitTyping}
           disabled={!connected}
           placeholder={tab === "my-kitchen" ? "Message your kitchen team..." : "Message everyone... Use @ to mention someone"}
           onlineUsers={shownOnline}
+          returned={refused}
+          onReturned={clearRefused}
         />
       )}
       </>

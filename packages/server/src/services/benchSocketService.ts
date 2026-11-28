@@ -361,7 +361,7 @@ export function initBenchSocket(httpServer: HttpServer): () => void {
         clearTyping(data.channelKey, userId);
       } catch (err) {
         logger.error({ err, userId }, "Bench: message send failed");
-        answerNotSent(err);
+        answerNotSent(err, data.messageId);
       }
     });
 
@@ -372,8 +372,10 @@ export function initBenchSocket(httpServer: HttpServer): () => void {
       else socket.emit(event, message);
     }
 
-    function answerNotSent(err: unknown) {
-      socket.emit("bench:error", err instanceof AppError ? { error: err.message, code: err.code } : { error: "Failed to send message" });
+    /** Names the post when it has an id, so the sender knows which one was not sent. */
+    function answerNotSent(err: unknown, messageId?: string) {
+      const answer = err instanceof AppError ? { error: err.message, code: err.code } : { error: "Failed to send message" };
+      socket.emit("bench:error", messageId ? { ...answer, messageId } : answer);
     }
 
     // ── Typing indicator ──────────────────────────────────
@@ -442,6 +444,7 @@ export function initBenchSocket(httpServer: HttpServer): () => void {
         }
       } catch (err) {
         logger.warn({ err, messageId }, "Bench: message edit failed");
+        answerNotSent(err, messageId);
       }
     });
 
@@ -461,7 +464,7 @@ export function initBenchSocket(httpServer: HttpServer): () => void {
         io.to(`bench:user_${recipientId}`).emit("bench:dm:new", message);
       } catch (err) {
         logger.error({ err, userId, recipientId }, "Bench: DM send failed");
-        answerNotSent(err);
+        answerNotSent(err, messageId);
       }
     });
 

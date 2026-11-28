@@ -4,9 +4,10 @@
  * Direct message state management for The Bench.
  */
 
-import { useState, useEffect, useCallback } from "react";
+import { useState, useEffect, useCallback, useRef } from "react";
 import { parseApiErrorBody } from "@culinaire/shared";
 import { useBenchSocket } from "../context/BenchSocketContext.js";
+import type { RefusedPost } from "./useBenchMessages.js";
 
 export interface DmThread {
   dmThreadId: number;
@@ -44,6 +45,8 @@ export function useBenchDm() {
   const [startError, setStartError] = useState<string | null>(null);
   /** Why a message in the open conversation was refused: the server's own words, which never say who blocked whom. */
   const [error, setError] = useState<string | null>(null);
+  const sentRef = useRef<RefusedPost | null>(null);
+  const [refused, setRefused] = useState<RefusedPost | null>(null);
 
   // Fetch threads
   const fetchThreads = useCallback(async () => {
@@ -80,6 +83,8 @@ export function useBenchDm() {
 
   // Close conversation (back to thread list)
   const closeThread = useCallback(() => {
+    sentRef.current = null;
+    setRefused(null);
     setStartError(null);
     setError(null);
     setActiveThreadId(null);
@@ -89,6 +94,8 @@ export function useBenchDm() {
 
   // Open a thread
   const openThread = useCallback((threadId: number, threadInfo?: DmThread) => {
+    sentRef.current = null;
+    setRefused(null);
     setStartError(null);
     setActiveThreadId(threadId);
     setError(null);
@@ -141,14 +148,23 @@ export function useBenchDm() {
   // Send a DM via socket
   const sendDm = useCallback((recipientId: number, body: string) => {
     if (!socket?.connected) return;
-    socket.emit("bench:dm:send", { recipientId, body });
+    const messageId = crypto.randomUUID();
+    sentRef.current = { messageId, body };
+    socket.emit("bench:dm:send", { recipientId, body, messageId });
   }, [socket]);
+
+  /** The composer has taken the refused post back. */
+  const clearRefused = useCallback(() => {
+    sentRef.current = null;
+    setRefused(null);
+  }, []);
 
   // Listen for incoming DMs
   useEffect(() => {
     if (!socket) return;
 
     function onDmNew(msg: DmMessage) {
+      if (msg.messageId === sentRef.current?.messageId) sentRef.current = null;
       // If viewing this thread, append message
       if (msg.dmThreadId === activeThreadId) {
         setMessages((prev) => {
@@ -189,8 +205,9 @@ export function useBenchDm() {
       );
     }
 
-    function onError({ error, code }: { error?: string; code?: string }) {
+    function onError({ error, code, messageId }: { error?: string; code?: string; messageId?: string }) {
       if (code === "DM_NOT_ALLOWED" && error) setError(error);
+      if (code === "POST_NOT_ALLOWED" && messageId && messageId === sentRef.current?.messageId) setRefused(sentRef.current);
     }
 
     socket.on("bench:dm:new", onDmNew);
@@ -219,5 +236,7 @@ export function useBenchDm() {
     sendDm,
     fetchThreads,
     error,
+    refused,
+    clearRefused,
   };
 }

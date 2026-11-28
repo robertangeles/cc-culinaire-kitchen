@@ -84,6 +84,8 @@ export const SERVER_ERROR_CODES = [
   "STORAGE_UNAVAILABLE",
   // The Bench: a direct message to someone who shares no kitchen and no thread with the sender, or who has blocked or is blocked by them (or does not exist).
   "DM_NOT_ALLOWED",
+  // The Bench: a post or an edit with a word the owner's list does not allow (422). The text never says which; the draft stays to be changed.
+  "POST_NOT_ALLOWED",
 ] as const;
 export type ServerErrorCode = (typeof SERVER_ERROR_CODES)[number];
 
