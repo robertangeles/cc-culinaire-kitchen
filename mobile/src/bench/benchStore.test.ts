@@ -526,6 +526,14 @@ describe("the lists", () => {
     expect(t.store.getSnapshot().fresh).toEqual([]);
   });
 
+  it("an answer to a message sent again, older than the preview, leaves the preview as it is", async () => {
+    const t = setup();
+    t.api.threads.mockResolvedValue([{ ...thread, lastMessage: "Newest", lastMessageAt: at(9) }]);
+    await t.store.refreshLists();
+    t.arrive("bench:dm:new", msg(5, { channelId: null, dmThreadId: 3, messageBody: "Older" }));
+    expect(t.store.getSnapshot().threads[0]).toMatchObject({ lastMessage: "Newest", lastMessageAt: at(9) });
+  });
+
   it("one's own message from another device puts no mark; a thread not listed yet is fetched", async () => {
     const t = setup();
     await t.store.refreshLists();

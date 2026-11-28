@@ -72,7 +72,7 @@ beforeEach(() => {
       { channelId: 1, channelKey: "everyone", channelName: "Everyone", channelType: "global", channelBanner: null },
       { channelId: 2, channelKey: "org_5", channelName: "Main Kitchen", channelType: "organisation", channelBanner: null },
     ]),
-    threads: vi.fn(async () => [{ dmThreadId: 3, otherUserId: 9, otherUserName: "Cy", otherUserPhotoPath: null, lastMessage: "See you at six", lastMessageAt: new Date().toISOString() }]),
+    threads: vi.fn(async () => [{ dmThreadId: 3, otherUserId: 9, otherUserName: "Cy", otherUserPhotoPath: null, lastMessage: "See you at six", lastMessageAt: new Date(Date.UTC(2026, 10, 20, 1, 0)).toISOString() }]),
     openThread: vi.fn(async (id: number) => ({ dmThreadId: 4, otherUserId: id, otherUserName: "Bo Li", otherUserPhotoPath: null, lastMessage: null, lastMessageAt: "" })),
     messages: vi.fn(async (_r: Room) => rows),
     pins: vi.fn(async () => []),
