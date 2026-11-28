@@ -2,8 +2,6 @@
 import { describe, it, expect, vi, beforeEach, afterEach } from "vitest";
 import { render, screen, fireEvent, waitFor, cleanup } from "@testing-library/react";
 import { Linking, Platform } from "react-native";
-import * as Clipboard from "expo-clipboard";
-import { contactEmail } from "../src/config";
 import { ApiError } from "../src/api/client";
 import { routerMock, searchParams } from "../testing/mocks";
 
@@ -63,19 +61,15 @@ describe("the contact row", () => {
     const open = vi.spyOn(Linking, "openURL").mockResolvedValue(undefined);
     render(<SignIn />);
     fireEvent.click(screen.getByRole("link", { name: "Contact us" }));
-    expect(open).toHaveBeenCalledWith(`mailto:${contactEmail}`);
-    expect(screen.queryByText("Copy")).toBeNull();
+    expect(open).toHaveBeenCalledWith("mailto:rob.angeles@passeculinaire.com");
   });
 
-  it("shows the address with a Copy action when no mail app takes it", async () => {
+  it("shows the address as text when no mail app takes it", async () => {
     vi.spyOn(Linking, "openURL").mockRejectedValue(new Error("none"));
     setState({ phase: "ready", user: chef, location: main, locations: [main] });
     render(<Account />);
     fireEvent.click(screen.getByRole("link", { name: "Contact us" }));
-    expect(await screen.findByText(contactEmail)).toBeTruthy();
-    fireEvent.click(screen.getByText("Copy"));
-    await screen.findByText("Copied");
-    expect(Clipboard.setStringAsync).toHaveBeenCalledWith(contactEmail);
+    expect(await screen.findByText("rob.angeles@passeculinaire.com")).toBeTruthy();
   });
 });
 

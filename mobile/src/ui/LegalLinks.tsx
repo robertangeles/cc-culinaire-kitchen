@@ -1,10 +1,8 @@
 import { useState } from "react";
 import { Linking, Pressable, View } from "react-native";
-import * as Clipboard from "expo-clipboard";
 import { useRouter } from "expo-router";
-import { contactEmail } from "../config";
+import { CONTACT_EMAIL } from "@culinaire/shared";
 import { fontFamily, size, space } from "../theme";
-import { Button } from "./Button";
 import { Text } from "./Text";
 import { useColors } from "./theme";
 
@@ -18,7 +16,6 @@ export function LegalLinks() {
   const router = useRouter();
   const c = useColors();
   const [noMailApp, setNoMailApp] = useState(false);
-  const [copied, setCopied] = useState(false);
   const linkStyle = { minHeight: size.tap, justifyContent: "center" as const };
   return (
     <View style={{ alignItems: "center" }}>
@@ -28,15 +25,14 @@ export function LegalLinks() {
             <Text style={{ fontFamily: fontFamily.uiStrong, color: c.accentText }}>{l.label}</Text>
           </Pressable>
         ))}
-        <Pressable accessibilityRole="link" accessibilityLabel="Contact us" onPress={() => void Linking.openURL(`mailto:${contactEmail}`).catch(() => setNoMailApp(true))} style={linkStyle}>
+        <Pressable accessibilityRole="link" accessibilityLabel="Contact us" onPress={() => void Linking.openURL(`mailto:${CONTACT_EMAIL}`).catch(() => setNoMailApp(true))} style={linkStyle}>
           <Text style={{ fontFamily: fontFamily.uiStrong, color: c.accentText }}>Contact us</Text>
         </Pressable>
       </View>
       {noMailApp ? (
         <View style={{ alignItems: "center" }}>
           <Text variant="muted">No mail app is set up on this device. Write to us at:</Text>
-          <Text selectable style={{ fontFamily: fontFamily.uiStrong }}>{contactEmail}</Text>
-          <Button kind="ghost" label={copied ? "Copied" : "Copy"} onPress={() => void Clipboard.setStringAsync(contactEmail).then(() => setCopied(true))} />
+          <Text selectable style={{ fontFamily: fontFamily.uiStrong }}>{CONTACT_EMAIL}</Text>
         </View>
       ) : null}
     </View>

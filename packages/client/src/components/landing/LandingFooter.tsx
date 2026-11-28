@@ -1,5 +1,5 @@
 import { Link } from "react-router";
-import { contactEmail } from "../../config.js";
+import { CONTACT_EMAIL } from "@culinaire/shared";
 
 interface FooterLink {
   label: string;
@@ -9,7 +9,7 @@ interface FooterLink {
 const links: FooterLink[] = [
   { label: "Features", to: "#features" },
   { label: "Log In", to: "/login" },
-  { label: "Contact", to: `mailto:${contactEmail}` },
+  { label: "Contact", to: `mailto:${CONTACT_EMAIL}` },
   { label: "Privacy Policy", to: "/privacy" },
   { label: "Terms of Service", to: "/terms" },
 ];
