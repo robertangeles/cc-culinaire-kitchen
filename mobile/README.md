@@ -488,7 +488,6 @@ Differences from the web, found while comparing:
 
 **Still needed for a store build** (the tab stays off in production until the owner decides):
 
-- A published contact address for the app (the store listing and the app), as App Store 1.2 asks.
 - A filter on what can be posted: App Store 1.2 also asks for "a method for filtering objectionable material from being posted". Today there is reporting, a moderator's Hide and blocking, and no filter on words.
 - The owner adds to the Privacy Policy and Terms of Service (Settings > Pages, the web and the mobile copy of each) that reported Bench messages (the message, its sender and time) are read by platform moderators and administrators, and nothing else from the conversation.
 - Review notes for the reviewers: done in `mobile/RELEASE.md` ("The reviewer demo account"): two test accounts in one kitchen, neither holding `bench:moderate` (a moderator account on request), and where Report, Block and Blocked people are.

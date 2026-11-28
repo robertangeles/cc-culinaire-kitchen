@@ -1,4 +1,5 @@
 import { Link } from "react-router";
+import { CONTACT_EMAIL } from "@culinaire/shared";
 
 interface FooterLink {
   label: string;
@@ -8,7 +9,7 @@ interface FooterLink {
 const links: FooterLink[] = [
   { label: "Features", to: "#features" },
   { label: "Log In", to: "/login" },
-  { label: "Contact", to: "/contact" },
+  { label: "Contact", to: `mailto:${CONTACT_EMAIL}` },
   { label: "Privacy Policy", to: "/privacy" },
   { label: "Terms of Service", to: "/terms" },
 ];
@@ -25,7 +26,7 @@ export function LandingFooter() {
         {/* Links */}
         <nav className="flex flex-wrap items-center gap-5">
           {links.map((link) =>
-            link.to.startsWith("#") ? (
+            link.to.startsWith("#") || link.to.startsWith("mailto:") ? (
               <a
                 key={link.label}
                 href={link.to}

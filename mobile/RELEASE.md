@@ -65,7 +65,8 @@ Run commands from the repository root. `eas` is the Expo build service; use it t
 3. Add internal testers (your iPhone and iPad) in TestFlight. iPad is supported, so the store listing needs iPad screenshots.
 4. Before submitting for review: privacy nutrition labels, age rating, the privacy policy URL (the existing web Privacy URL), the terms URL (the existing web Terms URL), support URL, and the reviewer notes below, with the demo account.
 5. The build the reviewers get must have the Bench switched on (`EXPO_PUBLIC_BENCH=on`; the reviewer notes below walk them through the Bench's report and block); otherwise it stays off (App Store 1.2; see "Still needed for a store build" in `mobile/README.md`).
-6. Apple rule 3.1.3(b): the day the website starts selling paid plans, an app that unlocks those features must either also sell them in the app or qualify for an exemption. Billing in the app is deferred, so nothing in the app mentions plans. Revisit before the web billing launch.
+6. The contact address in each store listing (support contact) must be the same as the one in the app, `CONTACT_EMAIL` in `packages/shared/src/constants/contact.ts` (also the website footer), and the Bench report form must be reachable from the app (a message's actions, "Report"). The Privacy Policy and Terms text is in the database and may name another address: the owner decides that.
+7. Apple rule 3.1.3(b): the day the website starts selling paid plans, an app that unlocks those features must either also sell them in the app or qualify for an exemption. Billing in the app is deferred, so nothing in the app mentions plans. Revisit before the web billing launch.
 
 ## Owner chores that are not code (with the long lead times first)
 
@@ -106,7 +107,7 @@ The script prints the host before it writes anything and never prints the passwo
 >
 > App lock: this account can approve orders, so the app asks for Face ID, Touch ID or the device passcode when it opens. The review device needs a passcode set (Settings, Face ID & Passcode); without one the app asks for one and shows nothing else.
 >
-> Sign in with Google and Sign in with Apple are available on the sign-in screen. There are no in-app purchases and no paid features in this app. The Terms of Service and Privacy Policy are linked from the sign-in screen and the Account screen. Support: <support email>.
+> Sign in with Google and Sign in with Apple are available on the sign-in screen. There are no in-app purchases and no paid features in this app. The Terms of Service and Privacy Policy are linked from the sign-in screen and the Account screen. Support: <`CONTACT_EMAIL`>.
 
 ## Checks to do on real devices before each release
 
@@ -116,5 +117,5 @@ The script prints the host before it writes anything and never prints the passwo
 - Delete a test account from the Account screen (a tab, or under More); confirm the phone returns to sign-in with nothing left on it.
 - App lock, signed in as someone who approves orders: cold start shows the lock screen; Unlock works with Face ID or a fingerprint, and with the passcode after biometrics fail; cancel it and fail it five times (still locked, still signed in); lock the phone or switch apps for over a minute (locked) and for a few seconds (not locked); the app switcher shows a blank page; wait two minutes and approve an order (asked again; cancel sends nothing). On a spare device with no passcode: the app asks for one.
 - App lock, signed in as someone with no approval, roster or compliance permission (not even `roster:read-own`): no lock anywhere. A cook with their own shifts and documents is locked.
-- Open Terms and Privacy from sign-in (signed out) and from the Account screen.
+- Open Terms and Privacy from sign-in (signed out) and from the Account screen; "Contact us" next to them opens a new mail to the contact address.
 - Set `mobile_min_app_version` above the installed version on a test server: the update screen appears with no link, then (after setting the store link) with the right store's button.

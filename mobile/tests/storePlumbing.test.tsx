@@ -56,6 +56,23 @@ describe("terms and privacy links", () => {
   });
 });
 
+describe("the contact row", () => {
+  it("opens the mail composer to the published address", () => {
+    const open = vi.spyOn(Linking, "openURL").mockResolvedValue(undefined);
+    render(<SignIn />);
+    fireEvent.click(screen.getByRole("link", { name: "Contact us" }));
+    expect(open).toHaveBeenCalledWith("mailto:rob.angeles@passeculinaire.com");
+  });
+
+  it("shows the address as text when no mail app takes it", async () => {
+    vi.spyOn(Linking, "openURL").mockRejectedValue(new Error("none"));
+    setState({ phase: "ready", user: chef, location: main, locations: [main] });
+    render(<Account />);
+    fireEvent.click(screen.getByRole("link", { name: "Contact us" }));
+    expect(await screen.findByText("rob.angeles@passeculinaire.com")).toBeTruthy();
+  });
+});
+
 describe("a legal page", () => {
   it("shows the published text natively and asks the server for the page it was opened with", async () => {
     searchParams.current = { slug: "privacy" };
