@@ -11,6 +11,8 @@ configure({ asyncUtilTimeout: 10_000 });
 
 // Screen tests render the real screens with react-native-web in jsdom. Only native-only modules are faked here.
 vi.mock("expo-haptics", () => ({ impactAsync: vi.fn(), ImpactFeedbackStyle: { Light: "light" } }));
+vi.mock("expo-clipboard", () => ({ setStringAsync: vi.fn().mockResolvedValue(true) }));
+vi.mock("expo-constants", () => ({ default: { expoConfig: { version: "0.0.0-test" } } }));
 vi.mock("expo-status-bar", () => ({ StatusBar: () => null }));
 vi.mock("expo-linear-gradient", async () => {
   const { View } = await import("react-native");

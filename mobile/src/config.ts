@@ -23,3 +23,6 @@ export const googleIosClientId = process.env.EXPO_PUBLIC_GOOGLE_IOS_CLIENT_ID ??
  * every release build, so there the lock cannot be switched off.
  */
 export const appLockOff = process.env.EXPO_PUBLIC_APP_LOCK === "off" && __DEV__;
+
+/** The published contact address: the store listings, the Contact us row and the website footer all use this one. */
+export const contactEmail = "rob.angeles@passeculinaire.com";

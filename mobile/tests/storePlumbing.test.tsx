@@ -2,6 +2,8 @@
 import { describe, it, expect, vi, beforeEach, afterEach } from "vitest";
 import { render, screen, fireEvent, waitFor, cleanup } from "@testing-library/react";
 import { Linking, Platform } from "react-native";
+import * as Clipboard from "expo-clipboard";
+import { contactEmail } from "../src/config";
 import { ApiError } from "../src/api/client";
 import { routerMock, searchParams } from "../testing/mocks";
 
@@ -53,6 +55,27 @@ describe("terms and privacy links", () => {
     render(<Account />);
     fireEvent.click(screen.getByRole("link", { name: "Privacy Policy" }));
     expect(routerMock.push).toHaveBeenLastCalledWith({ pathname: "/legal", params: { slug: "privacy" } });
+  });
+});
+
+describe("the contact row", () => {
+  it("opens the mail composer to the published address", () => {
+    const open = vi.spyOn(Linking, "openURL").mockResolvedValue(undefined);
+    render(<SignIn />);
+    fireEvent.click(screen.getByRole("link", { name: "Contact us" }));
+    expect(open).toHaveBeenCalledWith(`mailto:${contactEmail}`);
+    expect(screen.queryByText("Copy")).toBeNull();
+  });
+
+  it("shows the address with a Copy action when no mail app takes it", async () => {
+    vi.spyOn(Linking, "openURL").mockRejectedValue(new Error("none"));
+    setState({ phase: "ready", user: chef, location: main, locations: [main] });
+    render(<Account />);
+    fireEvent.click(screen.getByRole("link", { name: "Contact us" }));
+    expect(await screen.findByText(contactEmail)).toBeTruthy();
+    fireEvent.click(screen.getByText("Copy"));
+    await screen.findByText("Copied");
+    expect(Clipboard.setStringAsync).toHaveBeenCalledWith(contactEmail);
   });
 });
 
