@@ -370,13 +370,15 @@ Differences from the web (`LocationDashboard.tsx`, `IngredientCatalog.tsx`, `Cat
 
 ## Menu (`src/menu`, `app/(app)/(menu)`)
 
-The Menu tab is the web's Menu & Costing page (`MenuIntelligencePage.tsx`): its Menu Items tab, the item's page and form, Category Settings and Record sale. It is shown to `menu:read` holders, the key on every
-menu route, and comes last in the tab order. Adding, changing and deleting items, saving a target and voiding a sale are offered only to `menu:manage` holders, and per item only where the server says `canManage`
+The Menu tab is the web's Menu & Costing page (`MenuIntelligencePage.tsx`): its Dashboard, Menu Items and Engineering Matrix tabs, the item's page and form, Category Settings and Record sale with its CSV import. It is shown to `menu:read` holders, the key on every
+menu route, and comes last in the tab order. Adding, changing and deleting items, saving a target, voiding a sale, Recalculate, the units sold import and the AI recommendations are offered only to `menu:manage` holders, and per item only where the server says `canManage`
 (its creator or an organisation admin). The menu belongs to the organisation; a sale is recorded at the current location.
 
 **Costs.** A food cost, percentage or margin is the server's stored figure (`storedItemCosts`), shown only to `inventory:cost` holders and only when the server sent it. The server leaves menu costs
 out for anyone else (`forViewer`); the store drops them too (`withoutCosts`, `lineWithoutCosts`, and a sale's on-hand figures), for a server from before that change and for what an earlier session kept on the phone. Nothing is worked out from
-what is left. The form's live preview uses the shared web editor functions (`previewLineCost`, `editorItemCosts`) and says it is a preview; a category's actual is `categoryActualFoodCostPct`. A person who may not see
+what is left. The form's live preview uses the shared web editor functions (`previewLineCost`, `editorItemCosts`) and says it is a preview; a category's actual is `categoryActualFoodCostPct`. The engineering matrix is drawn from margins, so it is
+offered only to `inventory:cost` holders; so are an item's waste (`/waste-impact`, which sends no dollars to anyone else and is not asked for), its plate P&L (`/items/:id/pandl-cost`, one serving at the
+location's weighted average cost, against one serving's share of the price) and its yield variance (`/items/:id/yield-variance`). Without the permission they are simply not there. A person who may not see
 costs can still change a recipe: the new version of a line is sent without a cost and before the old one is removed, so the server carries the unseen cost over (the same unit, for a typed name).
 
 **Offline.** The list, targets, items sold as they are and the lines of items already opened are kept on the phone (`menu.<user>`, `menu.lines.<user>.<item>`) and read with no signal, with their time. Nothing is
@@ -388,6 +390,12 @@ queued: every write waits for the server, and says when it needs a connection.
 - **Saving an item is several requests without keys** (the item, then its lines; no route changes a line). `SaveSession` (`menuEditor.ts`) makes Save again safe: it reads the menu before a create and finds the item a
   lost reply left behind (same creator, same fields, not there before), sends only fields that changed, adds only lines that are not on the server yet, adds a changed line's new version before removing the old one,
   and removes only a line it started from or one of its own earlier tries that the form no longer wants (a colleague's new line stays).
+- **The dashboard** is worked out on the phone from the menu the server classified, with the server's own `summariseMenuAnalysis` (a cost stored as none counts 0, as there), so it reads offline from the kept menu.
+  The waste is kept with the menu; the plate cost and yield variance are read on each visit to the item and never kept.
+- **A sales CSV** is picked in the system's document picker (`expo-file-system`'s `File.pickFileAsync`, already in the app), read into memory (`pickCsv.ts`: a `.csv` of at most 5 MB, the server's limit) and sent as the
+  web sends it; nothing of it is kept. iOS hands over a copy in the app's temporary folder, deleted once read; on Android it is the person's own file (a `content://` link), never touched. Record a sale's import
+  (`/sales/import/preview`, then `/commit`, `menu:read`) records each row as a sale at the server's selected location, the phone's location; each row's key is its content and location, so sending again after a lost answer records
+  none twice. The dashboard's (`/import-sales`, `menu:manage`) sets each item's units sold and does not touch stock.
 - A void of a sale already voided, and a delete of an item already gone, count as done. A delete refused because the item has sales or prep history (409 `CONFLICT`) shows the server's words.
 
 Differences from the web (`components/menu`, `components/menu-intelligence/RecordSaleModal.tsx`), found while comparing:
@@ -396,7 +404,14 @@ Differences from the web (`components/menu`, `components/menu-intelligence/Recor
 |---|---|---|
 | Add Menu Item and Save target shown to everyone with `menu:read` (a 403 without `menu:manage`) | Hidden without `menu:manage` | The server's gate. |
 | Nine-column table, sortable by any column | One row per item, A to Z; search, category and class filters | |
-| Waste column, dashboard, engineering matrix, AI recommendations, replacement recipe, sales CSV import, Recalculate | Not on the phone | Later slices; the web keeps them. |
+| Recalculate and Get Recommendations shown to everyone (a 403 without `menu:manage`) | Hidden without `menu:manage` | The server's gate. |
+| The matrix and the dashboard without `inventory:cost` say costs are hidden (`CostsHiddenNote.tsx`) | The matrix is not offered; the dashboard shows its other figures | |
+| The dashboard's summary comes from the server | Worked out on the phone with the server's own function | So it reads offline. |
+| The matrix's dots show a name on hover | A tap picks a dot and shows its figures; the same items are listed by class under the chart | A dot is too small to aim at on a phone. |
+| Generate Replacement Recipe opens the Recipe Lab empty (the request it sends is not read there) | Opens it with the request filled in | |
+| Waste shows as a column of the table | A line on the item's row and a figure on its page | |
+| Plate P&L and yield variance | On the item's page | The routes have no web page. |
+| A sales CSV row that fails says "row 2" counting from 0 | Counts from 1 | |
 | The item's panel opens only from the matrix | A row opens the item | |
 | A line reads "@ $14/g" when the cost is per kg (the cost is per kitchen unit, the label is the line's unit) | "$14.00 per kg" | The web label is wrong when the line's unit is not the kitchen unit. |
 | A typed ingredient with no cost shows $0.00 in the form | "No cost yet" (it still adds nothing to the preview) | |
@@ -417,7 +432,7 @@ Differences from the web (`components/menu`, `components/menu-intelligence/Recor
 
 The six costing differences between the web editor and the server (`menuCosting.test.ts`) are kept as they are. The phone meets five of them: a half-cent line (1), a zero yield (2, the form asks for 1 to 200, as the web's does),
 units with no path between them (3, the preview says so and the server refuses the line), and servings per sale below 1 (6, the form asks for at least 1) in the form; the class shown is the server's, over every item (4).
-The plate P&L cost (5) is not on the phone, as it is on no web page.
+The plate P&L cost (5) is shown per serving, as the server works it out.
 
 ## Your Brain (`src/brain`, `app/(app)/(brain)`)
 

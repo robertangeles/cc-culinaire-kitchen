@@ -22,6 +22,16 @@ Server, web, phone and shared. **Migration `0010_receiving_extras` must be appli
 - **The rules are shared** (`utils/receivingExtras.ts`): an expiry is a real day, not before the delivery day on a line that is taken in (one day of slack for kitchens east of UTC; a rejected line may carry any past day, as the evidence it arrived expired) and at most 10 years after it on any line; lot and docket numbers are trimmed, at most 50 characters, blank clears. Refusals answer 400 with `EXPIRY_DATE_INVALID`, `EXPIRY_DATE_OUT_OF_RANGE`, `LOT_NUMBER_TOO_LONG` or `DOCKET_NUMBER_TOO_LONG`.
 - **Installed apps keep working**: `POST .../lines/:lineId` takes the new fields optionally and accepts a body with no `status` (only the expiry and lot change; the line's status and discrepancy stay); a status change that leaves them out keeps them. `POST .../confirm` takes an optional `{ docketNumber }` and still works with no body.
 
+### Added (phone: menu dashboard, engineering matrix and the rest of Menu & Costing)
+
+Phone app and shared schemas only; no server or web change, no migration, no new permission, no new dependency (the document picker is `expo-file-system`'s, already in the app).
+
+- **Dashboard**: how many items are Stars, Plowhorses, Puzzles and Dogs, the most and least popular, the Dogs to rework, and for `inventory:cost` holders the average and overall food cost, the average margin and the highest and lowest margin. Worked out from the menu on the phone with the server's own `summariseMenuAnalysis`, so it shows offline too.
+- **Engineering matrix**, for `inventory:cost` holders: every item that sold by popularity and margin, the full width on a tablet, with the same items listed by class under it.
+- **Recalculate** and **Import units sold from a CSV** on the dashboard, and **AI recommendations** on an item's page, for `menu:manage` holders (the routes' gate); a recommendation to replace a dish opens the Recipe Lab with the request filled in.
+- **Import sales from a CSV** on Record a sale: the rows are matched first, then recorded; sending again after a lost answer records no row twice. The file is picked in the system's document picker, read into memory and never kept.
+- **An item's page** shows, for `inventory:cost` holders, its ingredients' waste over the last 30 days (also on the menu list), its plate P&L at the location's average cost and its yield variance.
+
 ### Added (a published contact address on the phone and the website)
 
 Web, phone and shared. No server change, no migration, no new dependency.
