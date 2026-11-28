@@ -3,11 +3,12 @@ import { Alert, ScrollView, View } from "react-native";
 import { useFocusEffect, useLocalSearchParams, useRouter } from "expo-router";
 import { SafeAreaView } from "react-native-safe-area-context";
 import { FOOD_COST_ALERT_PCT } from "@culinaire/shared";
+import type { Recommendation } from "@culinaire/shared/schemas/menu";
 import { useSession } from "../../../../src/runtime/appContext";
 import { hasAnyPermission } from "../../../../src/shell/tabs";
 import { useMenu } from "../../../../src/menu/MenuProvider";
 import { isOffline } from "../../../../src/menu/menuStore";
-import { allergensOf, amount, classInfo, costsOf, money, overTarget, pct } from "../../../../src/menu/menuView";
+import { actionLabel, allergensOf, amount, classInfo, costsOf, money, overTarget, pct, plateOf, varianceOf, wasteLabel } from "../../../../src/menu/menuView";
 import { OfflineBanner } from "../../../../src/ui/Banner";
 import { Button } from "../../../../src/ui/Button";
 import { Column } from "../../../../src/ui/Column";
@@ -17,8 +18,9 @@ import { fontFamily, space } from "../../../../src/theme";
 import { useColors } from "../../../../src/ui/theme";
 
 /**
- * One menu item: its price, its class, what the server stored as its food cost, percentage and margin (`inventory:cost` holders only), its
- * allergens and its recipe lines. Change and delete are offered to who may manage this item, as the server says (`canManage`).
+ * One menu item: its price, its class, what the server stored as its food cost, percentage and margin, its ingredients' waste, its plate
+ * P&L and yield variance (those for `inventory:cost` holders only), its allergens and its recipe lines. Change and delete are offered to who
+ * may manage this item, as the server says (`canManage`); the model's recommendations to `menu:manage` holders, the route's gate.
  */
 export default function MenuItemScreen() {
   const { state } = useSession();
@@ -29,7 +31,10 @@ export default function MenuItemScreen() {
   const id = Array.isArray(menuItemId) ? menuItemId[0] : (menuItemId ?? "");
   const [error, setError] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
-  useFocusEffect(useCallback(() => void store.loadLines(id), [store, id]));
+  const [advice, setAdvice] = useState<Recommendation | null>(null);
+  const [asking, setAsking] = useState(false);
+  const [adviceError, setAdviceError] = useState<string | null>(null);
+  useFocusEffect(useCallback(() => void Promise.all([store.loadLines(id), store.loadFigures(id)]), [store, id]));
   if (state.phase !== "ready") return null;
 
   const item = snap.items.find((i) => i.menuItemId === id);
@@ -47,7 +52,12 @@ export default function MenuItemScreen() {
     );
   }
 
-  const canManage = hasAnyPermission(state.user, ["menu:manage"]) && item.canManage !== false;
+  const mayManage = hasAnyPermission(state.user, ["menu:manage"]);
+  const canManage = mayManage && item.canManage !== false;
+  const waste = wasteLabel(item, snap.waste[id]);
+  const figures = snap.figures[id];
+  const plate = typeof figures?.plateCost === "number" ? plateOf(item, figures.plateCost) : null;
+  const variance = figures?.variance ? varianceOf(figures.variance) : null;
   const costs = costsOf(item);
   const over = overTarget(item, snap.targets);
   const info = classInfo(item.classification);
@@ -60,13 +70,38 @@ export default function MenuItemScreen() {
     </View>
   );
 
+  const failure = (err: unknown) => (isOffline(err) ? "This needs a connection, and the server can't be reached. Try again when you're back online." : err instanceof Error ? err.message : "Something went wrong. Try again.");
+
+  async function ask() {
+    setAsking(true);
+    setAdviceError(null);
+    try {
+      setAdvice(await store.recommend(id));
+    } catch (err) {
+      setAdviceError(failure(err));
+    }
+    setAsking(false);
+  }
+
+  async function replace() {
+    setAsking(true);
+    setAdviceError(null);
+    try {
+      const request = await store.replacement(id);
+      router.push({ pathname: "/recipe-lab", params: { request } });
+    } catch (err) {
+      setAdviceError(failure(err));
+    }
+    setAsking(false);
+  }
+
   async function run(action: () => Promise<void>) {
     setBusy(true);
     setError(null);
     try {
       await action();
     } catch (err) {
-      setError(isOffline(err) ? "This needs a connection, and the server can't be reached. Try again when you're back online." : err instanceof Error ? err.message : "Something went wrong. Try again.");
+      setError(failure(err));
     }
     setBusy(false);
   }
@@ -99,6 +134,8 @@ export default function MenuItemScreen() {
                 {costs ? fact("Food cost", pct(costs.foodCostPct), costs.foodCostPct > FOOD_COST_ALERT_PCT ? c.danger : undefined) : null}
                 {costs ? fact("Contribution margin", money(costs.margin), costs.margin < 0 ? c.danger : undefined) : null}
                 {over !== null ? <Text variant="error">{`Over the ${over}% target for ${item.category}.`}</Text> : null}
+                {waste ? fact("Ingredient waste, last 30 days", money(snap.waste[id]), c.danger) : null}
+                {waste && item.classification === "dog" ? <Text variant="error">A Dog with waste: a strong candidate to replace.</Text> : null}
               </View>
             </Surface>
           </View>
@@ -114,6 +151,37 @@ export default function MenuItemScreen() {
               </View>
             </Surface>
           </View>
+
+          {plate ? (
+            <View style={{ gap: space.xs }}>
+              <Text variant="label">Plate P&L</Text>
+              <Surface>
+                <View style={{ padding: space.lg, gap: space.sm }}>
+                  {fact("Price per serving", money(plate.price))}
+                  {fact("Food cost per serving", money(plate.foodCost))}
+                  {plate.foodCostPct !== null ? fact("Food cost", pct(plate.foodCostPct), plate.foodCostPct > FOOD_COST_ALERT_PCT ? c.danger : undefined) : null}
+                  {fact("Margin per serving", money(plate.margin), plate.margin < 0 ? c.danger : undefined)}
+                  <Text variant="meta">At what the location paid on average for each ingredient, not the catalogue's cost today.</Text>
+                </View>
+              </Surface>
+            </View>
+          ) : null}
+
+          {variance ? (
+            <View style={{ gap: space.xs }}>
+              <Text variant="label">Yield variance</Text>
+              <Surface>
+                <View style={{ padding: space.lg, gap: space.sm }}>
+                  {variance.figures ? fact("The recipe says", money(variance.figures.theoretical)) : null}
+                  {variance.figures ? fact("Logged as used", money(variance.figures.actual)) : null}
+                  {variance.figures ? fact("Difference", `${money(variance.figures.variance)} (${pct(variance.figures.variancePct)})`, figures?.variance?.threshold === "alert" ? c.danger : undefined) : null}
+                  <Text variant={figures?.variance?.threshold === "alert" ? "error" : "muted"}>{variance.sentence}</Text>
+                  {variance.figures && figures?.variance?.periodStart && figures.variance.periodEnd ? <Text variant="meta">{`${figures.variance.unitsSold} sold, ${figures.variance.periodStart} to ${figures.variance.periodEnd}`}</Text> : null}
+                </View>
+              </Surface>
+            </View>
+          ) : null}
+          {figures?.error ? <Text variant="muted">{figures.error}</Text> : null}
 
           {allergens.length > 0 ? (
             <View style={{ gap: space.xs }}>
@@ -156,6 +224,38 @@ export default function MenuItemScreen() {
               </Surface>
             ) : null}
           </View>
+
+          {mayManage ? (
+            <View style={{ gap: space.sm }}>
+              <Text variant="label">Recommendations</Text>
+              {advice ? (
+                <Surface>
+                  <View style={{ padding: space.lg, gap: space.md }}>
+                    {advice.summary ? <Text>{advice.summary}</Text> : null}
+                    {advice.actions.map((a, index) => (
+                      <View key={index} style={[{ gap: 2, paddingTop: space.md }, rowDivider(index === 0 && !advice.summary ? 0 : 1, c.border)]}>
+                        <Text variant="label">{actionLabel(a.type)}</Text>
+                        <Text>{a.description}</Text>
+                        {a.impact ? <Text variant="meta">{a.impact}</Text> : null}
+                        {a.type === "generate_replacement" ? <Button kind="ghost" label="Write a replacement recipe" disabled={asking} onPress={() => void replace()} /> : null}
+                      </View>
+                    ))}
+                    {advice.menuDescription ? (
+                      <View style={{ gap: 2 }}>
+                        <Text variant="label">Suggested menu description</Text>
+                        <Text variant="muted">{`“${advice.menuDescription}”`}</Text>
+                      </View>
+                    ) : null}
+                  </View>
+                </Surface>
+              ) : (
+                <Text variant="muted">CulinAIre looks at this item's class, price, sales and recipe and suggests what to do with it.</Text>
+              )}
+              {asking ? <Text variant="muted" accessibilityLiveRegion="polite">Asking CulinAIre… this can take up to a minute.</Text> : null}
+              {adviceError ? <Text variant="error" accessibilityLiveRegion="polite">{adviceError}</Text> : null}
+              <Button kind="ghost" label={advice ? "Ask again" : "Get recommendations"} disabled={asking} onPress={() => void ask()} />
+            </View>
+          ) : null}
 
           {error ? <Text variant="error" accessibilityLiveRegion="polite">{error}</Text> : null}
           <Button label="Record a sale" onPress={() => router.push({ pathname: "/menu-sale", params: { menuItemId: id } })} />

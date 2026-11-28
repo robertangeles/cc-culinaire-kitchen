@@ -7,7 +7,7 @@ import { createMenuStore } from "./menuStore";
 
 const NOW = Date.UTC(2026, 10, 25, 1);
 const item = (over: Partial<MenuItem> = {}): MenuItem => ({
-  menuItemId: "m1", userId: 4, name: "Margherita", category: "Pasta", sellingPrice: 24, servings: 1, servingsPerSale: 1, qFactorPct: 0, foodCost: 6.1, foodCostPct: 25.42, contributionMargin: 17.9, unitsSold: 12, classification: "star",
+  menuItemId: "m1", userId: 4, name: "Margherita", category: "Pasta", sellingPrice: 24, servings: 1, servingsPerSale: 1, qFactorPct: 0, foodCost: 6.1, foodCostPct: 25.42, contributionMargin: 17.9, unitsSold: 12, menuMixPct: 60, classification: "star",
   containsDairyInd: true, containsGlutenInd: true, containsNutsInd: false, containsShellfishInd: false, containsEggsInd: false, isVegetarianInd: true, canManage: true, ...over,
 });
 const line: MenuLine = { id: 1, ingredientId: "i1", ingredientName: "Mozzarella", note: null, quantity: 0.12, unit: "kg", unitCost: 14, yieldPct: 100, lineCost: 1.68, costStaleInd: true, baseUnit: "kg", contentQty: null, contentUnit: null, densityGPerMl: null, purchaseUnit: null, packQty: null, catalogUnitCost: 14 };
@@ -28,6 +28,15 @@ function setup(over: { canSeeCost?: boolean; kvMap?: Map<string, string> } = {})
     setTarget: vi.fn(async () => undefined),
     sales: vi.fn(async () => []),
     voidSale: vi.fn(async () => undefined),
+    wasteImpact: vi.fn(async () => [{ menuItemId: "m1", wasteEstimate: 40 }, { menuItemId: "m2", wasteEstimate: 0 }]),
+    yieldVariance: vi.fn(async () => ({ status: "no-period", threshold: null, unitsSold: 12, consumptionLogCount: 0, periodStart: null, periodEnd: null, theoretical: 0, actual: 0, variance: 0, variancePct: 0 })),
+    plateCost: vi.fn(async (): Promise<number | null | undefined> => 5.5),
+    recalculate: vi.fn(async () => undefined),
+    recommendations: vi.fn(async () => ({ summary: "Keep it.", actions: [] })),
+    replacement: vi.fn(async () => "Generate a replacement recipe"),
+    previewSales: vi.fn(async () => ({ matched: [{ rowIndex: 1, menuItemId: "m1", name: "Margherita", qtySold: 2 }], unmatched: [] })),
+    commitSales: vi.fn(async () => ({ succeeded: [{}], alreadyExists: [], failed: [] })),
+    importUnits: vi.fn(async () => ({ updated: 1, notFound: [] })),
   };
   let id = 0;
   const make = () => createMenuStore({ api: api as unknown as MenuApi, kv, userId: 4, locationId: "L1", canSeeCost: over.canSeeCost ?? true, now: () => NOW, newId: () => `key${++id}` });
@@ -291,5 +300,76 @@ describe("other writes", () => {
     await expect(s.voidSale("s1")).resolves.toBeUndefined();
     t.api.voidSale.mockRejectedValueOnce(new ApiError("forbidden", "Only the person who recorded this sale", 403, undefined, "FORBIDDEN"));
     await expect(s.voidSale("s1")).rejects.toThrow("Only the person");
+  });
+});
+
+describe("the dashboard's and the item page's extra figures", () => {
+  it("keeps the waste per item for a cost holder, offline too, and never asks for it without inventory:cost", async () => {
+    const t = setup();
+    const s = t.make();
+    await s.refresh();
+    expect(s.getSnapshot().waste).toEqual({ m1: 40 });
+    t.api.items.mockRejectedValue(new ApiError("network"));
+    const again = setup({ kvMap: t.kvMap });
+    again.api.items.mockRejectedValue(new ApiError("network"));
+    const offline = again.make();
+    await offline.refresh();
+    expect(offline.getSnapshot()).toMatchObject({ offline: true, waste: { m1: 40 } });
+    const blind = setup({ canSeeCost: false, kvMap: t.kvMap });
+    blind.api.items.mockRejectedValue(new ApiError("network"));
+    const b = blind.make();
+    await b.refresh();
+    expect(b.getSnapshot().waste).toEqual({});
+    const fresh = setup({ canSeeCost: false });
+    await fresh.make().refresh();
+    expect(fresh.api.wasteImpact).not.toHaveBeenCalled();
+  });
+
+  it("keeps the last waste when only its read fails", async () => {
+    const t = setup();
+    const s = t.make();
+    await s.refresh();
+    t.api.wasteImpact.mockRejectedValueOnce(new ApiError("server"));
+    await s.refresh();
+    expect(s.getSnapshot()).toMatchObject({ phase: "ready", waste: { m1: 40 } });
+  });
+
+  it("reads an item's yield variance and plate cost for a cost holder only, and says when there is no signal", async () => {
+    const t = setup();
+    const s = t.make();
+    await s.loadFigures("m1");
+    expect(s.getSnapshot().figures.m1).toMatchObject({ variance: { status: "no-period" }, plateCost: 5.5, error: undefined });
+    t.api.plateCost.mockResolvedValueOnce(undefined);
+    t.api.yieldVariance.mockRejectedValueOnce(new ApiError("timeout"));
+    await s.loadFigures("m1");
+    expect(s.getSnapshot().figures.m1).toEqual({ variance: undefined, plateCost: undefined, error: "The yield variance and plate cost show when you're back online." });
+    const blind = setup({ canSeeCost: false });
+    const b = blind.make();
+    await b.loadFigures("m1");
+    expect(blind.api.yieldVariance).not.toHaveBeenCalled();
+    expect(b.getSnapshot().figures).toEqual({});
+  });
+
+  it("recalculates, then reads the menu again; a refusal reads nothing", async () => {
+    const t = setup();
+    const s = t.make();
+    await s.recalculate();
+    expect(t.api.items).toHaveBeenCalledTimes(1);
+    t.api.recalculate.mockRejectedValueOnce(new ApiError("forbidden", "Missing permission", 403, undefined, "FORBIDDEN"));
+    await expect(s.recalculate()).rejects.toThrow("Missing permission");
+    expect(t.api.items).toHaveBeenCalledTimes(1);
+  });
+
+  it("previews a sales CSV without recording, records the matched rows and reads the menu again; units sold too", async () => {
+    const t = setup();
+    const s = t.make();
+    const csv = { name: "sales.csv", bytes: new Uint8Array([1]) };
+    const preview = await s.previewSales(csv);
+    expect(t.api.commitSales).not.toHaveBeenCalled();
+    await expect(s.commitSales(preview.matched)).resolves.toMatchObject({ succeeded: [{}] });
+    expect(t.api.commitSales).toHaveBeenCalledWith(preview.matched);
+    await expect(s.importUnits(csv)).resolves.toEqual({ updated: 1, notFound: [] });
+    expect(t.api.importUnits).toHaveBeenCalledWith(csv);
+    await vi.waitFor(() => expect(t.api.items).toHaveBeenCalledTimes(2));
   });
 });

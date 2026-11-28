@@ -8,7 +8,8 @@
  * FAKE_MODEL_DELAY_MS   gap between streamed lines (default 250)
  * FAKE_RECIPE_MS        how long a recipe or a refinement takes (default 8000), so the wait can be seen
  * A user message containing "[fake:fail]" gets a provider error (the server turns it into AI_UNAVAILABLE).
- * Recipe generation and refinement (`generateObject`, which asks for a "json" tool call) get a fixed recipe.
+ * Recipe generation and refinement (`generateObject`, which asks for a "json" tool call) get a fixed recipe; a menu item's
+ * recommendations (the same call, with an `actions` field) get fixed advice, after FAKE_MODEL_DELAY_MS x 4.
  * Any other OpenRouter call (embeddings, images) is refused with 503, which the server already handles.
  */
 
@@ -61,11 +62,21 @@ const RECIPE = {
   whyThisWorks: "Cider's acidity balances the rich thigh meat.",
 };
 
+const MENU_ADVICE = {
+  summary: "Made by the fake model: a popular dish that earns less than the menu's average.",
+  actions: [
+    { type: "adjust_portion", description: "Trim the mozzarella to 100 g; guests will not miss it on a 12-inch base.", impact: "About $0.30 more margin a plate" },
+    { type: "raise_price", description: "Move the price up by a dollar at the next menu change.", impact: "About $40 a week at today's sales" },
+    { type: "generate_replacement", description: "Try a seasonal pizza that uses the same dough and oven time." },
+  ],
+  menuDescription: "Blistered sourdough, San Marzano tomato, fior di latte and torn basil.",
+};
+
 /** The `generateObject` reply in tool mode: one call of the "json" tool with the object as its arguments. */
 function objectReply(body) {
   const tool = body.tools?.[0]?.function;
   const refine = Boolean(tool?.parameters?.properties?.refinedData);
-  const object = refine
+  const object = tool?.parameters?.properties?.actions ? MENU_ADVICE : refine
     ? { refinedData: { ...RECIPE, name: "Cider-braised chicken thighs, dairy-free", ingredients: RECIPE.ingredients.map((i) => (i.name === "butter" ? { amount: "2", unit: "tbsp", name: "olive oil" } : i)) }, changeSummary: "Swapped the butter for olive oil." }
     : RECIPE;
   return JSON.stringify({
@@ -105,7 +116,7 @@ globalThis.fetch = async (input, init) => {
   const question = lastUserText(body);
   if (question.includes("[fake:fail]")) return new Response(JSON.stringify({ error: { message: "fake provider failure" } }), { status: 500 });
   if (!body.stream && body.tools?.length) {
-    await sleep(recipeDelay);
+    await sleep(body.tools[0]?.function?.parameters?.properties?.actions ? delay * 4 : recipeDelay);
     if (init?.signal?.aborted) throw new DOMException("aborted", "AbortError");
     return new Response(objectReply(body), { status: 200, headers: { "Content-Type": "application/json" } });
   }

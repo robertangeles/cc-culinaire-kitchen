@@ -5,7 +5,7 @@ import { ApiError } from "../api/client";
 import { blankLine, checkDraft, draftCosts, draftFromRecipe, draftOf, emptyDraft, linePreview, planLines, pickInto, saveMenuItem, saveSession, unitsFor, type DraftLine, type MenuDraft } from "./menuEditor";
 
 const item = (over: Partial<MenuItem> = {}): MenuItem => ({
-  menuItemId: "m1", userId: 4, name: "Margherita", category: "Pasta", sellingPrice: 24, servings: 2, servingsPerSale: 1, qFactorPct: 5, foodCost: 1, foodCostPct: 4, contributionMargin: 23, unitsSold: 12, classification: "star",
+  menuItemId: "m1", userId: 4, name: "Margherita", category: "Pasta", sellingPrice: 24, servings: 2, servingsPerSale: 1, qFactorPct: 5, foodCost: 1, foodCostPct: 4, contributionMargin: 23, unitsSold: 12, menuMixPct: 60, classification: "star",
   containsDairyInd: false, containsGlutenInd: false, containsNutsInd: false, containsShellfishInd: false, containsEggsInd: false, isVegetarianInd: false, canManage: true, ...over,
 });
 const line = (over: Partial<MenuLine> = {}): MenuLine => ({ id: 1, ingredientId: "i1", ingredientName: "Mozzarella", note: null, quantity: 0.12, unit: "kg", unitCost: 14, yieldPct: 100, lineCost: 1.68, costStaleInd: false, baseUnit: "kg", contentQty: null, contentUnit: null, densityGPerMl: null, purchaseUnit: null, packQty: null, catalogUnitCost: 14, ...over });

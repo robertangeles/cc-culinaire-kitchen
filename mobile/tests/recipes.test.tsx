@@ -121,6 +121,14 @@ describe("Recipe Lab", () => {
     await waitFor(() => expect(routerMock.replace).toHaveBeenCalledWith({ pathname: "/recipe", params: { id: "r9" } }));
   });
 
+  it("opens with a menu item's replacement request filled in", async () => {
+    searchParams.current = { request: 'Generate a replacement recipe for "Minestrone".' };
+    render(wrap(<RecipeLab />));
+    expect((screen.getByLabelText("What would you like to create?") as HTMLTextAreaElement).value).toBe('Generate a replacement recipe for "Minestrone".');
+    press("Generate recipe");
+    await waitFor(() => expect(fake.api.generate).toHaveBeenCalledWith(expect.objectContaining({ request: 'Generate a replacement recipe for "Minestrone".' }), expect.anything()));
+  });
+
   it("Stop ends it and says nothing was saved", async () => {
     render(wrap(<RecipeLab />));
     fireEvent.change(screen.getByLabelText("What would you like to create?"), { target: { value: "Tart" } });

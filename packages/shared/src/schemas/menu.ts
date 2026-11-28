@@ -31,6 +31,8 @@ export const MenuItemSchema = z.object({
   foodCostPct: cost,
   contributionMargin: cost,
   unitsSold: z.number().catch(0),
+  /** Its share of all units sold, in percent, as the server worked it out. */
+  menuMixPct: numeric.catch(0),
   /** star, plowhorse, puzzle, dog, unclassified, or a class this version does not know. */
   classification: z.string().catch("unclassified"),
   containsDairyInd: z.boolean().catch(false),
@@ -44,7 +46,7 @@ export const MenuItemSchema = z.object({
 });
 export type MenuItem = z.infer<typeof MenuItemSchema>;
 
-/** `GET /api/menu/analysis`: the organisation's items with their mix and class (the summary figures are not read yet). */
+/** `GET /api/menu/analysis`: the organisation's items with their mix and class. The phone works the summary out from them with the server's own `summariseMenuAnalysis`. */
 export const MenuAnalysisSchema = z.object({ items: list(MenuItemSchema) });
 
 /** `POST /api/menu/items`: the new row; the list is read again for the rest. */
@@ -141,3 +143,60 @@ export const SaleListSchema = list(z.object({
   canManage: z.boolean().optional().catch(undefined),
 }));
 export type Sale = z.infer<typeof SaleListSchema>[number];
+
+/** `GET /api/menu/waste-impact`: the last 30 days of waste of each item's ingredients, for items that have any. The dollars go only to `inventory:cost` holders. */
+export const WasteImpactListSchema = list(z.object({ menuItemId: z.string(), wasteEstimate: cost }));
+export type WasteImpact = z.infer<typeof WasteImpactListSchema>[number];
+
+/**
+ * `GET /api/menu/items/:id/yield-variance`: the recipe's food cost over the sales period against what was logged as used for the dish.
+ * `status` is ok, no-period, thin-data, no-recipe, uncosted, or one this version does not know; the figures only for `inventory:cost` holders.
+ */
+export const YieldVarianceSchema = z.object({
+  status: z.string().catch(""),
+  theoretical: cost,
+  actual: cost,
+  variance: cost,
+  variancePct: cost,
+  /** good, warning or alert; null when there is no variance to judge. */
+  threshold: z.string().nullable().optional().catch(undefined),
+  unitsSold: z.number().catch(0),
+  consumptionLogCount: z.number().catch(0),
+  periodStart: text,
+  periodEnd: text,
+});
+export type YieldVariance = z.infer<typeof YieldVarianceSchema>;
+
+/** `GET /api/menu/items/:id/pandl-cost`: one serving's food cost at the item's location's weighted average cost (`plateFoodCost`), only for `inventory:cost` holders. */
+export const PlateCostSchema = z.object({ foodCost: cost });
+
+/** `GET /api/menu/items/:id/recommendations`: the model's advice on one item. */
+export const RecommendationSchema = z.object({
+  summary: z.string().catch(""),
+  /** `type` is one of the server's actions (protect, raise_price, generate_replacement…) or one this version does not know. */
+  actions: list(z.object({ type: z.string().catch(""), description: z.string().min(1), impact: z.string().optional().catch(undefined) })).catch([]),
+  menuDescription: z.string().optional().catch(undefined),
+});
+export type Recommendation = z.infer<typeof RecommendationSchema>;
+
+/** `POST /api/menu/items/:id/generate-replacement`: the Recipe Lab request that asks for a replacement. */
+export const ReplacementSchema = z.object({ request: z.string().min(1) });
+
+/** `POST /api/menu/sales/import/preview`: the CSV's rows matched to menu items; nothing is recorded yet. */
+export const SalesCsvPreviewSchema = z.object({
+  matched: list(z.object({ rowIndex: z.number(), menuItemId: z.string(), name: z.string().min(1), qtySold: numeric, soldAt: z.string().optional().catch(undefined) })).catch([]),
+  unmatched: list(z.object({ rowIndex: z.number(), name: z.string().catch(""), reason: z.string().catch("") })).catch([]),
+});
+export type SalesCsvPreview = z.infer<typeof SalesCsvPreviewSchema>;
+
+/** `POST /api/menu/sales/import/commit`. A row already imported (the same item, quantity, time and location) answers under `alreadyExists`. */
+export const SalesCsvReportSchema = z.object({
+  succeeded: z.array(z.unknown()).catch([]),
+  alreadyExists: z.array(z.unknown()).catch([]),
+  failed: list(z.object({ rowIndex: z.number(), reason: z.string().catch("") })).catch([]),
+});
+export type SalesCsvReport = z.infer<typeof SalesCsvReportSchema>;
+
+/** `POST /api/menu/import-sales`: units sold set from a CSV; `notFound` names the rows matched to no item (or to more than one). */
+export const UnitsImportSchema = z.object({ updated: z.number().catch(0), notFound: z.array(z.string()).catch([]) });
+export type UnitsImport = z.infer<typeof UnitsImportSchema>;

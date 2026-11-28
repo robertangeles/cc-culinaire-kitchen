@@ -1,5 +1,5 @@
 import { describe, it, expect } from "vitest";
-import { CategoryTargetListSchema, ConversionListSchema, CreatedMenuItemSchema, ImportRecipeListSchema, MenuAnalysisSchema, MenuCatalogueSchema, MenuLineListSchema, SaleListSchema, SaleResultSchema } from "./menu.js";
+import { CategoryTargetListSchema, ConversionListSchema, CreatedMenuItemSchema, ImportRecipeListSchema, MenuAnalysisSchema, MenuCatalogueSchema, MenuLineListSchema, PlateCostSchema, RecommendationSchema, ReplacementSchema, SaleListSchema, SaleResultSchema, SalesCsvPreviewSchema, SalesCsvReportSchema, UnitsImportSchema, WasteImpactListSchema, YieldVarianceSchema } from "./menu.js";
 
 // Shaped like the replies of the Wave 7 server (PR 216). The point: a cost the server leaves out for a person without
 // `inventory:cost` stays absent, never becomes 0, and one row the phone cannot read never hides the rest.
@@ -60,5 +60,28 @@ describe("menu schemas", () => {
     expect(SaleListSchema.parse([{ saleId: "s1", menuItemId: "m1", menuItemName: "Margherita", qtySold: "2.000", source: "MANUAL", soldAt: "2026-11-25T01:00:00.000Z", voidedAt: null, canManage: false }, {}])).toEqual([
       { saleId: "s1", menuItemName: "Margherita", qtySold: 2, soldAt: "2026-11-25T01:00:00.000Z", voidedAt: null, canManage: false },
     ]);
+  });
+
+  it("reads the menu mix, the waste, the yield variance and the plate cost, a hidden figure absent", () => {
+    expect(MenuAnalysisSchema.parse({ items: [item, { ...item, menuItemId: "m2", menuMixPct: "12.50" }, { ...item, menuItemId: "m3", menuMixPct: undefined }] }).items.map((i) => i.menuMixPct)).toEqual([60, 12.5, 0]);
+    expect(WasteImpactListSchema.parse([{ menuItemId: "m1", wasteEstimate: 40.5 }, { menuItemId: "m2" }, { wasteEstimate: 3 }])).toEqual([{ menuItemId: "m1", wasteEstimate: 40.5 }, { menuItemId: "m2" }]);
+    const variance = { menuItemId: "m1", status: "ok", theoretical: 20, actual: 23, variance: 3, variancePct: 15, threshold: "alert", unitsSold: 2, consumptionLogCount: 4, periodStart: "2026-11-01", periodEnd: "2026-11-27" };
+    expect(YieldVarianceSchema.parse(variance)).toMatchObject({ status: "ok", variancePct: 15, threshold: "alert", periodEnd: "2026-11-27" });
+    const { theoretical: _t, actual: _a, variance: _v, variancePct: _p, threshold: _h, ...blind } = variance;
+    const hidden = YieldVarianceSchema.parse(blind);
+    expect([hidden.theoretical, hidden.actual, hidden.variance, hidden.variancePct, hidden.threshold]).toEqual([undefined, undefined, undefined, undefined, undefined]);
+    expect(PlateCostSchema.parse({ menuItemId: "m1", foodCost: 3.5 }).foodCost).toBe(3.5);
+    expect(PlateCostSchema.parse({ menuItemId: "m1" }).foodCost).toBeUndefined();
+  });
+
+  it("reads recommendations, a replacement and both CSV imports, skipping a row it cannot read", () => {
+    expect(RecommendationSchema.parse({ summary: "Rework it.", actions: [{ type: "raise_price", description: "Charge $11.", impact: "+$2" }, { type: "teleport" , description: "Move it." }, { description: "" }] })).toEqual({ summary: "Rework it.", actions: [{ type: "raise_price", description: "Charge $11.", impact: "+$2" }, { type: "teleport", description: "Move it." }] });
+    expect(ReplacementSchema.parse({ request: "Generate a replacement recipe", domain: "recipe" })).toEqual({ request: "Generate a replacement recipe" });
+    expect(SalesCsvPreviewSchema.parse({ matched: [{ rowIndex: 1, menuItemId: "m1", name: "Margherita", qtySold: 2 }, { rowIndex: 2 }], unmatched: [{ rowIndex: 3, name: "Pizza", reason: "no matching menu item" }] })).toEqual({
+      matched: [{ rowIndex: 1, menuItemId: "m1", name: "Margherita", qtySold: 2 }],
+      unmatched: [{ rowIndex: 3, name: "Pizza", reason: "no matching menu item" }],
+    });
+    expect(SalesCsvReportSchema.parse({ succeeded: [{ rowIndex: 1, saleId: "s1" }], alreadyExists: [], failed: [{ rowIndex: 2, reason: "failed" }] })).toMatchObject({ succeeded: [{}], failed: [{ rowIndex: 2, reason: "failed" }] });
+    expect(UnitsImportSchema.parse({ updated: 2, notFound: ["Pizza"] })).toEqual({ updated: 2, notFound: ["Pizza"] });
   });
 });

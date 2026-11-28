@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useState } from "react";
 import { KeyboardAvoidingView, Pressable, ScrollView, View } from "react-native";
-import { useFocusEffect, useRouter } from "expo-router";
+import { useFocusEffect, useLocalSearchParams, useRouter } from "expo-router";
 import { SafeAreaView } from "react-native-safe-area-context";
 import { useLab } from "../../../src/recipes/RecipesProvider";
 import type { RecipeRequest } from "../../../src/recipes/recipeApi";
@@ -78,12 +78,13 @@ function Waiting({ startedAt, onStop }: { startedAt: number; onStop: () => void 
   );
 }
 
-/** Recipe Lab (culinary): describe a dish, get a full recipe saved to My Recipes. */
+/** Recipe Lab (culinary): describe a dish, get a full recipe saved to My Recipes. A menu item's replacement opens it with its request filled in (`request`). */
 export default function RecipeLab() {
   const router = useRouter();
   const c = useColors();
   const { store, snap } = useLab();
-  const [request, setRequest] = useState("");
+  const asked = useLocalSearchParams<{ request?: string }>().request;
+  const [request, setRequest] = useState(() => (Array.isArray(asked) ? asked[0] : asked) ?? "");
   const [servings, setServings] = useState(4);
   const [difficulty, setDifficulty] = useState<RecipeRequest["difficulty"]>(undefined);
   const [dietary, setDietary] = useState<string[]>([]);

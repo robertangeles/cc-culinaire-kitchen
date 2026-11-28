@@ -1,5 +1,5 @@
 import { vi } from "vitest";
-import type { ImportRecipe, MenuCatalogueItem, MenuItem, MenuLine, Sale, SaleResult, SellableConsumable } from "@culinaire/shared/schemas/menu";
+import type { ImportRecipe, MenuCatalogueItem, MenuItem, MenuLine, Recommendation, Sale, SaleResult, SalesCsvPreview, SalesCsvReport, SellableConsumable, WasteImpact, YieldVariance } from "@culinaire/shared/schemas/menu";
 import { createRecents, type Recents } from "../src/ingredients/recents";
 import type { PickedIngredient } from "../src/ingredients/source";
 import type { MenuApi } from "../src/menu/menuApi";
@@ -11,7 +11,7 @@ import { NOW } from "./stockHarness";
 export const menu = { store: null as unknown as MenuStore, api: null as unknown as MenuApi, recents: null as unknown as Recents<PickedIngredient> };
 
 export const menuItem = (over: Partial<MenuItem> = {}): MenuItem => ({
-  menuItemId: "m1", userId: 1, name: "Margherita", category: "Pasta", sellingPrice: 24, servings: 1, servingsPerSale: 1, qFactorPct: 0, foodCost: 6.1, foodCostPct: 25.42, contributionMargin: 17.9, unitsSold: 12, classification: "star",
+  menuItemId: "m1", userId: 1, name: "Margherita", category: "Pasta", sellingPrice: 24, servings: 1, servingsPerSale: 1, qFactorPct: 0, foodCost: 6.1, foodCostPct: 25.42, contributionMargin: 17.9, unitsSold: 12, menuMixPct: 60, classification: "star",
   containsDairyInd: true, containsGlutenInd: false, containsNutsInd: false, containsShellfishInd: false, containsEggsInd: false, isVegetarianInd: false, canManage: true, ...over,
 });
 export const menuLine = (over: Partial<MenuLine> = {}): MenuLine => ({ id: 1, ingredientId: "i1", ingredientName: "Mozzarella", note: null, quantity: 0.12, unit: "kg", unitCost: 14, yieldPct: 100, lineCost: 1.68, costStaleInd: false, baseUnit: "kg", contentQty: null, contentUnit: null, densityGPerMl: null, purchaseUnit: null, packQty: null, catalogUnitCost: 14, ...over });
@@ -25,6 +25,9 @@ interface Over {
   consumables?: SellableConsumable[];
   recipes?: ImportRecipe[];
   sales?: Sale[];
+  waste?: WasteImpact[];
+  variance?: YieldVariance;
+  plateCost?: number;
   canSeeCost?: boolean;
   api?: Partial<Record<keyof MenuApi, ReturnType<typeof vi.fn>>>;
 }
@@ -50,6 +53,15 @@ export async function makeMenu(over: Over = {}) {
     sell: vi.fn(async () => recorded),
     sales: vi.fn(async () => over.sales ?? []),
     voidSale: vi.fn(async () => undefined),
+    wasteImpact: vi.fn(async () => over.waste ?? []),
+    yieldVariance: vi.fn(async () => over.variance ?? { status: "no-period", threshold: null, unitsSold: 0, consumptionLogCount: 0, periodStart: null, periodEnd: null }),
+    plateCost: vi.fn(async (): Promise<number | null | undefined> => over.plateCost),
+    recalculate: vi.fn(async () => undefined),
+    recommendations: vi.fn(async (): Promise<Recommendation> => ({ summary: "", actions: [] })),
+    replacement: vi.fn(async () => "Generate a replacement recipe for \"Margherita\"."),
+    previewSales: vi.fn(async (): Promise<SalesCsvPreview> => ({ matched: [], unmatched: [] })),
+    commitSales: vi.fn(async (): Promise<SalesCsvReport> => ({ succeeded: [], alreadyExists: [], failed: [] })),
+    importUnits: vi.fn(async () => ({ updated: 0, notFound: [] as string[] })),
     ...over.api,
   };
   let n = 0;

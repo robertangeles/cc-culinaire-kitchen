@@ -1072,6 +1072,75 @@ describe.skipIf(!process.env.SCREENS_OUT)(`screens on ${FORM}`, { timeout: 600_0
     }
   });
 
+  it("menu insights: dashboard, matrix, an item's waste, plate P&L, yield variance and recommendations, a sales CSV import", async () => {
+    assertThrowawayServer();
+    await seedMenu();
+    const items = await m.client.request<{ menuItemId: string; name: string }[]>("GET", "/api/menu/items");
+    const margherita = items.find((i) => i.name === "Margherita")!.menuItemId;
+    const lines = await m.client.request<{ ingredientId: string | null; ingredientName: string }[]>("GET", `/api/menu/items/${margherita}/ingredients`);
+    const mozzarella = lines.find((l) => l.ingredientName === "Fior di latte mozzarella")!.ingredientId!;
+    // Waste of an ingredient, and usage logged for the dish over a sales period: the waste and yield variance figures. The period has no
+    // route (only the database sets it), so straight into the walk's own throwaway database.
+    await m.client.request("POST", "/api/waste", { body: { storeLocationId: locationId, ingredientName: "Fior di latte mozzarella", quantity: 2, unit: "kg", reason: "Spoilage", estimatedCost: 28, loggedAt: new Date().toISOString() } });
+    await m.client.request("POST", `${INV}/consumption-logs`, { body: { storeLocationId: locationId, ingredientId: mozzarella, menuItemId: margherita, quantity: "5.6", unit: "kg", reason: "kitchen_operations" } });
+    const day = (offset: number) => new Date(Date.now() + offset * 86_400_000).toISOString().slice(0, 10);
+    sql(`update menu_item set period_start = '${day(-7)}', period_end = '${day(1)}' where menu_item_id = '${margherita}'`);
+    // A CSV in the emulator's Downloads, for the system's document picker.
+    mkdirSync(OUT, { recursive: true });
+    const csv = resolve(OUT, "menu-sales.csv");
+    writeFileSync(csv, "item,quantity\nMargherita,2\nFocaccia,1\nCalzone,3\n");
+    adb(["push", csv, "/sdcard/Download/menu-sales.csv"]);
+    adb(["shell", "am", "broadcast", "-a", "android.intent.action.MEDIA_SCANNER_SCAN_FILE", "-d", "file:///sdcard/Download/menu-sales.csv"]);
+
+    await signedIn();
+    await tab("Menu");
+    await waitFor("Dozen dinner rolls", 60_000);
+    await shot("m10-menu-waste");
+    await choose("Dashboard");
+    await waitFor(/^Items analysed/, 30_000);
+    await shot("m10b-dashboard");
+    await scroll("down");
+    await shot("m10c-dashboard-more");
+    await choose("Recalculate");
+    await waitFor("Every item was priced again and classified.", 60_000);
+    await shot("m10d-dashboard-recalculated");
+    await choose("Engineering matrix");
+    await waitFor("Engineering matrix", 30_000);
+    await shot("m11-matrix");
+    await choose(/^Margherita: margin/);
+    await waitFor("Open Margherita", 30_000);
+    await shot("m11b-matrix-picked");
+    await choose("Open Margherita");
+    await waitFor(/^Price per serving/, 30_000);
+    await shot("m12-item-figures");
+    await scroll("down");
+    await shot("m12b-item-variance");
+    await choose("Get recommendations");
+    await waitFor(/^Made by the fake model/, 60_000); // "Ask again" is below the fold
+    await shot("m12c-item-recommendations");
+    await choose("Write a replacement recipe");
+    await waitFor("What would you like to create?", 30_000);
+    await shot("m12d-replacement-in-recipe-lab");
+    await tab("Menu");
+    await choose("Record a sale");
+    await choose("Import sales from a CSV");
+    await waitFor("Import sales", 30_000);
+    await shot("m13-import-sales");
+    await choose("Choose a CSV file");
+    await sleep(4000);
+    await shot("m13b-document-picker");
+    await tap("menu-sales.csv", 30_000);
+    await waitFor(/^2 matched/i, 60_000); // a copper capitals label
+    await shot("m13c-import-matched");
+    await choose("Record 2 sales");
+    await waitFor("2 recorded", 60_000);
+    await shot("m13d-import-recorded");
+    // Nothing of the file is kept by the app.
+    const kept = adb(["shell", "run-as com.culinairekitchen.chef sh -c 'find . -name \"*.csv\" 2>/dev/null | wc -l'"]).trim();
+    if (kept !== "0") throw new Error("the app kept a copy of the CSV");
+    adb(["shell", "rm", "-f", "/sdcard/Download/menu-sales.csv"]);
+  });
+
   it("brain: warming up, a list, an open memory, remove, shared, no match, nudges, offline", async () => {
     await signedIn();
     const me = await m.client.request<{ userId?: number; user?: { userId: number } }>("GET", "/api/auth/me");
@@ -1450,6 +1519,11 @@ describe.skipIf(!process.env.SCREENS_OUT)(`screens on ${FORM}`, { timeout: 600_0
       await choose("Record the sale");
       await waitFor("Sale recorded", 30_000);
       await shot("m9c-sale-no-costs");
+      await choose("Back");
+      await choose("Back to the menu");
+      await choose("Dashboard");
+      await waitFor(/^Items analysed/, 30_000);
+      await shot("m9d-dashboard-no-costs");
     } finally {
       await asCook.request("DELETE", `/api/organisations/${organisation.organisationId}/leave`).catch(() => {});
       await setSubscriber(subscriber.permissions.map((p) => p.permissionId));

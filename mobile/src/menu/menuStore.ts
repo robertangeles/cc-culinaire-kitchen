@@ -4,10 +4,10 @@
  * that got no answer is kept with its key until the person sends it again (the server records a key once) or says to forget it.
  */
 
-import type { MenuItem, MenuLine, Sale, SaleResult, SellableConsumable } from "@culinaire/shared/schemas/menu";
+import type { MenuItem, MenuLine, Recommendation, Sale, SaleResult, SalesCsvPreview, SalesCsvReport, SellableConsumable, UnitsImport, YieldVariance } from "@culinaire/shared/schemas/menu";
 import { ApiError } from "../api/client";
 import type { KvStore } from "../storage/kv";
-import type { MenuApi, SaleAttempt, SaleTarget } from "./menuApi";
+import type { CsvFile, MenuApi, SaleAttempt, SaleTarget } from "./menuApi";
 import { mayHaveLanded } from "./menuEditor";
 import { lineWithoutCosts, withoutCosts } from "./menuView";
 
@@ -26,6 +26,17 @@ export interface MenuSnapshot {
   linesError?: string;
   /** A sale sent without an answer: it may or may not be recorded. */
   pendingSale: SaleAttempt | null;
+  /** The last 30 days of waste of each item's ingredients, in dollars, by item (`inventory:cost` holders only). */
+  waste: Record<string, number>;
+  /** An opened item's yield variance and plate cost, read with a signal only (`inventory:cost` holders only). */
+  figures: Record<string, ItemFigures>;
+}
+
+export interface ItemFigures {
+  variance?: YieldVariance;
+  /** One serving's food cost at the location's average cost. */
+  plateCost?: number;
+  error?: string;
 }
 
 export interface MenuStoreDeps {
@@ -39,17 +50,20 @@ export interface MenuStoreDeps {
   newId: () => string;
 }
 
-type Saved = Pick<MenuSnapshot, "items" | "targets" | "consumables" | "savedAt">;
+type Saved = Pick<MenuSnapshot, "items" | "targets" | "consumables" | "savedAt"> & { waste?: Record<string, number> };
 
 export const isOffline = (err: unknown) => err instanceof ApiError && (err.code === "network" || err.code === "timeout");
 const sentence = (err: unknown) => (err instanceof ApiError ? err.message : "Something went wrong. Try again.");
+
+const wasteById = (rows: { menuItemId: string; wasteEstimate?: number | null }[]) =>
+  Object.fromEntries(rows.flatMap((r) => (typeof r.wasteEstimate === "number" && r.wasteEstimate > 0 ? [[r.menuItemId, r.wasteEstimate]] : [])));
 
 export function createMenuStore({ api, kv, userId, locationId, canSeeCost, now, newId }: MenuStoreDeps) {
   // Per account: what one person may see is not another's.
   const savedKey = `menu.${userId}`;
   const linesKey = (menuItemId: string) => `menu.lines.${userId}.${menuItemId}`;
   const saleKey = `menu.sale.${userId}`;
-  let snapshot: MenuSnapshot = { phase: "loading", offline: false, items: [], targets: {}, consumables: [], savedAt: null, lines: {}, pendingSale: null };
+  let snapshot: MenuSnapshot = { phase: "loading", offline: false, items: [], targets: {}, consumables: [], savedAt: null, lines: {}, pendingSale: null, waste: {}, figures: {} };
   const listeners = new Set<() => void>();
   const set = (next: Partial<MenuSnapshot>) => {
     snapshot = { ...snapshot, ...next };
@@ -106,15 +120,21 @@ export function createMenuStore({ api, kv, userId, locationId, canSeeCost, now, 
     async refresh(): Promise<void> {
       await restorePending();
       try {
-        const [items, targets, consumables] = await Promise.all([api.items(), api.targets().catch(() => snapshot.targets), api.consumables().catch(() => snapshot.consumables)]);
-        const saved: Saved = { items: seen(items), targets, consumables, savedAt: now() };
+        const [items, targets, consumables, waste] = await Promise.all([
+          api.items(),
+          api.targets().catch(() => snapshot.targets),
+          api.consumables().catch(() => snapshot.consumables),
+          // Without inventory:cost the server sends no dollars, so it is not asked.
+          canSeeCost ? api.wasteImpact().then(wasteById, () => snapshot.waste) : {},
+        ]);
+        const saved: Saved = { items: seen(items), targets, consumables, savedAt: now(), waste };
         await kv.set(savedKey, JSON.stringify(saved));
         set({ phase: "ready", offline: false, error: undefined, ...saved });
       } catch (err) {
         if (isOffline(err)) {
           // Filtered again: it may have been kept while this person could see costs.
           const saved = JSON.parse((await kv.get(savedKey)) ?? "null") as Saved | null;
-          set({ phase: "ready", offline: true, error: undefined, ...(saved && { ...saved, items: seen(saved.items) }) });
+          set({ phase: "ready", offline: true, error: undefined, ...(saved && { ...saved, items: seen(saved.items), waste: canSeeCost ? (saved.waste ?? {}) : {} }) });
         } else set({ phase: "error", error: sentence(err) });
       }
     },
@@ -176,6 +196,48 @@ export function createMenuStore({ api, kv, userId, locationId, canSeeCost, now, 
     forgetSale: (): Promise<void> => withSale(() => setPending(null)),
 
     sales: (): Promise<Sale[]> => api.sales(locationId),
+
+    /** An item's yield variance and plate cost, for who may see costs; both are read again on every visit and never kept. */
+    async loadFigures(menuItemId: string): Promise<void> {
+      if (!canSeeCost) return;
+      const [variance, plateCost] = await Promise.allSettled([api.yieldVariance(menuItemId), api.plateCost(menuItemId)]);
+      const failed = [variance, plateCost].find((r) => r.status === "rejected")?.reason;
+      const figures: ItemFigures = {
+        variance: variance.status === "fulfilled" ? variance.value : undefined,
+        plateCost: plateCost.status === "fulfilled" && typeof plateCost.value === "number" ? plateCost.value : undefined,
+        error: failed === undefined ? undefined : isOffline(failed) ? "The yield variance and plate cost show when you're back online." : sentence(failed),
+      };
+      set({ figures: { ...snapshot.figures, [menuItemId]: figures } });
+    },
+
+    /** Price every item again and store its cost, mix and class, then read the menu again. */
+    async recalculate(): Promise<void> {
+      await api.recalculate();
+      await store.refresh();
+    },
+
+    /** The model's advice on one item. Costs reach the model only for who may see them (the server's rule). */
+    recommend: (menuItemId: string): Promise<Recommendation> => api.recommendations(menuItemId),
+
+    /** The Recipe Lab request that asks for a replacement of this item. */
+    replacement: (menuItemId: string): Promise<string> => api.replacement(menuItemId),
+
+    /** Match a CSV of sales to the menu; nothing is recorded. */
+    previewSales: (csv: CsvFile): Promise<SalesCsvPreview> => api.previewSales(csv),
+
+    /** Record the matched rows as sales. Safe to send again: a row already recorded answers as already imported. */
+    async commitSales(lines: SalesCsvPreview["matched"]): Promise<SalesCsvReport> {
+      const report = await api.commitSales(lines);
+      void store.refresh();
+      return report;
+    },
+
+    /** Set each item's units sold from a CSV, then read the menu again (its mix and class change). */
+    async importUnits(csv: CsvFile): Promise<UnitsImport> {
+      const result = await api.importUnits(csv);
+      await store.refresh();
+      return result;
+    },
 
     async voidSale(saleId: string): Promise<void> {
       try {
