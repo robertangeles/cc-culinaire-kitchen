@@ -42,6 +42,8 @@ export function useBenchDm() {
   const [loadingMessages, setLoadingMessages] = useState(false);
   /** Why the last conversation asked for could not be opened (the server allows people who share a kitchen, or who already have a thread). */
   const [startError, setStartError] = useState<string | null>(null);
+  /** Why a message in the open conversation was refused: the server's own words, which never say who blocked whom. */
+  const [error, setError] = useState<string | null>(null);
 
   // Fetch threads
   const fetchThreads = useCallback(async () => {
@@ -79,6 +81,7 @@ export function useBenchDm() {
   // Close conversation (back to thread list)
   const closeThread = useCallback(() => {
     setStartError(null);
+    setError(null);
     setActiveThreadId(null);
     setActiveThread(null);
     setMessages([]);
@@ -88,6 +91,7 @@ export function useBenchDm() {
   const openThread = useCallback((threadId: number, threadInfo?: DmThread) => {
     setStartError(null);
     setActiveThreadId(threadId);
+    setError(null);
     if (threadInfo) setActiveThread(threadInfo);
     else {
       const found = threads.find((t) => t.dmThreadId === threadId);
@@ -99,6 +103,7 @@ export function useBenchDm() {
 
   // Start a DM with a user (create or get thread)
   const startDm = useCallback(async (recipientId: number) => {
+    setError(null);
     try {
       const res = await fetch(`${API}/api/bench/dm/threads`, {
         method: "POST",
@@ -184,13 +189,19 @@ export function useBenchDm() {
       );
     }
 
+    function onError({ error, code }: { error?: string; code?: string }) {
+      if (code === "DM_NOT_ALLOWED" && error) setError(error);
+    }
+
     socket.on("bench:dm:new", onDmNew);
     socket.on("bench:message:deleted", onDeleted);
     socket.on("bench:message:edited", onEdited);
+    socket.on("bench:error", onError);
     return () => {
       socket.off("bench:dm:new", onDmNew);
       socket.off("bench:message:deleted", onDeleted);
       socket.off("bench:message:edited", onEdited);
+      socket.off("bench:error", onError);
     };
   }, [socket, activeThreadId, threads, fetchThreads]);
 
@@ -207,5 +218,6 @@ export function useBenchDm() {
     startError,
     sendDm,
     fetchThreads,
+    error,
   };
 }

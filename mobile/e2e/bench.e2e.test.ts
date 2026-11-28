@@ -183,4 +183,21 @@ describe.skipIf(!process.env.CI && !process.env.E2E_USER_EMAIL)("the Bench again
     bo.store.remove(mine.messageId);
     await soon(() => expect(bo.room()!.messages.map((m) => m.messageId)).not.toContain(mine.messageId));
   });
+
+  it("a block keeps a colleague's posts off the blocker's phone and stops their direct messages; unblocking brings them back", async () => {
+    await ann.store.open({ kind: "channel", key });
+    expect(await ann.store.block(bo.userId)).toBeNull();
+    bo.store.post(`Behind the block ${tag}`);
+    await soon(() => expect(bo.room()!.pending).toEqual([]));
+    await new Promise((r) => setTimeout(r, 1_000));
+    expect(ann.texts()).not.toContain(`Behind the block ${tag}`);
+    expect((await ann.api.messages({ kind: "channel", key })).map((m) => m.messageBody)).not.toContain(`Behind the block ${tag}`);
+    await expect(bo.api.openThread(ann.userId)).rejects.toMatchObject({ serverCode: "DM_NOT_ALLOWED" });
+
+    const theirs = (await bo.api.messages({ kind: "channel", key })).find((m) => m.messageBody === `Behind the block ${tag}`)!;
+    await ann.api.report({ messageId: theirs.messageId, reason: "spam" });
+    expect(await ann.store.unblock(bo.userId)).toBeNull();
+    await soon(() => expect(ann.texts()).toContain(`Behind the block ${tag}`));
+  });
 });
+

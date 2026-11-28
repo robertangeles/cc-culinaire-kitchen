@@ -855,6 +855,91 @@ export const benchDmThread = pgTable(
   ],
 );
 
+/**
+ * The `bench_blocks` table: `user_id` blocked `blocked_user_id`. The blocker no longer receives the other's messages, reactions,
+ * typing or presence, and neither can message the other. Migration 0009.
+ *
+ * OLTP table, 2NF — every non-key column depends on id.
+ */
+export const benchBlock = pgTable(
+  "bench_blocks",
+  {
+    id: uuid("id").defaultRandom().primaryKey(),
+    userId: integer("user_id").notNull().references(() => user.userId, { onDelete: "cascade" }),
+    blockedUserId: integer("blocked_user_id").notNull().references(() => user.userId, { onDelete: "cascade" }),
+    createdAt: timestamp("created_at", { withTimezone: true }).defaultNow().notNull(),
+    updatedAt: timestamp("updated_at", { withTimezone: true }).defaultNow().notNull(),
+  },
+  (table) => [
+    // FK index (user_id first): "the people I blocked" (history filters, the blocked list), and one row per pair.
+    uniqueIndex("idx_bench_blocks_pair").on(table.userId, table.blockedUserId),
+    // FK index: "who blocked this author", read before every live message, edit, typing notice and presence list.
+    index("idx_bench_blocks_blocked_user_id").on(table.blockedUserId),
+    check("bench_blocks_not_self", sql`${table.userId} <> ${table.blockedUserId}`),
+  ],
+);
+
+/**
+ * The `bench_reports` table: one person's report of a message (with its text as it was then) or of a person. Only moderators read it.
+ * Migration 0009.
+ *
+ * OLTP table, 2NF — every non-key column depends on id (`message_body` is the text at report time, not a copy of the message's).
+ */
+export const benchReport = pgTable(
+  "bench_reports",
+  {
+    id: uuid("id").defaultRandom().primaryKey(),
+    /** Who reported. */
+    userId: integer("user_id").notNull().references(() => user.userId, { onDelete: "cascade" }),
+    reportedUserId: integer("reported_user_id").notNull().references(() => user.userId, { onDelete: "cascade" }),
+    messageId: uuid("message_id").references(() => benchMessage.messageId, { onDelete: "set null" }),
+    messageBody: text("message_body"),
+    reason: varchar("reason", { length: 20 }).notNull(),
+    note: varchar("note", { length: 500 }),
+    status: varchar("status", { length: 20 }).notNull().default("open"),
+    createdAt: timestamp("created_at", { withTimezone: true }).defaultNow().notNull(),
+    updatedAt: timestamp("updated_at", { withTimezone: true }).defaultNow().notNull(),
+  },
+  (table) => [
+    // FK index: "reports this person made today" (the daily limit), and the constraint check when that user row is deleted.
+    index("idx_bench_reports_user_id").on(table.userId, table.createdAt),
+    // FK index: the constraint check when the reported user row is deleted.
+    index("idx_bench_reports_reported_user_id").on(table.reportedUserId),
+    // FK index: "open reports about this message" (closed together when it is hidden).
+    index("idx_bench_reports_message_id").on(table.messageId),
+    // "The open queue, newest first": only open reports are in it.
+    index("idx_bench_reports_open").on(table.createdAt).where(sql`${table.status} = 'open'`),
+    check("bench_reports_reason", sql`${table.reason} IN ('spam', 'harassment', 'hate', 'sexual', 'violence', 'other')`),
+    check("bench_reports_status", sql`${table.status} IN ('open', 'hidden', 'dismissed', 'resolved')`),
+  ],
+);
+
+/**
+ * The `bench_report_actions` table: what a moderator did about a report, and when. Migration 0009.
+ *
+ * OLTP table, 2NF — every non-key column depends on id.
+ */
+export const benchReportAction = pgTable(
+  "bench_report_actions",
+  {
+    id: uuid("id").defaultRandom().primaryKey(),
+    reportId: uuid("report_id").notNull().references(() => benchReport.id, { onDelete: "cascade" }),
+    /** The moderator. */
+    userId: integer("user_id").references(() => user.userId, { onDelete: "set null" }),
+    action: varchar("action", { length: 20 }).notNull(),
+    note: varchar("note", { length: 500 }),
+    createdAt: timestamp("created_at", { withTimezone: true }).defaultNow().notNull(),
+    updatedAt: timestamp("updated_at", { withTimezone: true }).defaultNow().notNull(),
+  },
+  (table) => [
+    // FK index: "what was done about this report" (the queue shows it).
+    index("idx_bench_report_actions_report_id").on(table.reportId),
+    // FK index: the constraint check when a moderator's user row is deleted.
+    index("idx_bench_report_actions_user_id").on(table.userId),
+    check("bench_report_actions_action", sql`${table.action} IN ('hide', 'dismiss', 'resolve')`),
+  ],
+);
+
 // ---------------------------------------------------------------------------
 // Menu Intelligence
 // ---------------------------------------------------------------------------

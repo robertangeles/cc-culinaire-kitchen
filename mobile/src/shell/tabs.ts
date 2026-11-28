@@ -50,7 +50,7 @@ export const moduleTabs: ModuleTab[] = [
   { route: "(menu)", title: "Menu", icon: "menu", anyPermission: ["menu:read"] },
   // What CulinAIre remembers for this person; removing a memory is `brain:manage` on the server.
   { route: "(brain)", title: "Brain", icon: "brain", anyPermission: ["brain:read"] },
-  // Team chat: the server asks only for a sign-in and checks each room (a kitchen's members, a thread's two people). Only in a build made with EXPO_PUBLIC_BENCH=on: a store build waits for report and block (App Store 1.2).
+  // Team chat: the server asks only for a sign-in and checks each room (a kitchen's members, a thread's two people). Only in a build made with EXPO_PUBLIC_BENCH=on: a store build waits for the owner's decision (App Store 1.2, mobile/README.md).
   { route: "(bench)", title: "Bench", icon: "bench", buildFlag: benchBuild },
   // The staff side of the web's Roster page and of Profile > My Documents: the person's own shifts and their own documents.
   { route: "(roster)", title: "Roster", icon: "roster", anyPermission: ["roster:read-own"], underMore: true },

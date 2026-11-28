@@ -6,7 +6,7 @@ import { io, type Socket } from "socket.io-client";
 
 /** Connecting to the Bench, leaving it and stopping it, over real connections. Only the database is a stand-in, so a read can be made to wait. */
 
-const { profiles } = vi.hoisted(() => ({ profiles: { held: null as null | (() => void)[], read: vi.fn() } }));
+const { profiles, blocklist } = vi.hoisted(() => ({ profiles: { held: null as null | (() => void)[], read: vi.fn() }, blocklist: { read: vi.fn() } }));
 vi.mock("../db/index.js", () => ({
   db: { select: () => ({ from: () => ({ where: () => ({ limit: () => profiles.read() }) }) }) },
 }));
@@ -16,6 +16,7 @@ vi.mock("./benchService.js", () => ({
   getOrganisationIdsByUser: async (ids: number[]) => new Map(ids.map((id) => [id, [5]])),
 }));
 vi.mock("./benchDmService.js", () => ({ mayDirectMessage: async () => true }));
+vi.mock("./benchBlockService.js", () => ({ blockedBy: () => blocklist.read() }));
 
 import { initBenchSocket } from "./benchSocketService.js";
 
@@ -61,6 +62,7 @@ describe("the Bench's connections", () => {
 
   beforeEach(async () => {
     profiles.held = null;
+    blocklist.read.mockResolvedValue([]);
     profiles.read.mockImplementation(async () => {
       if (profiles.held) await new Promise<void>((r) => profiles.held!.push(r));
       return [{ userName: "Someone", userPhotoPath: null }];
@@ -107,6 +109,17 @@ describe("the Bench's connections", () => {
       ann.socket.emit("bench:dm:typing", { recipientId: BO });
       await settle();
       expect(bo.got.map((e) => e.name)).toContain("bench:dm:typing");
+    });
+
+    it("disconnects a person whose blocklist could not be read, and joins them to no room", async () => {
+      blocklist.read.mockRejectedValue(new Error("db down"));
+      const ann = await connect(ANN, [["bench:join", KITCHEN]]);
+      expect(ann.socket.connected).toBe(false);
+      expect(ann.got.filter((e) => e.name === "bench:presence:update")).toEqual([]);
+      blocklist.read.mockResolvedValue([]);
+      const bo = await connect(BO, [["bench:join", KITCHEN]]);
+      expect(bo.here()).toEqual([BO]);
+      expect(bo.here("everyone")).toEqual([BO]);
     });
 
     it("does not list someone who was gone before their profile was read", async () => {

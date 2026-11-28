@@ -21,6 +21,9 @@ export interface MessageActions {
   pinned: boolean;
   /** Absent unless the two share a kitchen or already have a thread. */
   write?: () => void;
+  /** Absent on one's own messages. */
+  report?: () => void;
+  block?: () => void;
 }
 
 /** The words, with one's own @name in copper. */
@@ -146,6 +149,8 @@ export function MessageRow({ message, user, reactions: withReactions, open, onTo
               {actions.pin ? quiet(actions.pinned ? "Unpin" : "Pin", actions.pin) : null}
               {canEdit(user, message) ? quiet("Edit", () => setDraft(message.messageBody)) : null}
               {canDelete(user, message) ? quiet("Delete", confirmRemove) : null}
+              {actions.report ? quiet("Report", actions.report) : null}
+              {actions.block ? quiet("Block", actions.block) : null}
             </View>
           </View>
         ) : null}

@@ -8,6 +8,7 @@ import { useEffect, useRef } from "react";
 import { Loader2 } from "lucide-react";
 import { BenchMessageItem } from "./BenchMessageItem.js";
 import type { BenchMessage } from "../../hooks/useBenchMessages.js";
+import type { BenchPerson, ReportTarget } from "../../hooks/useBenchSafety.js";
 
 interface BenchMessageListProps {
   messages: BenchMessage[];
@@ -21,6 +22,8 @@ interface BenchMessageListProps {
   /** Channel info banner shown at the top of the message list */
   channelBanner?: string;
   onStartDm?: (userId: number) => void;
+  onReport?: (target: ReportTarget) => void;
+  onBlock?: (person: BenchPerson) => void;
 }
 
 export function BenchMessageList({
@@ -33,6 +36,8 @@ export function BenchMessageList({
   onReaction,
   onRemoveReaction,
   onStartDm,
+  onReport,
+  onBlock,
   channelBanner,
 }: BenchMessageListProps) {
   const bottomRef = useRef<HTMLDivElement>(null);
@@ -145,6 +150,8 @@ export function BenchMessageList({
                   onEdit={onEdit}
                   onReaction={onReaction}
                   onStartDm={onStartDm}
+                  onReport={onReport}
+                  onBlock={onBlock}
                   onRemoveReaction={onRemoveReaction}
                 />
               </div>

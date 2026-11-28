@@ -25,7 +25,7 @@ Run commands from the repository root. `eas` is the Expo build service; use it t
 | Blocker | State |
 |---|---|
 | Biometric app lock for people who hold approval, roster or compliance permissions (owner's Q6: before the first store release, and before any roster or compliance data is kept on the phone) | **Done in code** (`mobile/README.md`, "App lock"). Still needs: a new development build (below) and the device checks at the end of this file, on the iPhone, the iPad and the moto g86. |
-| The Bench (team chat) in a store build (App Store 1.2 and Google Play: user-generated content needs a way to report a message and block a person) | **Off in production** (`EXPO_PUBLIC_BENCH` is `off` in the production profile of `eas.json`; development and preview have it `on`). Turn it on for production only when the server has report and block, and not before. |
+| The Bench (team chat) in a store build (App Store 1.2 and Google Play: user-generated content needs a way to report a message and block a person) | **Off in production** (`EXPO_PUBLIC_BENCH` is `off` in the production profile of `eas.json`; development and preview have it `on`). The server and both apps have report, block and a moderators' queue; turn it on for production only when the owner decides, with the rest of the list under "Still needed for a store build" in `mobile/README.md`. |
 
 **The app lock needs a new dev client.** `expo-local-authentication` is native code, the Face ID sentence is in the iOS build and one line in Android's MainActivity keeps the app out of the app switcher's pictures, so a development build made before it dies at start with "Cannot find native module 'ExpoLocalAuthentication'". Nothing has been built in the cloud: run the dev client commands under "Test builds" once for each platform (they use your Expo account's build allowance), or rebuild the Android one locally for free (`mobile/device/README.md`, "Rebuild and install"). If a build has already reached a tester by then, raise `version` first (the version rule above).
 
@@ -64,7 +64,7 @@ Run commands from the repository root. `eas` is the Expo build service; use it t
 2. `pnpm --dir mobile exec eas build --profile production --platform ios`, then `pnpm --dir mobile exec eas submit --platform ios` (asks for your Apple login). It appears in TestFlight after Apple's processing.
 3. Add internal testers (your iPhone and iPad) in TestFlight. iPad is supported, so the store listing needs iPad screenshots.
 4. Before submitting for review: privacy nutrition labels, age rating, the privacy policy URL (the existing web Privacy URL), the terms URL (the existing web Terms URL), support URL, and the reviewer notes below, with the demo account.
-5. Check `EXPO_PUBLIC_BENCH` in the production profile of `eas.json`: it stays `off` until the server has report and block (App Store 1.2).
+5. Check `EXPO_PUBLIC_BENCH` in the production profile of `eas.json`: it stays `off` until the owner decides (App Store 1.2; see "Still needed for a store build" in `mobile/README.md`).
 6. Apple rule 3.1.3(b): the day the website starts selling paid plans, an app that unlocks those features must either also sell them in the app or qualify for an exemption. Billing in the app is deferred, so nothing in the app mentions plans. Revisit before the web billing launch.
 
 ## Owner chores that are not code (with the long lead times first)

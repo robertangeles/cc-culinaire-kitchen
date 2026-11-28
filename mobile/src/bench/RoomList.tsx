@@ -1,5 +1,8 @@
 import { Pressable, RefreshControl, ScrollView, View } from "react-native";
 import { useState } from "react";
+import { useRouter } from "expo-router";
+import { useSession } from "../runtime/appContext";
+import { hasAnyPermission } from "../shell/tabs";
 import { timeAgo } from "../notifications/notificationView";
 import { size, space } from "../theme";
 import { Avatar } from "../ui/Avatar";
@@ -16,7 +19,10 @@ import { useBench } from "./BenchProvider";
 /** The channels, then the direct messages, newest first. `selected` is the room open beside the list on a tablet. */
 export function RoomList({ selected, onOpen }: { selected: Room | null; onOpen: (room: Room) => void }) {
   const { store, snap, status } = useBench();
+  const { state } = useSession();
+  const router = useRouter();
   const c = useColors();
+  const moderator = state.phase === "ready" && hasAnyPermission(state.user, ["bench:moderate"]);
   const [pulling, setPulling] = useState(false);
 
   const row = (room: Room, index: number, label: string, children: React.ReactNode) => {
@@ -91,6 +97,20 @@ export function RoomList({ selected, onOpen }: { selected: Room | null; onOpen: 
                 })}
               </Surface>
             </View>
+            <Surface>
+              {[["Blocked people", "/bench-blocked"], ...(moderator ? [["Reports to review", "/bench-reports"]] : [])].map(([label, pathname], index) => (
+                <Pressable
+                  key={pathname}
+                  accessibilityRole="button"
+                  accessibilityLabel={label}
+                  onPress={() => router.push(pathname)}
+                  style={({ pressed }) => [{ minHeight: size.tap + 8, flexDirection: "row", alignItems: "center", paddingHorizontal: space.lg, backgroundColor: pressed ? c.surface : undefined }, rowDivider(index, c.border)]}
+                >
+                  <Text variant="heading" style={{ flex: 1 }}>{label}</Text>
+                  <Text style={{ color: c.accentText, fontSize: 22 }}>›</Text>
+                </Pressable>
+              ))}
+            </Surface>
           </>
         ) : null}
       </Column>

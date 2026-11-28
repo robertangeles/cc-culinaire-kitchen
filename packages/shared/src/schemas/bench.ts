@@ -79,3 +79,52 @@ export type BenchPerson = z.infer<typeof BenchPersonSchema>;
 
 /** The live channel's `bench:presence:update`: who is in that room now. */
 export const PresenceSchema = z.object({ channelKey: z.string(), users: rows(BenchPersonSchema) });
+
+/** `GET /api/bench/blocks`: the people this person has blocked. */
+export const BlockedListSchema = rows(BenchPersonSchema);
+
+/** Why a message or a person is reported. */
+export const BENCH_REPORT_REASONS = ["spam", "harassment", "hate", "sexual", "violence", "other"] as const;
+export type BenchReportReason = (typeof BENCH_REPORT_REASONS)[number];
+export const BENCH_REPORT_REASON_LABELS: Record<BenchReportReason, string> = {
+  spam: "Spam or advertising",
+  harassment: "Harassment or bullying",
+  hate: "Hate or discrimination",
+  sexual: "Sexual content",
+  violence: "Violence or threats",
+  other: "Something else",
+};
+
+/** `POST /api/bench/reports`: a message (`messageId`) or a person (`userId`), not both. 201 `{ id }`; 429 `RATE_LIMITED` past the daily limit. */
+export const BenchReportRequestSchema = z
+  .object({
+    messageId: z.string().uuid().optional(),
+    userId: z.number().int().positive().max(2_147_483_647).optional(),
+    reason: z.enum(BENCH_REPORT_REASONS),
+    note: z.string().trim().max(500).optional(),
+  })
+  .refine((r) => (r.messageId === undefined) !== (r.userId === undefined), { message: "Report a message or a person" });
+export type BenchReportRequest = z.infer<typeof BenchReportRequestSchema>;
+
+export const BENCH_REPORT_STATUSES = ["open", "hidden", "dismissed", "resolved"] as const;
+
+/** `GET /api/bench/reports` (moderators): a report, what it was about as it was then, and what was done about it. */
+export const BenchReportSchema = z.object({
+  id: z.string(),
+  status: z.enum(BENCH_REPORT_STATUSES),
+  reason: z.enum(BENCH_REPORT_REASONS).catch("other"),
+  note: z.string().nullable().catch(null),
+  createdAt: z.string(),
+  reporterName: z.string().catch("Chef"),
+  reportedUserId: z.number(),
+  reportedUserName: z.string().catch("Chef"),
+  messageId: z.string().nullable().catch(null),
+  messageBody: z.string().nullable().catch(null),
+  /** Hidden by a moderator, or deleted by its author, since. */
+  messageGone: z.boolean().catch(false),
+  /** The channel's name; null for a direct message or a person. */
+  channelName: z.string().nullable().catch(null),
+  actions: rows(z.object({ action: z.enum(["hide", "dismiss", "resolve"]), note: z.string().nullable().catch(null), userName: z.string().catch("Chef"), createdAt: z.string() })).catch([]),
+});
+export type BenchReport = z.infer<typeof BenchReportSchema>;
+export const BenchReportListSchema = rows(BenchReportSchema);

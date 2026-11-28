@@ -36,6 +36,7 @@ import { NotFoundPage } from "./pages/NotFoundPage.js";
 import { RecipeDetailPage } from "./pages/RecipeDetailPage.js";
 import { MyShelfPage } from "./pages/MyShelfPage.js";
 import { BenchPage } from "./pages/BenchPage.js";
+import { BenchModerationPage } from "./pages/BenchModerationPage.js";
 import { MenuIntelligencePage } from "./pages/MenuIntelligencePage.js";
 import { WasteIntelligencePage } from "./pages/WasteIntelligencePage.js";
 import { KitchenCopilotPage } from "./pages/KitchenCopilotPage.js";
@@ -179,6 +180,7 @@ export function App() {
                           <Route path="/inventory" element={<AuthenticatedOnly><RequirePermission anyOf={["inventory:count", "inventory:manage", "inventory:transfer", "inventory:hq"]}><LocationGate><KitchenOpsLayout><InventoryPage /></KitchenOpsLayout></LocationGate></RequirePermission></AuthenticatedOnly>} />
                           <Route path="/purchasing" element={<AuthenticatedOnly><RequirePermission anyOf={["purchasing:draft", "purchasing:submit", "purchasing:approve", "purchasing:receive", "purchasing:credit"]}><LocationGate><KitchenOpsLayout><PurchasingPage /></KitchenOpsLayout></LocationGate></RequirePermission></AuthenticatedOnly>} />
                           <Route path="/bench" element={<BenchPage />} />
+                          <Route path="/bench/moderation" element={<AuthenticatedOnly><RequirePermission anyOf={["bench:moderate"]}><BenchModerationPage /></RequirePermission></AuthenticatedOnly>} />
                           <Route path="/kitchen-shelf" element={<RecipeGalleryPage />} />
                           <Route path="/kitchen-shelf/:id" element={<RecipeDetailPage />} />
                           {/* Catch-all. Without this an unknown URL rendered an empty

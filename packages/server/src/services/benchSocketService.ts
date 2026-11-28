@@ -33,9 +33,11 @@ import {
   getOrganisationIdsByUser,
   getMessageAudience,
   isInAudience,
+  withoutPeople,
   type MessageAudience,
 } from "./benchService.js";
 import { openThread, createDmMessage, getThreadById, mayDirectMessage, DM_NOT_ALLOWED } from "./benchDmService.js";
+import { blockedBy } from "./benchBlockService.js";
 import { db } from "../db/index.js";
 import { user as userTable } from "../db/schema.js";
 import { eq } from "drizzle-orm";
@@ -57,6 +59,8 @@ interface UserProfile {
 const userProfiles = new Map<number, UserProfile>();
 const userSocketCount = new Map<number, number>();
 const typingMap = new Map<string, Map<number, { userName: string; timeout: ReturnType<typeof setTimeout> }>>();
+/** Whom each connected person has blocked, read before any of their sockets joins a room; kept current by {@link noteBlock}. */
+const blocks = new Map<number, Set<number>>();
 
 let io: Server;
 
@@ -73,14 +77,30 @@ function removeUserSocket(userId: number): boolean {
   if (count <= 0) {
     userSocketCount.delete(userId);
     userProfiles.delete(userId);
+    blocks.delete(userId);
     return true;
   }
   userSocketCount.set(userId, count);
   return false;
 }
 
+/**
+ * Reads whom this person blocked, then puts the socket in Everyone and its own room. Until then it is in no room, so nothing
+ * reaches it unfiltered.
+ */
+async function enter(socket: Socket, userId: number) {
+  const blocked = await blockedBy(userId);
+  if (!userSocketCount.has(userId)) return; // gone before the read came back
+  // Merged: a block made while this was read is already in. One lifted meanwhile stays until they reconnect, hidden rather than shown.
+  const mine = blocks.get(userId) ?? new Set<number>();
+  for (const id of blocked) mine.add(id);
+  blocks.set(userId, mine);
+  socket.join("bench:everyone");
+  socket.join(`bench:user_${userId}`);
+}
+
 /** Reads who this is, then shows them to everyone and to the kitchens they have joined meanwhile. */
-async function announce(socket: Socket, userId: number) {
+async function announce(socket: Socket, userId: number, entered: Promise<unknown>) {
   const profile: UserProfile = { userId, userName: "Chef", userPhotoPath: null };
   try {
     const [u] = await db
@@ -95,10 +115,38 @@ async function announce(socket: Socket, userId: number) {
   } catch {
     // Use defaults
   }
+  await entered;
   if (!userSocketCount.has(userId)) return; // gone before the read came back
   userProfiles.set(userId, profile);
   void sendEveryonePresence();
   for (const channelKey of kitchensOf(socket)) broadcastPresence(channelKey);
+}
+
+/** Every device of everyone connected who blocked this person. */
+function blockerRooms(userId: number): string[] {
+  return [...blocks].filter(([, blocked]) => blocked.has(userId)).map(([blocker]) => `bench:user_${blocker}`);
+}
+
+/** Sends the rooms `payloadFor` of no one, except to a person who blocked someone: each of their devices gets `payloadFor` of whom they blocked. */
+function emitEach(rooms: string[], event: string, payloadFor: (hidden: ReadonlySet<number>) => unknown) {
+  const blockers = [...blocks].filter(([, blocked]) => blocked.size > 0);
+  io.to(rooms).except(blockers.map(([blocker]) => `bench:user_${blocker}`)).emit(event, payloadFor(new Set()));
+  for (const [blocker, blocked] of blockers) {
+    for (const socketId of io.sockets.adapter.rooms.get(`bench:user_${blocker}`) ?? []) {
+      const socket = io.sockets.sockets.get(socketId);
+      if (socket && rooms.some((room) => socket.rooms.has(room))) socket.emit(event, payloadFor(blocked));
+    }
+  }
+}
+
+/** The rooms of a stored message's DM or channel. */
+function audienceRooms(audience: MessageAudience): string[] {
+  return audience.userAId !== null ? [`bench:user_${audience.userAId}`, `bench:user_${audience.userBId}`] : [`bench:${audience.channelKey}`];
+}
+
+/** Tells a stored message's DM or channel; `authorId`'s blockers are left out. */
+function broadcastToAudience(audience: MessageAudience, event: string, payload: Record<string, unknown>, authorId?: number) {
+  io.to(audienceRooms(audience)).except(authorId === undefined ? [] : blockerRooms(authorId)).emit(event, payload);
 }
 
 /** The kitchens' own channels this socket is in */
@@ -116,17 +164,45 @@ function getRoomUsers(channelKey: string): UserProfile[] {
   return Array.from(users.values());
 }
 
-/** Broadcast presence to everyone in an organisation or DM room: who is in it */
+/** Broadcast presence to everyone in an organisation or DM room: who is in it; never whom the viewer blocked */
 function broadcastPresence(channelKey: string) {
   const users = getRoomUsers(channelKey);
   logger.debug({ channelKey, userCount: users.length, userIds: users.map(u => u.userId) }, "Bench: broadcasting presence");
-  io.to(`bench:${channelKey}`).emit("bench:presence:update", { channelKey, users });
+  emitEach([`bench:${channelKey}`], "bench:presence:update", (hidden) => ({ channelKey, users: users.filter((u) => !hidden.has(u.userId)) }));
+}
+
+/**
+ * A block made or lifted: from now on this person's devices are sent accordingly, and their presence lists are sent again.
+ * What is on their screen already the client takes away itself.
+ */
+export function noteBlock(userId: number, otherId: number, blocked: boolean): void {
+  if (!io || !userSocketCount.has(userId)) return; // not connected: read when they connect
+  const mine = blocks.get(userId) ?? new Set<number>();
+  blocks.set(userId, mine);
+  if (blocked) mine.add(otherId);
+  else mine.delete(otherId);
+  const rooms = new Set<string>();
+  for (const socket of io.sockets.sockets.values()) {
+    if (socket.data.user.sub !== userId) continue;
+    for (const room of socket.rooms) if (room === "bench:everyone" || room.startsWith("bench:org_")) rooms.add(room);
+  }
+  for (const room of rooms) {
+    if (room === "bench:everyone") void sendEveryonePresence();
+    else broadcastPresence(room.slice("bench:".length));
+  }
+}
+
+/** A message a moderator hid: gone for everyone who has it on screen, as a deletion is. */
+export async function announceHidden(messageId: string): Promise<void> {
+  if (!io) return;
+  const audience = await getMessageAudience(messageId);
+  if (audience) broadcastToAudience(audience, "bench:message:deleted", { messageId });
 }
 
 let everyoneRound = 0;
 
 /**
- * Everyone's list is each viewer's own: the people online who share an organisation with them, and themselves.
+ * Everyone's list is each viewer's own: the people online who share an organisation with them, and themselves; never whom they blocked.
  * Memberships are read at each send, so a kitchen joined or left shows by the next one. Sent to the sockets in Everyone, or to one.
  */
 async function sendEveryonePresence(only?: Socket) {
@@ -140,7 +216,8 @@ async function sendEveryonePresence(only?: Socket) {
     for (const socket of sockets) {
       const viewer = socket.data.user.sub as number;
       const mine = kitchens.get(viewer) ?? [];
-      const users = online.filter((u) => u.userId === viewer || (kitchens.get(u.userId) ?? []).some((id) => mine.includes(id)));
+      const hidden = blocks.get(viewer);
+      const users = online.filter((u) => u.userId === viewer || (!hidden?.has(u.userId) && (kitchens.get(u.userId) ?? []).some((id) => mine.includes(id))));
       socket.emit("bench:presence:update", { channelKey: "everyone", users });
     }
   } catch (err) {
@@ -214,16 +291,19 @@ export function initBenchSocket(httpServer: HttpServer): () => void {
     // Register user (ref-counted — multiple sockets per user are fine)
     addUserSocket(userId);
 
-    // Auto-join the "everyone" room and personal DM room
-    socket.join("bench:everyone");
-    socket.join(`bench:user_${userId}`);
-
+    // Joins the "everyone" room and personal DM room once whom they blocked is known.
     // Nothing may be awaited before the handlers below: what a client sends as it connects would find none.
-    void announce(socket, userId);
+    const ready = enter(socket, userId).catch((err) => {
+      logger.error({ err, userId }, "Bench: reading blocks failed");
+      socket.disconnect(true); // a socket whose blocks are unknown would receive unfiltered
+    });
+    void announce(socket, userId, ready);
 
     // ── Join channel ──────────────────────────────────────
     onBenchEvent(socket, "bench:join", async ({ channelKey }) => {
       try {
+        await ready; // a room joined before whom they blocked is known would deliver unfiltered
+        if (socket.disconnected) return;
         if (!(await canJoin(channelKey, userId))) {
           socket.emit("bench:error", { error: "You cannot join this channel", code: "FORBIDDEN" });
           return;
@@ -274,8 +354,8 @@ export function initBenchSocket(httpServer: HttpServer): () => void {
         const sent = { ...message, channelKey: data.channelKey };
         if (replay) return answerReplay("bench:message:new", sent);
 
-        // Broadcast to the channel room
-        io.to(`bench:${data.channelKey}`).emit("bench:message:new", sent);
+        // Broadcast to the channel room, but to nobody who blocked the sender
+        io.to(`bench:${data.channelKey}`).except(blockerRooms(userId)).emit("bench:message:new", sent);
 
         // Clear typing indicator
         clearTyping(data.channelKey, userId);
@@ -306,7 +386,7 @@ export function initBenchSocket(httpServer: HttpServer): () => void {
         if (!userOrgIds.includes(orgId)) return;
       }
       setTyping(channelKey, userId, userName());
-      socket.to(`bench:${channelKey}`).emit("bench:typing", { channelKey, userId, userName: userName() });
+      socket.to(`bench:${channelKey}`).except(blockerRooms(userId)).emit("bench:typing", { channelKey, userId, userName: userName() });
     });
 
     // ── Reactions ─────────────────────────────────────────
@@ -316,7 +396,7 @@ export function initBenchSocket(httpServer: HttpServer): () => void {
         if (!audience || !(await isInAudience(audience, userId))) return;
         await addReaction(messageId, userId, emoji);
         const reactions = await getReactions(messageId);
-        broadcastToAudience(audience, "bench:reaction:updated", { messageId, reactions });
+        emitEach(audienceRooms(audience), "bench:reaction:updated", (hidden) => ({ messageId, reactions: withoutPeople(reactions, hidden) }));
       } catch (err) {
         logger.warn({ err, messageId, emoji }, "Bench: reaction add failed");
       }
@@ -328,19 +408,11 @@ export function initBenchSocket(httpServer: HttpServer): () => void {
         if (!audience || !(await isInAudience(audience, userId))) return;
         await removeReaction(messageId, userId, emoji);
         const reactions = await getReactions(messageId);
-        broadcastToAudience(audience, "bench:reaction:updated", { messageId, reactions });
+        emitEach(audienceRooms(audience), "bench:reaction:updated", (hidden) => ({ messageId, reactions: withoutPeople(reactions, hidden) }));
       } catch (err) {
         logger.warn({ err, messageId, emoji }, "Bench: reaction remove failed");
       }
     });
-
-    // ── Helper: broadcast to a stored message's DM or channel ─
-    function broadcastToAudience(audience: MessageAudience, event: string, payload: Record<string, unknown>) {
-      const rooms = audience.userAId !== null
-        ? [`bench:user_${audience.userAId}`, `bench:user_${audience.userBId}`]
-        : [`bench:${audience.channelKey}`];
-      io.to(rooms).emit(event, payload);
-    }
 
     // ── Delete message ────────────────────────────────────
     onBenchEvent(socket, "bench:message:delete", async ({ messageId }) => {
@@ -366,7 +438,7 @@ export function initBenchSocket(httpServer: HttpServer): () => void {
         if (!audience || !(await isInAudience(audience, userId))) return;
         const edited = await editMessage(messageId, userId, newBody.trim());
         if (edited) {
-          broadcastToAudience(audience, "bench:message:edited", { messageId, newBody: newBody.trim(), editedInd: true });
+          broadcastToAudience(audience, "bench:message:edited", { messageId, newBody: newBody.trim(), editedInd: true }, userId);
         }
       } catch (err) {
         logger.warn({ err, messageId }, "Bench: message edit failed");

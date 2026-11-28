@@ -170,5 +170,8 @@ export function useBenchMessages(channelKey: string) {
     fetchMessages(oldest.createdDttm);
   }, [messages, hasMore, fetchMessages]);
 
-  return { messages, loading, hasMore, loadMore, sendMessage, deleteMessage, editMessage };
+  // Refetch the latest page (after an unblock brings someone's messages back)
+  const reload = useCallback(() => fetchMessages(), [fetchMessages]);
+
+  return { messages, loading, hasMore, loadMore, sendMessage, deleteMessage, editMessage, reload };
 }

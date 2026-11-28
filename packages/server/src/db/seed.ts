@@ -170,6 +170,8 @@ async function seed() {
       permissionKey: "roster:manage-award-rules",
       permissionDescription: "Author Fair Work award rule thresholds — deliberately separate from roster:manage",
     },
+    // The Bench's moderation queue. No other role holds it: grant it to a moderator role in Settings → Roles.
+    { permissionKey: "bench:moderate", permissionDescription: "Review Bench reports: hide a message, dismiss or resolve a report" },
   ];
 
   for (const p of defaultPermissions) {
@@ -199,6 +201,7 @@ async function seed() {
       "brain:read", "brain:manage",
       "compliance:read-own", "compliance:read-all", "compliance:verify", "compliance:manage-rules",
       "roster:read-own", "roster:read-all", "roster:manage", "roster:publish", "roster:manage-award-rules",
+      "bench:moderate",
     ],
     // Default tiers are solo operators (chef + owner in one) — they keep full module
     // access. Staff differentiation (BOH/FOH) is done via custom roles that omit these.

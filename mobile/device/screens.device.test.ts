@@ -1227,6 +1227,28 @@ describe.skipIf(!process.env.SCREENS_OUT)(`screens on ${FORM}`, { timeout: 600_0
       await tap("Bo Li, new message");
       await waitFor(/cover the pass/, 30_000);
       await shot("c11-direct-message");
+      // Report and block: the direct message's header offers both.
+      await tapNow("Report");
+      await waitFor("Send report", 20_000);
+      await tapLabel("Harassment or bullying");
+      await shot("c13-report-form");
+      await tapNow("Send report");
+      await waitFor(/A moderator will look at it/, 20_000);
+      await shot("c14-report-sent");
+      await tapNow("Block");
+      await waitFor("Block Bo Li?", 20_000);
+      await shot("c15-block-asks");
+      await tapNow(/^cancel$/i); // the block itself is made through the API: Back does not close this dialog
+      await m.client.request("POST", "/api/bench/blocks", { body: { userId: bo } });
+      if (await has("Back to the Bench")) await tapNow("Back to the Bench");
+      await tap("Blocked people");
+      await waitFor("Unblock Bo Li", 20_000);
+      await shot("c16-blocked-people");
+      await tapNow("Back to the Bench");
+      await tap("Reports to review"); // the walk's user is an Administrator
+      await waitFor(/^Reported by/, 20_000);
+      await shot("c17-reports");
+      await m.client.request("DELETE", `/api/bench/blocks/${bo}`);
       // Someone who is not an administrator: Everyone's message offers reactions, and no Pin.
       const administrator = sql(`select role_id from role where role_name = 'Administrator'`);
       sql(`delete from user_role where user_id = ${me} and role_id = ${administrator}`);

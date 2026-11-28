@@ -6,7 +6,7 @@
  */
 
 import { Router } from "express";
-import { authenticate } from "../middleware/auth.js";
+import { authenticate, requirePermission } from "../middleware/auth.js";
 import {
   handleGetChannels,
   handleGetMessages,
@@ -22,6 +22,14 @@ import {
   handleGetDmMessages,
   handleCreateDmThread,
 } from "../controllers/benchController.js";
+import {
+  handleListBlocked,
+  handleBlock,
+  handleUnblock,
+  handleReport,
+  handleListReports,
+  handleReportAction,
+} from "../controllers/benchSafetyController.js";
 
 export const benchRouter = Router();
 
@@ -43,3 +51,15 @@ benchRouter.post("/mentions/read", handleMarkMentionsRead);
 benchRouter.get("/dm/threads", handleGetDmThreads);
 benchRouter.post("/dm/threads", handleCreateDmThread);
 benchRouter.get("/dm/threads/:threadId/messages", handleGetDmMessages);
+
+// Blocking and reporting (every signed-in person)
+benchRouter.get("/blocks", handleListBlocked);
+benchRouter.post("/blocks", handleBlock);
+benchRouter.delete("/blocks/:userId", handleUnblock);
+benchRouter.post("/reports", handleReport);
+
+// The moderators' queue
+benchRouter.get("/reports", requirePermission("bench:moderate"), handleListReports);
+benchRouter.post("/reports/:id/hide", requirePermission("bench:moderate"), handleReportAction("hide"));
+benchRouter.post("/reports/:id/dismiss", requirePermission("bench:moderate"), handleReportAction("dismiss"));
+benchRouter.post("/reports/:id/resolve", requirePermission("bench:moderate"), handleReportAction("resolve"));

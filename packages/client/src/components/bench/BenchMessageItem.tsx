@@ -1,14 +1,17 @@
 /**
  * Single message in The Bench chat.
  * Shows avatar, name, timestamp, message body, reactions.
- * Own messages can be edited (inline) and deleted.
+ * Own messages can be edited (inline) and deleted; someone else's can be reported,
+ * and their author blocked.
  */
 
 import { useState, useRef, useEffect } from "react";
-import { Trash2, SmilePlus, Pencil, Check, X } from "lucide-react";
+import { Trash2, SmilePlus, Pencil, Check, X, Flag, Ban } from "lucide-react";
 import { Link } from "react-router";
 import { useAuth } from "../../context/AuthContext.js";
 import type { BenchMessage } from "../../hooks/useBenchMessages.js";
+import type { BenchPerson, ReportTarget } from "../../hooks/useBenchSafety.js";
+import { BenchPersonMenu } from "./BenchPersonMenu.js";
 
 const EMOJI_SET = [
   { key: "fire", display: "🔥" },
@@ -31,15 +34,18 @@ interface BenchMessageItemProps {
   onReaction?: (messageId: string, emoji: string) => void;
   onRemoveReaction?: (messageId: string, emoji: string) => void;
   onStartDm?: (userId: number) => void;
+  onReport?: (target: ReportTarget) => void;
+  onBlock?: (person: BenchPerson) => void;
 }
 
-export function BenchMessageItem({ message, onDelete, onEdit, onReaction, onRemoveReaction, onStartDm }: BenchMessageItemProps) {
+export function BenchMessageItem({ message, onDelete, onEdit, onReaction, onRemoveReaction, onStartDm, onReport, onBlock }: BenchMessageItemProps) {
   const { user } = useAuth();
   const [showReactions, setShowReactions] = useState(false);
   const [editing, setEditing] = useState(false);
   const [editText, setEditText] = useState("");
   const editRef = useRef<HTMLInputElement>(null);
   const isOwn = user?.userId === message.userId;
+  const author: BenchPerson = { userId: message.userId, userName: message.userName, userPhotoPath: message.userPhotoPath };
 
   useEffect(() => {
     if (editing && editRef.current) {
@@ -100,14 +106,17 @@ export function BenchMessageItem({ message, onDelete, onEdit, onReaction, onRemo
       {/* Content */}
       <div className="flex-1 min-w-0">
         <div className="flex items-baseline gap-2">
-          {!isOwn && onStartDm ? (
-            <button
-              onClick={() => onStartDm(message.userId)}
-              className="text-[15px] font-semibold text-[#FAFAFA] hover:text-gold transition-colors"
-              title={`Message ${message.userName}`}
+          {!isOwn && (onStartDm || onReport || onBlock) ? (
+            <BenchPersonMenu
+              person={author}
+              onMessage={onStartDm}
+              onReport={onReport}
+              onBlock={onBlock}
+              label={`${message.userName}: options`}
+              triggerClassName="text-[15px] font-semibold text-[#FAFAFA] hover:text-gold rounded focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-gold/50 transition-colors"
             >
               {message.userName}
-            </button>
+            </BenchPersonMenu>
           ) : (
             <span className="text-[15px] font-semibold text-[#FAFAFA]">{message.userName}</span>
           )}
@@ -193,7 +202,7 @@ export function BenchMessageItem({ message, onDelete, onEdit, onReaction, onRemo
 
       {/* Action buttons (visible on hover) */}
       {!editing && (
-        <div className="flex items-start gap-1 opacity-0 group-hover:opacity-100 transition-opacity">
+        <div className="flex items-start gap-1 opacity-0 group-hover:opacity-100 focus-within:opacity-100 transition-opacity">
           <button
             onClick={() => setShowReactions(!showReactions)}
             className="p-1 rounded hover:bg-dark-200 text-dark-500 hover:text-[#E5E5E5] transition-colors"
@@ -217,6 +226,26 @@ export function BenchMessageItem({ message, onDelete, onEdit, onReaction, onRemo
               title="Delete"
             >
               <Trash2 className="size-4" />
+            </button>
+          )}
+          {!isOwn && onReport && (
+            <button
+              onClick={() => onReport({ person: author, messageId: message.messageId })}
+              className="p-1 rounded hover:bg-dark-200 text-dark-500 hover:text-[#E5E5E5] transition-colors"
+              title="Report"
+              aria-label="Report"
+            >
+              <Flag className="size-4" />
+            </button>
+          )}
+          {!isOwn && onBlock && (
+            <button
+              onClick={() => onBlock(author)}
+              className="p-1 rounded hover:bg-dark-200 text-dark-500 hover:text-red-400 transition-colors"
+              title={`Block ${message.userName}`}
+              aria-label={`Block ${message.userName}`}
+            >
+              <Ban className="size-4" />
             </button>
           )}
         </div>
